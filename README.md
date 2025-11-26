@@ -20,14 +20,14 @@ Designed for comparing data between sources, with detailed analysis and discrepa
 ================================================================================
 2025-11-24 20:09:40
 DATA SAMPLE COMPARISON REPORT:
-public.hyperloop_account
+public.account
 VS
-stage.hyperloop_account
+stage.account
 ================================================================================
 timezone: Europe/Athens
 
         SELECT created_at, updated_at, id, code, bank_code, account_type, counterparty_id, special_code, case when updated_at > (now() - INTERVAL '%(exclude_recent_hours)s hours') then 'y' end as xrecently_changed
-        FROM public.hyperloop_account
+        FROM public.account
         WHERE 1=1
             AND created_at >= date_trunc('day', %(start_date)s::date)
             AND created_at < date_trunc('day', %(end_date)s::date)  + interval '1 days'
@@ -36,7 +36,7 @@ timezone: Europe/Athens
 ----------------------------------------
 
         SELECT created_at, updated_at, id, code, bank_code, account_type, counterparty_id, special_code, case when updated_at > (sysdate - :exclude_recent_hours) then 'y' end as xrecently_changed
-        FROM stage.hyperloop_account
+        FROM stage.account
         WHERE 1=1
             AND created_at >= trunc(to_date(:start_date, 'YYYY-MM-DD'), 'dd')
             AND created_at < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1
@@ -78,16 +78,16 @@ special_code               1
   Some examples:
 
 primary_key                          column_name  source_value target_value
-f8153447-****-****-****-8fdcc81811c9 special_code N/A          502044
+f8153447-****-****-****-****** special_code       N/A          XYZ
 
 DISCREPANT DATA (first pairs):
 Sorted by primary key and dataset:
 
 
 created_at          updated_at          id                                   code                 bank_code account_type counterparty_id                      special_code xflg
-2025-11-24 18:58:27 2025-11-24 18:58:27 f8153447-****-****-****-8fdcc81811c9 42****************87 0*******4 11           62aa01a6-****-****-****-f17e2b*****4
+2025-11-24 18:58:27 2025-11-24 18:58:27 f8153447-****-****-****-****** 42****************87 0********* 11           62aa01a6-****-****-****-f17e2b*****4
 N/A       src
-2025-11-24 18:58:27 2025-11-24 18:58:27 f8153447-****-****-****-8fdcc81811c9 42****************87 0*******4 11           62aa01a6-****-****-****-f17e2b*****4 502044       trg
+2025-11-24 18:58:27 2025-11-24 18:58:27 f8153447-****-****-****-****** 42****************87 0********* 11           62aa01a6-****-****-****-f17e2b*****4 XYZ       trg
 
 
 ================================================================================
