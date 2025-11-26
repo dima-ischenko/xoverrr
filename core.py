@@ -6,7 +6,8 @@ import pandas as pd
 from sqlalchemy.engine import Engine
 from .models import (
     DBMSType,
-    TableReference
+    DataReference,
+    ObjectType
 )
 
 from .logger import app_logger
@@ -20,6 +21,7 @@ from . import constants as ct
 
 from .exceptions import (
     MetadataError,
+    DQCompareException
 )
 from .utils import (
     prepare_dataframe,
@@ -79,7 +81,7 @@ class DataQualityComparator:
             'end_time': None
         }
 
-    def _update_stats(self, status: str, source_table:TableReference):
+    def _update_stats(self, status: str, source_table:DataReference):
         """Update comparison statistics"""
         self.comparison_stats[status] += 1
         self.comparison_stats['end_time'] = pd.Timestamp.now().strftime(ct.DATETIME_FORMAT)
@@ -94,8 +96,8 @@ class DataQualityComparator:
 
     def compare_counts(
             self,
-        source_table: TableReference,
-        target_table: TableReference,
+        source_table: DataReference,
+        target_table: DataReference,
         date_column: Optional[str] = None,
         date_range: Optional[Tuple[str, str]] = None,
         tolerance_percentage: float = 0.0,
@@ -126,8 +128,8 @@ class DataQualityComparator:
 
     def compare_sample(
         self,
-        source_table: TableReference,
-        target_table: TableReference,
+        source_table: DataReference,
+        target_table: DataReference,
         date_column: Optional[str] = None,
         update_column: Optional[str] = None,
         date_range: Optional[Tuple[str, str]] = None,
@@ -164,8 +166,8 @@ class DataQualityComparator:
             self._update_stats(status, source_table)
             return status, None, None, None
 
-    def _compare_counts(self, source_table: TableReference,
-                        target_table: TableReference,
+    def _compare_counts(self, source_table: DataReference,
+                        target_table: DataReference,
                         date_column: str,
                         start_date: Optional[str],
                         end_date: Optional[str],
@@ -236,8 +238,8 @@ class DataQualityComparator:
 
     def _compare_samples(
         self,
-        source_table: TableReference,
-        target_table: TableReference,
+        source_table: DataReference,
+        target_table: DataReference,
         date_column: str,
         update_column: str,
         start_date: Optional[str],
@@ -250,6 +252,10 @@ class DataQualityComparator:
     ) -> Tuple[str, str, Optional[ComparisonStats], Optional[ComparisonDiffDetails]]:
 
         try:
+            source_object_type = self._get_object_type(source_table, self.source_engine)
+            target_object_type = self._get_object_type(target_table, self.target_engine)
+            app_logger.info(f'object type source: {source_object_type} vs target {target_object_type}')
+
             source_columns_meta = self._get_metadata_cols(source_table, self.source_engine)
             app_logger.info('source_columns meta:\n')
             app_logger.info(source_columns_meta.to_string(index=False))
@@ -258,6 +264,7 @@ class DataQualityComparator:
             app_logger.info('target_columns meta:\n')
             app_logger.info(target_columns_meta.to_string(index=False))
             key_columns = None
+
 
             if custom_key_columns:
                 key_columns = custom_key_columns
@@ -272,8 +279,10 @@ class DataQualityComparator:
                 if missing_in_target:
                     raise MetadataError(f"Custom key columns missing in target: {missing_in_target}")
             else:
-                source_pk = self._get_metadata_pk(source_table, self.source_engine)
-                target_pk = self._get_metadata_pk(target_table, self.target_engine)
+                source_pk = self._get_metadata_pk(source_table, self.source_engine) \
+                                         if source_object_type == ObjectType.TABLE else pd.DataFrame({'pk_column_name': []})
+                target_pk = self._get_metadata_pk(target_table, self.target_engine) \
+                                         if target_object_type == ObjectType.TABLE else pd.DataFrame({'pk_column_name': []})
 
                 if source_pk['pk_column_name'].tolist() != target_pk['pk_column_name'].tolist():
                     app_logger.warning(f"Primary keys differ: source={source_pk['pk_column_name'].tolist()}, target={target_pk['pk_column_name'].tolist()}")
@@ -300,6 +309,9 @@ class DataQualityComparator:
             if target_data.empty and source_data.empty:
                 status = ct.COMPARISON_SKIPPED
                 return status, None, None, None
+            elif source_data.empty or target_data.empty:
+                raise DQCompareException(f"Nothing to compare, rows returned from source: {len(source_data)}, from target: {len(target_data)}")
+
 
             source_data = prepare_dataframe(source_data)
             target_data = prepare_dataframe(target_data)
@@ -421,31 +433,37 @@ class DataQualityComparator:
             self._update_stats(status, None)
             return status, None, None, None
 
-    def _get_metadata_cols(self, table_ref: TableReference, engine: Engine) -> pd.DataFrame:
-        """Get metadata for table with proper source handling"""
+    def _get_metadata_cols(self, data_ref: DataReference, engine: Engine) -> pd.DataFrame:
+        """Get metadata with proper source handling"""
         adapter = self._get_adapter(DBMSType.from_engine(engine))
 
-        query, params = adapter.build_metadata_columns_query(table_ref)
+        query, params = adapter.build_metadata_columns_query(data_ref)
         columns_meta = self._execute_query((query, params), engine)
 
         if columns_meta.empty:
-            raise ValueError(f"Failed to get table metadata for: {table_ref.full_name}")
+            raise ValueError(f"Failed to get metadata for: {data_ref.full_name}")
 
         return columns_meta
 
-    def _get_metadata_pk(self, table_ref: TableReference, engine: Engine) -> pd.DataFrame:
-        """Get metadata for table with proper source handling"""
+    def _get_metadata_pk(self, data_ref: DataReference, engine: Engine) -> pd.DataFrame:
+        """Get metadata with proper source handling"""
         adapter = self._get_adapter(DBMSType.from_engine(engine))
 
-        query, params = adapter.build_primary_key_query(table_ref)
+        query, params = adapter.build_primary_key_query(data_ref)
         primary_key = self._execute_query((query, params), engine)
 
         return primary_key
 
+    def _get_object_type(self, data_ref: DataReference, engine: Engine) -> pd.DataFrame:
+
+        adapter = self._get_adapter(DBMSType.from_engine(engine))
+        object_type = adapter.get_object_type(data_ref, engine)
+        return object_type
+
     def _get_table_data(
         self,
         engine,
-        table_ref: TableReference,
+        data_ref: DataReference,
         metadata,
         columns: List[str],
         date_column: str,
@@ -460,7 +478,7 @@ class DataQualityComparator:
         app_logger.info(db_type)
 
         query, params = adapter.build_data_query_common(
-            table_ref, columns, date_column, update_column,
+            data_ref, columns, date_column, update_column,
             start_date, end_date, exclude_recent_hours
         )
 
@@ -511,11 +529,11 @@ class DataQualityComparator:
 
     def _validate_inputs(
         self,
-        source: TableReference,
-        target: TableReference
+        source: DataReference,
+        target: DataReference
     ):
         """Validate input parameters"""
-        if not isinstance(source, TableReference):
-            raise TypeError("source must be a TableReference")
-        if not isinstance(target, TableReference):
-            raise TypeError("target must be a TableReference")
+        if not isinstance(source, DataReference):
+            raise TypeError("source must be a DataReference")
+        if not isinstance(target, DataReference):
+            raise TypeError("target must be a DataReference")

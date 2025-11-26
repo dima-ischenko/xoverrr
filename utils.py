@@ -18,11 +18,18 @@ class ComparisonStats:
     """Class for storing comparison statistics"""
     total_source_rows: int
     total_target_rows: int
+
+    dup_source_rows: int
+    dup_target_rows: int
+
     only_source_rows: int
     only_target_rows: int
     common_pk_rows: int
     total_matched_rows: int
-    #
+    # percentages
+    dup_source_percentage_rows: float
+    dup_target_percentage_rows: float
+
     source_only_percentage_rows: float
     target_only_percentage_rows: float
     total_diff_percentage_rows : float
@@ -37,8 +44,13 @@ class ComparisonStats:
 class ComparisonDiffDetails:
     mismatches_per_column: pd.DataFrame
     discrepancies_per_col_examples: pd.DataFrame
+
+    dup_source_keys_examples: tuple
+    dup_target_keys_examples: tuple
+
     source_only_keys_examples: tuple
     target_only_keys_examples: tuple
+
     discrepant_data_examples:  pd.DataFrame
     common_attribute_columns: List[str]
     skipped_source_columns: List[str]= field(default_factory=list)
@@ -175,24 +187,42 @@ def compare_dataframes(
         2) ComparisonDiffDetails Object with additional details, like the examples and per column diff data
     """
     app_logger.info('start')
+
     # Input data validation
     if source_df.empty and target_df.empty:
         return None, None
     _validate_input_data(source_df, target_df, key_columns)
 
-    non_key_columns = compare_dataframes_meta(source_df, target_df, key_columns)
+    # Check for duplicate primary keys and handle them
+    source_dup = source_df[source_df.duplicated(subset=key_columns, keep=False)]
+    target_dup = target_df[target_df.duplicated(subset=key_columns, keep=False)]
 
+    source_dup_keys = _create_keys_set(source_dup, key_columns) if not source_dup.empty else set()
+    target_dup_keys = _create_keys_set(target_dup, key_columns) if not target_dup.empty else set()
 
-    source_df = source_df.assign(xflg='src')
-    target_df = target_df.assign(xflg='trg')
+    source_dup_keys_examples = format_keys(source_dup_keys, max_examples)
+    target_dup_keys_examples = format_keys(target_dup_keys, max_examples)
+
+    # Remove duplicates from both dataframes for clean comparison
+    source_clean = source_df.drop_duplicates(subset=key_columns, keep='first')
+    target_clean = target_df.drop_duplicates(subset=key_columns, keep='first')
+
+    # Count duplicates for metrics
+    source_dup_cnt = len(source_df) - len(source_clean)
+    target_dup_cnt = len(target_df) - len(target_clean)
+
+    non_key_columns = compare_dataframes_meta(source_clean, target_clean, key_columns)
+
+    source_clean = source_clean.assign(xflg='src')
+    target_clean = target_clean.assign(xflg='trg')
 
     xor_combined_df = (
-        pd.concat([source_df, target_df], ignore_index=True)
+        pd.concat([source_clean, target_clean], ignore_index=True)
         .drop_duplicates(subset=key_columns + non_key_columns, keep=False)
         .assign(xcount_pairs=lambda df: df.groupby(key_columns)[key_columns[0]].transform('size'))
     )
 
-    # simmetrical difference between two datasets, sorted
+    # symmetrical difference between two datasets, sorted
     xor_combined_sorted = xor_combined_df.sort_values(
         by=key_columns + ['xflg'],
         ascending=[False] * len(key_columns) + [True]
@@ -209,30 +239,33 @@ def compare_dataframes(
     xor_source_only_keys = _create_keys_set(xor_df_source_only, key_columns)
     xor_target_only_keys = _create_keys_set(xor_df_target_only, key_columns)
 
-    xor_common_keys_cnt = int(len(xor_df_multi)/2)
+    xor_common_keys_cnt = int(len(xor_df_multi)/2) if not xor_df_multi.empty else 0
     xor_source_only_keys_cnt = len(xor_source_only_keys)
     xor_target_only_keys_cnt = len(xor_target_only_keys)
 
     # take n pairs that is why examples x2
-    xor_df_multi_example = xor_df_multi.head(max_examples*2).drop(columns=['xcount_pairs'])
+    xor_df_multi_example = xor_df_multi.head(max_examples*2).drop(columns=['xcount_pairs']) if not xor_df_multi.empty else pd.DataFrame()
 
     xor_source_only_keys_examples = format_keys(xor_source_only_keys, max_examples)
     xor_target_only_keys_examples = format_keys(xor_target_only_keys, max_examples)
 
     # get number of records that present in two datasets based on primary key
-    common_keys_cnt = int ((len(source_df) - xor_source_only_keys_cnt + len(target_df)  - xor_target_only_keys_cnt)/2)
+    common_keys_cnt = int((len(source_clean) - xor_source_only_keys_cnt + len(target_clean) - xor_target_only_keys_cnt)/2)
 
     if not common_keys_cnt:
         #Special case when there is no matched primary keys at all
-        #Todo return 100% discrepancies percent
         comparison_stats = ComparisonStats(
         total_source_rows = len(source_df),
         total_target_rows = len(target_df),
+        dup_source_rows = source_dup_cnt,
+        dup_target_rows = target_dup_cnt,
         only_source_rows = xor_source_only_keys_cnt,
         only_target_rows = xor_target_only_keys_cnt,
         common_pk_rows = 0,
         total_matched_rows= 0,
         #
+        dup_source_percentage_rows = 100,
+        dup_target_percentage_rows = 100,
         source_only_percentage_rows = 100,
         target_only_percentage_rows = 100,
         total_diff_percentage_rows = 100,
@@ -247,6 +280,8 @@ def compare_dataframes(
         comparison_diff_detais = ComparisonDiffDetails(
         mismatches_per_column = pd.DataFrame(),
         discrepancies_per_col_examples = pd.DataFrame(),
+        dup_source_keys_examples = source_dup_keys_examples,
+        dup_target_keys_examples = target_dup_keys_examples,
         common_attribute_columns=non_key_columns,
         source_only_keys_examples = xor_source_only_keys_examples,
         target_only_keys_examples = xor_target_only_keys_examples,
@@ -258,8 +293,11 @@ def compare_dataframes(
     # get number of that totally equal in two datasets
     total_matched_records_cnt = common_keys_cnt - xor_common_keys_cnt
 
-    source_only_percentage = xor_source_only_keys_cnt/common_keys_cnt
-    target_only_percentage = xor_target_only_keys_cnt/common_keys_cnt
+    source_only_percentage = (xor_source_only_keys_cnt/common_keys_cnt)*100
+    target_only_percentage = (xor_target_only_keys_cnt/common_keys_cnt)*100
+
+    source_dup_percentage = (source_dup_cnt/len(source_df))*100
+    target_dup_percentage = (target_dup_cnt/len(target_df))*100
 
     diff_col_metrics, \
     diff_col_examples,\
@@ -268,17 +306,22 @@ def compare_dataframes(
 
     source_and_target_total_diff_percentage = (1-total_matched_records_cnt/common_keys_cnt)*100
 
-    final_diff_score = source_only_percentage*0.2 + target_only_percentage*0.2 + \
-                       source_and_target_total_diff_percentage*0.6
+    final_diff_score = source_dup_percentage*0.1 + target_dup_percentage*0.1 + \
+                       source_only_percentage*0.15 + target_only_percentage*0.15 + \
+                       source_and_target_total_diff_percentage*0.5
 
     comparison_stats = ComparisonStats(
         total_source_rows = len(source_df),
         total_target_rows = len(target_df),
+        dup_source_rows = source_dup_cnt,
+        dup_target_rows = target_dup_cnt,
         only_source_rows = xor_source_only_keys_cnt,
         only_target_rows = xor_target_only_keys_cnt,
         common_pk_rows = common_keys_cnt,
         total_matched_rows= total_matched_records_cnt,
         #
+        dup_source_percentage_rows = source_dup_percentage,
+        dup_target_percentage_rows = target_dup_percentage,
         source_only_percentage_rows = source_only_percentage,
         target_only_percentage_rows = target_only_percentage,
         total_diff_percentage_rows = source_and_target_total_diff_percentage,
@@ -293,6 +336,8 @@ def compare_dataframes(
     comparison_diff_detais = ComparisonDiffDetails(
         mismatches_per_column = diff_col_counters,
         discrepancies_per_col_examples = diff_col_examples,
+        dup_source_keys_examples = source_dup_keys_examples,
+        dup_target_keys_examples = target_dup_keys_examples,
         source_only_keys_examples = xor_source_only_keys_examples,
         target_only_keys_examples = xor_target_only_keys_examples,
         discrepant_data_examples = xor_df_multi_example,
@@ -358,6 +403,8 @@ def generate_comparison_sample_report(source_table:str,
     rl.append(f"\nSUMMARY:")
     rl.append(f"  Source rows: {stats.total_source_rows}")
     rl.append(f"  Target rows: {stats.total_target_rows}")
+    rl.append(f"  Duplicated source rows: {stats.dup_source_rows}")
+    rl.append(f"  Duplicated target rows: {stats.dup_target_rows}")
     rl.append(f"  Only source rows: {stats.only_source_rows}")
     rl.append(f"  Only target rows: {stats.only_target_rows}")
     rl.append(f"  Common rows (by primary key): {stats.common_pk_rows}")
@@ -365,6 +412,8 @@ def generate_comparison_sample_report(source_table:str,
     rl.append("-"*40)
     rl.append(f"  Source only rows %: {stats.source_only_percentage_rows:.5f}")
     rl.append(f"  Target only rows %: {stats.target_only_percentage_rows:.5f}")
+    rl.append(f"  Duplicated source rows %: {stats.dup_source_percentage_rows:.5f}")
+    rl.append(f"  Duplicated target rows %: {stats.dup_target_percentage_rows:.5f}")
     rl.append(f"  Mismatched rows %: {stats.total_diff_percentage_rows:.5f}")
     rl.append(f"  Final discrepancies score: {stats.final_diff_score:.5f}")
     rl.append(f"  Final data quality score: {stats.final_score:.5f}")
@@ -372,6 +421,9 @@ def generate_comparison_sample_report(source_table:str,
 
     rl.append(f"  Source-only key examples: {details.source_only_keys_examples}")
     rl.append(f"  Target-only key examples: {details.target_only_keys_examples}")
+
+    rl.append(f"  Duplicated source key examples: {details.dup_source_keys_examples}")
+    rl.append(f"  Duplicated target key examples: {details.dup_target_keys_examples}")
 
     rl.append(f"  Common attribute columns: {', '.join(details.common_attribute_columns)}")
     rl.append(f"  Skipped source columns: {', '.join(details.skipped_source_columns)}")

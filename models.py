@@ -4,6 +4,13 @@ from typing import Optional
 import re
 from sqlalchemy.engine import Engine
 
+class ObjectType(Enum):
+    """Types of database objects"""
+    TABLE = auto()
+    VIEW = auto()
+    MATERIALIZED_VIEW = auto()
+    UNKNOWN = auto()
+
 class DBMSType(Enum):
     """Supported database management systems"""
     ORACLE = auto()
@@ -24,7 +31,7 @@ class DBMSType(Enum):
 
 
 @dataclass(frozen=True)
-class TableReference:
+class DataReference:
     """Immutable reference to a database object"""
     name: str
     schema: Optional[str] = None

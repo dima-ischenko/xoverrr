@@ -2,7 +2,7 @@ import pandas as pd
 from typing import Optional, Dict, Callable, List, Tuple, Union
 from ..constants import DATE_FORMAT, DATETIME_FORMAT
 from .base import BaseDatabaseAdapter, Engine
-from ..models import TableReference
+from ..models import DataReference, ObjectType
 from ..exceptions import QueryExecutionError
 import time
 from ..logger import app_logger
@@ -41,7 +41,37 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
 
             raise QueryExecutionError(f"Query failed: {str(e)}")
 
-    def build_metadata_columns_query(self, table_ref: TableReference) -> Tuple[str, Dict]:
+    def get_object_type(self, data_ref: DataReference, engine: Engine) -> ObjectType:
+        """Determine if object is table or view in ClickHouse"""
+        query = """
+            SELECT
+                engine as table_engine,
+                if(engine = 'View', 'view', 'table') as object_type
+            FROM system.tables
+            WHERE database = %(schema)s
+            AND name = %(table)s
+        """
+        params = {'schema': data_ref.schema, 'table': data_ref.name}
+
+        try:
+            result = self._execute_query((query, params), engine, None)
+            if not result.empty:
+                type_str = result.iloc[0]['object_type']
+                engine_str = result.iloc[0]['table_engine']
+
+                # ClickHouse имеет разные типы таблиц
+                if engine_str == 'View':
+                    return ObjectType.VIEW
+                elif engine_str in ['MaterializedView', 'MaterializeView']:
+                    return ObjectType.MATERIALIZED_VIEW
+                else:
+                    return ObjectType.TABLE
+        except Exception as e:
+            app_logger.warning(f"Could not determine object type for {data_ref.full_name}: {str(e)}")
+
+        return ObjectType.UNKNOWN
+
+    def build_metadata_columns_query(self, data_ref: DataReference) -> Tuple[str, Dict]:
         query = """
             SELECT
                 name as column_name,
@@ -52,10 +82,10 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
             AND table = %(table)s
             ORDER BY position
         """
-        params = {'schema': table_ref.schema, 'table': table_ref.name}
+        params = {'schema': data_ref.schema, 'table': data_ref.name}
         return query, params
 
-    def build_primary_key_query(self, table_ref: TableReference) -> Tuple[str, Dict]:
+    def build_primary_key_query(self, data_ref: DataReference) -> Tuple[str, Dict]:
         query = """
             SELECT name as pk_column_name
             FROM system.columns
@@ -64,16 +94,16 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
             AND is_in_primary_key = 1
             ORDER BY position
         """
-        params = {'schema': table_ref.schema, 'table': table_ref.name}
+        params = {'schema': data_ref.schema, 'table': data_ref.name}
         return query, params
 
-    def build_count_query(self, table_ref: TableReference, date_column: str,
+    def build_count_query(self, data_ref: DataReference, date_column: str,
                          start_date: Optional[str], end_date: Optional[str]) -> Tuple[str, Dict]:
         query = f"""
             SELECT
                 toDate({date_column}) as dt,
                 count(*) as cnt
-            FROM {table_ref.full_name}
+            FROM {data_ref.full_name}
             WHERE 1=1
         """
         params = {}
@@ -89,7 +119,7 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
         query += " GROUP BY dt ORDER BY dt DESC"
         return query, params
 
-    def build_data_query(self, table_ref: TableReference, columns: List[str],
+    def build_data_query(self, data_ref: DataReference, columns: List[str],
                         date_column: Optional[str], update_column: str,
                         start_date: Optional[str], end_date: Optional[str],
                         exclude_recent_hours: Optional[int] = None) -> Tuple[str, Dict]:
@@ -105,7 +135,7 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
 
         query = f"""
         SELECT {', '.join(columns)}
-        FROM {table_ref.full_name}
+        FROM {data_ref.full_name}
         WHERE 1=1\n"""
 
         if start_date and date_column:

@@ -3,7 +3,7 @@ from typing import Optional, Dict, Callable, List, Tuple, Union
 from datetime import datetime, timedelta
 from ..constants import DATE_FORMAT,DATETIME_FORMAT
 from .base import BaseDatabaseAdapter, Engine
-from ..models import TableReference
+from ..models import DataReference, ObjectType
 from ..exceptions import QueryExecutionError
 from ..logger import app_logger
 import time
@@ -72,7 +72,37 @@ class OracleAdapter(BaseDatabaseAdapter):
 
             raise QueryExecutionError(f"Query failed: {str(e)}")
 
-    def build_metadata_columns_query(self, table_ref: TableReference) -> pd.DataFrame:
+    def get_object_type(self, data_ref: DataReference, engine: Engine) -> ObjectType:
+        """Determine if object is table or view in Oracle"""
+        query = """
+            SELECT
+                CASE
+                    WHEN object_type = 'TABLE' THEN 'table'
+                    WHEN object_type = 'VIEW' THEN 'view'
+                    WHEN object_type = 'MATERIALIZED VIEW' THEN 'materialized_view'
+                    ELSE 'unknown'
+                END as object_type
+            FROM all_objects
+            WHERE owner = UPPER(:schema_name)
+            AND object_name = UPPER(:table_name)
+        """
+        params = {'schema_name': data_ref.schema, 'table_name': data_ref.name}
+
+        try:
+            result = self._execute_query((query, params), engine, None)
+            if not result.empty:
+                type_str = result.iloc[0]['object_type']
+                return {
+                    'table': ObjectType.TABLE,
+                    'view': ObjectType.VIEW,
+                    'materialized_view': ObjectType.MATERIALIZED_VIEW
+                }.get(type_str, ObjectType.UNKNOWN)
+        except Exception as e:
+            app_logger.warning(f"Could not determine object type for {data_ref.full_name}: {str(e)}")
+
+        return ObjectType.UNKNOWN
+
+    def build_metadata_columns_query(self, data_ref: DataReference) -> pd.DataFrame:
         query = """
             SELECT
                 lower(column_name) as column_name,
@@ -85,11 +115,12 @@ class OracleAdapter(BaseDatabaseAdapter):
         """
         params = {}
 
-        params['schema_name'] = table_ref.schema
-        params['table_name'] = table_ref.name
+        params['schema_name'] = data_ref.schema
+        params['table_name'] = data_ref.name
         return query, params
 
-    def build_primary_key_query(self, table_ref: TableReference) -> pd.DataFrame:
+    def build_primary_key_query(self, data_ref: DataReference) -> pd.DataFrame:
+
         #todo add suport of unique indexes when no pk?
         query = """
             SELECT lower(cols.column_name) as pk_column_name
@@ -104,18 +135,18 @@ class OracleAdapter(BaseDatabaseAdapter):
         """
         params = {}
 
-        params['schema_name'] = table_ref.schema
-        params['table_name'] = table_ref.name
+        params['schema_name'] = data_ref.schema
+        params['table_name'] = data_ref.name
         return query, params
 
 
-    def build_count_query(self, table_ref: TableReference, date_column: str,
+    def build_count_query(self, data_ref: DataReference, date_column: str,
                             start_date: Optional[str], end_date: Optional[str]) -> Tuple[str, Dict]:
         query = f"""
             SELECT
                 to_char(trunc({date_column}, 'dd'),'YYYY-MM-DD') as dt,
                 count(*) as cnt
-            FROM {table_ref.full_name}
+            FROM {data_ref.full_name}
             WHERE 1=1\n"""
         params = {}
 
@@ -130,7 +161,7 @@ class OracleAdapter(BaseDatabaseAdapter):
         query += f" GROUP BY to_char(trunc({date_column}, 'dd'),'YYYY-MM-DD') ORDER BY dt DESC"
         return query, params
 
-    def build_data_query(self, table_ref: TableReference, columns: List[str],
+    def build_data_query(self, data_ref: DataReference, columns: List[str],
                         date_column: Optional[str], update_column: str,
                         start_date: Optional[str], end_date: Optional[str],
                         exclude_recent_hours: Optional[int] = None) -> Tuple[str, Dict]:
@@ -147,7 +178,7 @@ class OracleAdapter(BaseDatabaseAdapter):
 
         query = f"""
         SELECT {', '.join(columns)}
-        FROM {table_ref.full_name}
+        FROM {data_ref.full_name}
         WHERE 1=1\n"""
         #query += "AND ID = 'ffedb8f3-1a39-4738-8ee3-b11276768ea7'\n"
         if start_date and date_column:
@@ -166,9 +197,8 @@ class OracleAdapter(BaseDatabaseAdapter):
         if  update_column and exclude_recent_hours:
 
 
-            exclude_recent_hours = exclude_recent_hours/24
 
-            condition = f"""case when {update_column} > (sysdate - :exclude_recent_hours) then 'y' end as xrecently_changed"""
+            condition = f"""case when {update_column} > (sysdate - :exclude_recent_hours/24) then 'y' end as xrecently_changed"""
             params = {'exclude_recent_hours':  exclude_recent_hours}
             return condition, params
 

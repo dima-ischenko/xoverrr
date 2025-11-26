@@ -1,4 +1,4 @@
-from .core import DataQualityComparator, TableReference
+from .core import DataQualityComparator, DataReference
 from . import models, constants, exceptions, utils, adapters
 from .constants import (
     COMPARISON_SUCCESS,
@@ -10,7 +10,7 @@ __version__ = "1.1.0"
 
 __all__ = [
     'DataQualityComparator',
-    'TableReference',
+    'DataReference',
     'COMPARISON_SUCCESS',
     'COMPARISON_FAILED',
     'COMPARISON_SKIPPED',

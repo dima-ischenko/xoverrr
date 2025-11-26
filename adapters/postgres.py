@@ -2,7 +2,7 @@ import pandas as pd
 from typing import Optional, Dict, Callable, List, Tuple, Union
 from ..constants import DATETIME_FORMAT
 from .base import BaseDatabaseAdapter, Engine
-from ..models import TableReference
+from ..models import DataReference, ObjectType
 from ..exceptions import QueryExecutionError
 from json import dumps
 
@@ -45,8 +45,38 @@ class PostgresAdapter(BaseDatabaseAdapter):
             raise QueryExecutionError(f"Query failed: {str(e)}")
 
 
+    def get_object_type(self, data_ref: DataReference, engine: Engine) -> ObjectType:
+        """Determine if object is table, view, or materialized view"""
+        query = """
+            SELECT
+                CASE
+                    WHEN relkind = 'r' THEN 'table'
+                    WHEN relkind = 'v' THEN 'view'
+                    WHEN relkind = 'm' THEN 'materialized_view'
+                    ELSE 'unknown'
+                END as object_type
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = %(schema)s
+            AND c.relname = %(table)s
+        """
+        params = {'schema': data_ref.schema, 'table': data_ref.name}
 
-    def build_metadata_columns_query(self, table_ref: TableReference) -> pd.DataFrame:
+        try:
+            result = self._execute_query((query, params), engine, None)
+            if not result.empty:
+                type_str = result.iloc[0]['object_type']
+                return {
+                    'table': ObjectType.TABLE,
+                    'view': ObjectType.VIEW,
+                    'materialized_view': ObjectType.MATERIALIZED_VIEW
+                }.get(type_str, ObjectType.UNKNOWN)
+        except Exception as e:
+            app_logger.warning(f"Could not determine object type for {data_ref.full_name}: {str(e)}")
+
+        return ObjectType.UNKNOWN
+
+    def build_metadata_columns_query(self, data_ref: DataReference) -> pd.DataFrame:
 
         query = """
             SELECT
@@ -58,36 +88,36 @@ class PostgresAdapter(BaseDatabaseAdapter):
             AND table_name = %(table)s
             ORDER BY ordinal_position
         """
-        params = {'schema': table_ref.schema, 'table': table_ref.name}
+        params = {'schema': data_ref.schema, 'table': data_ref.name}
         return query, params
 
-    def build_primary_key_query(self, table_ref: TableReference) -> pd.DataFrame:
-
+    def build_primary_key_query(self, data_ref: DataReference) -> pd.DataFrame:
+        """Build primary key query with GreenPlum compatibility"""
         query = """
-        select
-                  pg_attribute.attname as pk_column_name
-                from pg_index, pg_class, pg_attribute, pg_namespace
-                where
-                  pg_class.oid = %(table)s::regclass and
-                  indrelid = pg_class.oid and
-                  nspname = %(schema)s and
-                  pg_class.relnamespace = pg_namespace.oid and
-                  pg_attribute.attrelid = pg_class.oid and
-                  pg_attribute.attnum = any(pg_index.indkey)
-                 and indisprimary
+            select
+                pg_attribute.attname as pk_column_name
+            from pg_index
+            join pg_class on pg_class.oid = pg_index.indrelid
+            join pg_attribute on pg_attribute.attrelid = pg_class.oid
+                            and pg_attribute.attnum = any(pg_index.indkey)
+            join pg_namespace on pg_namespace.oid = pg_class.relnamespace
+            where pg_namespace.nspname = %(schema)s
+            and pg_class.relname = %(table)s
+            and pg_index.indisprimary
+            order by pg_attribute.attnum
         """
 
-        params = {'schema': table_ref.schema, 'table': table_ref.name}
+        params = {'schema': data_ref.schema, 'table': data_ref.name}
         return query, params
 
-    def build_count_query(self, table_ref: TableReference, date_column: str,
+    def build_count_query(self, data_ref: DataReference, date_column: str,
                           start_date: Optional[str], end_date: Optional[str]
                          ) -> Tuple[str, Dict]:
         query = f"""
             SELECT
                 to_char(date_trunc('day', {date_column}),'YYYY-MM-DD') as dt,
                 count(*) as cnt
-            FROM {table_ref.full_name}
+            FROM {data_ref.full_name}
             WHERE 1=1\n"""
         params = {}
 
@@ -101,7 +131,7 @@ class PostgresAdapter(BaseDatabaseAdapter):
         query += f" GROUP BY to_char(date_trunc('day', {date_column}),'YYYY-MM-DD') ORDER BY dt DESC"
         return query, params
 
-    def build_data_query(self, table_ref: TableReference, columns: List[str],
+    def build_data_query(self, data_ref: DataReference, columns: List[str],
                         date_column: Optional[str], update_column: str,
                         start_date: Optional[str], end_date: Optional[str],
                         exclude_recent_hours: Optional[int] = None) -> Tuple[str, Dict]:
@@ -118,7 +148,7 @@ class PostgresAdapter(BaseDatabaseAdapter):
 
         query = f"""
         SELECT {', '.join(columns)}
-        FROM {table_ref.full_name}
+        FROM {data_ref.full_name}
         WHERE 1=1\n"""
 
         if start_date and date_column:
@@ -147,7 +177,7 @@ class PostgresAdapter(BaseDatabaseAdapter):
     def _get_type_conversion_rules(self, timezone) -> Dict[str, Callable]:
         return {
             r'date': lambda x: pd.to_datetime(x, errors='coerce').dt.strftime(DATETIME_FORMAT).str.replace(r'\s00:00:00$', '', regex=True),
-            r'boolean': lambda x: x.astype(int).astype(str),
+            r'boolean': lambda x: x.map({True: '1', False: '0', None: ''}),
             r'timestamptz|timestamp.*\bwith\b.*time\szone': lambda x: pd.to_datetime(x, errors='coerce').dt.tz_convert(timezone).dt.tz_localize(None).dt.strftime(DATETIME_FORMAT).str.replace(r'\s00:00:00$', '', regex=True),
             r'timestamp': lambda x: pd.to_datetime(x, errors='coerce').dt.strftime(DATETIME_FORMAT).str.replace(r'\s00:00:00$', '', regex=True),
             r'integer|numeric|double|float|double precision|real': lambda x: x.astype(str).str.replace(r'\.0+$', '', regex=True),

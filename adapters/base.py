@@ -3,7 +3,7 @@ import pandas as pd
 from typing import Dict, Callable, List, Tuple, Optional, Union
 import re
 from datetime import datetime, timedelta
-from ..models import TableReference
+from ..models import DataReference, ObjectType
 from ..constants import RESERVED_WORDS
 from sqlalchemy.engine import Engine
 from ..logger import app_logger
@@ -17,21 +17,26 @@ class BaseDatabaseAdapter(ABC):
         pass
 
     @abstractmethod
-    def build_metadata_columns_query(self, table_ref: TableReference) -> Tuple[str, Dict]:
+    def get_object_type(self, data_ref: DataReference, engine: Engine) -> ObjectType:
+        """Determine database object type"""
         pass
 
     @abstractmethod
-    def build_primary_key_query(self, table_ref: TableReference) -> Tuple[str, Dict]:
+    def build_metadata_columns_query(self, data_ref: DataReference) -> Tuple[str, Dict]:
         pass
 
     @abstractmethod
-    def build_count_query(self, table_ref: TableReference, date_column: str,
+    def build_primary_key_query(self, data_ref: DataReference) -> Tuple[str, Dict]:
+        pass
+
+    @abstractmethod
+    def build_count_query(self, data_ref: DataReference, date_column: str,
                          start_date: Optional[str], end_date: Optional[str]
                          ) -> Tuple[str, Dict]:
         """Returns tuple of (query, params) with recent data exclusion"""
         pass
 
-    def build_data_query_common(self, table_ref: TableReference, columns: List[str],
+    def build_data_query_common(self, data_ref: DataReference, columns: List[str],
                         date_column: Optional[str], update_column: Optional[str],
                         start_date: Optional[str], end_date: Optional[str],
                         exclude_recent_hours: Optional[int] = None) -> Tuple[str, Dict]:
@@ -43,12 +48,12 @@ class BaseDatabaseAdapter(ABC):
             for col in columns
         ]
 
-        result = self.build_data_query(table_ref, cols_select, date_column, update_column,
+        result = self.build_data_query(data_ref, cols_select, date_column, update_column,
                                      start_date, end_date, exclude_recent_hours)
         return result
 
     @abstractmethod
-    def build_data_query(self, table_ref: TableReference, columns: List[str],
+    def build_data_query(self, data_ref: DataReference, columns: List[str],
                         date_column: Optional[str], update_column: Optional[str],
                         start_date: Optional[str], end_date: Optional[str],
                         exclude_recent_hours: Optional[int] = None) -> Tuple[str, Dict]:
@@ -96,7 +101,7 @@ class BaseDatabaseAdapter(ABC):
             for pattern, rule in type_rules.items():
                 if re.search(pattern, col_type):
                     converter = rule
-                    app_logger.debug(f'found rule {converter=}')
+                    app_logger.debug(f'{col_name=}: found rule {converter=}')
                     break
 
             if converter is None:
