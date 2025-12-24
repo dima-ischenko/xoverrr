@@ -180,7 +180,7 @@ class OracleAdapter(BaseDatabaseAdapter):
         SELECT {', '.join(columns)}
         FROM {data_ref.full_name}
         WHERE 1=1\n"""
-        #query += "AND ID = 'ffedb8f3-1a39-4738-8ee3-b11276768ea7'\n"
+
         if start_date and date_column:
             query += f"            AND {date_column} >= trunc(to_date(:start_date, 'YYYY-MM-DD'), 'dd')\n"
             params['start_date'] = start_date
@@ -209,7 +209,7 @@ class OracleAdapter(BaseDatabaseAdapter):
             #errors='coerce' is needed as workaround for >= 2262 year: Out of bounds nanosecond timestamp (3023-04-04 00:00:00)
             #  todo need specify explicit dateformat (nls params) in sessions, for the correct string conversion to datetime
             r'date': lambda x: pd.to_datetime(x, errors='coerce').dt.strftime(DATETIME_FORMAT).str.replace(r'\s00:00:00$', '', regex=True),
-            r'timestamp.*\bwith\b.*time\szone': lambda x: pd.to_datetime(x, errors='coerce').dt.tz_convert(timezone).dt.tz_localize(None).dt.strftime(DATETIME_FORMAT).str.replace(r'\s00:00:00$', '', regex=True),
+            r'timestamp.*\bwith\b.*time\szone': lambda x: pd.to_datetime(x, utc=True, errors='coerce').dt.tz_convert(timezone).dt.tz_localize(None).dt.strftime(DATETIME_FORMAT).str.replace(r'\s00:00:00$', '', regex=True),
             r'timestamp': lambda x: pd.to_datetime(x, errors='coerce').dt.strftime(DATETIME_FORMAT).str.replace(r'\s00:00:00$', '', regex=True),
             r'number|float|double': lambda x: x.astype(str).str.replace(r'\.0+$', '', regex=True).str.lower(), #lower case for exponential form compare
         }

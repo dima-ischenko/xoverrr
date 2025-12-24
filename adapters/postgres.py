@@ -178,7 +178,7 @@ class PostgresAdapter(BaseDatabaseAdapter):
         return {
             r'date': lambda x: pd.to_datetime(x, errors='coerce').dt.strftime(DATETIME_FORMAT).str.replace(r'\s00:00:00$', '', regex=True),
             r'boolean': lambda x: x.map({True: '1', False: '0', None: ''}),
-            r'timestamptz|timestamp.*\bwith\b.*time\szone': lambda x: pd.to_datetime(x, errors='coerce').dt.tz_convert(timezone).dt.tz_localize(None).dt.strftime(DATETIME_FORMAT).str.replace(r'\s00:00:00$', '', regex=True),
+            r'timestamptz|timestamp.*\bwith\b.*time\szone': lambda x: pd.to_datetime(x, utc=True, errors='coerce').dt.tz_convert(timezone).dt.tz_localize(None).dt.strftime(DATETIME_FORMAT).str.replace(r'\s00:00:00$', '', regex=True),
             r'timestamp': lambda x: pd.to_datetime(x, errors='coerce').dt.strftime(DATETIME_FORMAT).str.replace(r'\s00:00:00$', '', regex=True),
             r'integer|numeric|double|float|double precision|real': lambda x: x.astype(str).str.replace(r'\.0+$', '', regex=True),
             r'json': lambda x: '"' + x.astype(str).str.replace(r'"', '\\"', regex=True) + '"',
