@@ -170,15 +170,14 @@ def compare_dataframes(
     2) by vectors
 
     Parameters:
-    -----------
-    source_df : pd.DataFrame
-        Source dataframe
-    target_df : pd.DataFrame
-        Target dataframe for comparison
-    key_columns : List[str]
-        List of primary key columns
-    max_examples : int, optional
-        Maximum number of discrepancy examples per column
+        source_df : pd.DataFrame
+            Source dataframe
+        target_df : pd.DataFrame
+            Target dataframe for comparison
+        key_columns : List[str]
+            List of primary key columns
+        max_examples : int, optional
+            Maximum number of discrepancy examples per column
 
     Returns:
     --------
@@ -501,7 +500,7 @@ def generate_comparison_count_report(source_table:str,
 
 
         rl.append(f"\nDETAIL DIFFERENCES:")
-        rl.append (details.mismatches_per_column
+        rl.append (details.mismatches_per_column.to_string(index=False)
 
                )
 
@@ -548,11 +547,11 @@ def clean_recently_changed_data(df1:pd.DataFrame, df2:pd.DataFrame, primary_keys
     Mutually removes rows with recently changed records
 
     Parameters:
-    df1, df2: pandas.DataFrame
-    primary_keys: list -
+        df1, df2: pandas.DataFrame
+        primary_keys: list 
 
     Returns:
-    tuple: (df1_processed, df2_processed)
+        tuple: (df1_processed, df2_processed)
     """
     app_logger.info(f'before exclusion recently changed rows source: {len(df1)}, target {len(df2)}')
 

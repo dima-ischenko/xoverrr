@@ -95,7 +95,7 @@ class DataQualityComparator:
                     self.comparison_stats['tables_skipped'].add(source_table.full_name)
 
     def compare_counts(
-            self,
+        self,
         source_table: DataReference,
         target_table: DataReference,
         date_column: Optional[str] = None,
@@ -134,12 +134,31 @@ class DataQualityComparator:
         update_column: Optional[str] = None,
         date_range: Optional[Tuple[str, str]] = None,
         exclude_columns: Optional[List[str]] = None,
+        include_columns: Optional[List[str]] = None,
         custom_primary_key: Optional[List[str]] = None,
         tolerance_percentage: float = 0.0,
         exclude_recent_hours: Optional[int] = None,
         max_examples: Optional[int] = ct.DEFAULT_MAX_EXAMPLES
     ) -> Tuple[str, str, Optional[ComparisonStats], Optional[ComparisonDiffDetails]]:
+        """
+        Compare data from custom queries with specified key columns
 
+        Parameters:
+            source_table: `DataReference` 
+                source table to compare
+            target_table: `DataReference`
+                target table to compare
+            custom_primary_key : `List[str]`
+                List of primary key columns for comparison.
+            exclude_columns : `Optional[List[str]] = None` 
+                Columns to exclude from comparison.
+            include_columns : `Optional[List[str]] = None` 
+                Columns to include from comparison (default all cols)
+            tolerance_percentage : `float` 
+                Tolerance percentage for discrepancies.
+            max_examples 
+                Maximum number of discrepancy examples per column
+        """
         self._validate_inputs(source_table, target_table)
 
         exclude_hours = exclude_recent_hours or self.default_exclude_recent_hours
@@ -147,13 +166,14 @@ class DataQualityComparator:
         start_date, end_date = date_range or (None, None)
         exclude_cols = exclude_columns or []
         custom_keys = custom_primary_key
+        include_cols = include_columns or []
 
         try:
             self.comparison_stats['compared'] += 1
 
             status, report, stats, details = self._compare_samples(
                     source_table, target_table, date_column, update_column,
-                    start_date, end_date, exclude_cols,
+                    start_date, end_date, exclude_cols,include_cols, 
                     custom_keys, tolerance_percentage, exclude_hours, max_examples
             )
 
@@ -245,6 +265,7 @@ class DataQualityComparator:
         start_date: Optional[str],
         end_date: Optional[str],
         exclude_columns: List[str],
+        include_columns: List[str],
         custom_key_columns: Optional[List[str]],
         tolerance_percentage:float,
         exclude_recent_hours: Optional[int],
@@ -263,8 +284,12 @@ class DataQualityComparator:
             target_columns_meta = self._get_metadata_cols(target_table, self.target_engine)
             app_logger.info('target_columns meta:\n')
             app_logger.info(target_columns_meta.to_string(index=False))
-            key_columns = None
 
+            intersect = list(set(include_columns)&set(exclude_columns))
+            if intersect:
+                app_logger.warning(f'Intersection columns between Include and exclude: {",".join(intersect)}')
+            
+            key_columns = None
 
             if custom_key_columns:
                 key_columns = custom_key_columns
@@ -288,13 +313,44 @@ class DataQualityComparator:
                     app_logger.warning(f"Primary keys differ: source={source_pk['pk_column_name'].tolist()}, target={target_pk['pk_column_name'].tolist()}")
                 key_columns = source_pk['pk_column_name'].tolist() or target_pk['pk_column_name'].tolist()
                 if not key_columns:
-                    raise MetadataError(f"Primary key not found in the source neither in the target and not provided")
+                    raise MetadataError(f"Primary key not found in the source neither in the target and not provided") 
 
+            if include_columns:
+            
+                if not set(include_columns) & set(key_columns):
+                    app_logger.warning(f'The primary key was not included in the column list.\
+                                       The key column was included in the resulting query automatically. PK:{key_columns}') 
+
+                include_columns = list(set(include_columns + key_columns))
+
+                source_columns_meta = source_columns_meta[
+                    source_columns_meta['column_name'].isin(include_columns)
+                ]
+                target_columns_meta = target_columns_meta[
+                    target_columns_meta['column_name'].isin(include_columns)
+                ]
+            
+            if exclude_columns:
+
+                if set(exclude_columns) & set(key_columns):
+                    app_logger.warning(f'The primary key has been excluded from the column list.\
+                                       However, the key column must be present in the resulting query.s PK:{key_columns}') 
+
+                exclude_columns = list(set(exclude_columns) - set(key_columns))
+
+                source_columns_meta = source_columns_meta[
+                    ~source_columns_meta['column_name'].isin(exclude_columns)
+                ]
+                target_columns_meta = target_columns_meta[
+                    ~target_columns_meta['column_name'].isin(exclude_columns)
+                ]
 
             common_cols_df, source_only_cols, target_only_cols = self._analyze_columns_meta(source_columns_meta, target_columns_meta)
-            common_cols_df = common_cols_df[~common_cols_df['column_name'].isin(exclude_columns)]
             common_cols = common_cols_df['column_name'].tolist()
 
+            if not common_cols:
+                raise MetadataError(f"No one column to compare, need to check tables or reduce the exclude_columns list: {','.join(exclude_columns)}")
+            
             source_data, source_query, source_params = self._get_table_data(
                 self.source_engine, source_table, source_columns_meta, common_cols,
                 date_column, update_column, start_date, end_date, exclude_recent_hours
@@ -363,21 +419,22 @@ class DataQualityComparator:
         Compare data from custom queries with specified key columns
 
         Parameters:
-        -----------
-        source_query : Union[str, Tuple[str, Dict]]
-            Source query (can be string or tuple with query and params)
-        target_query : Union[str, Tuple[str, Dict]]
-            Target query (can be string or tuple with query and params)
-        custom_primary_key : List[str]
-            List of primary key columns for comparison
-        exclude_columns : Optional[List[str]]
-            Columns to exclude from comparison
-        tolerance_percentage : float
-            Tolerance percentage for discrepancies
-
+            source_query : Union[str, Tuple[str, Dict]]  
+                Source query (can be string or tuple with query and params).
+            target_query : Union[str, Tuple[str, Dict]]
+                Target query (can be string or tuple with query and params).
+            custom_primary_key : List[str]
+                List of primary key columns for comparison.
+            exclude_columns : Optional[List[str]] = None 
+                Columns to exclude from comparison.
+            tolerance_percentage : float 
+                Tolerance percentage for discrepancies.
+            max_examples: int
+                Maximum number of discrepancy examples per column 
+                
         Returns:
-        --------
-        Tuple[str, Optional[ComparisonStats], Optional[ComparisonDiffDetails]]
+        ----------
+            Tuple[str, Optional[ComparisonStats], Optional[ComparisonDiffDetails]]
         """
         source_engine = self.source_engine
         target_engine = self.target_engine
@@ -432,7 +489,6 @@ class DataQualityComparator:
             status = ct.COMPARISON_FAILED
             self._update_stats(status, None)
             return status, None, None, None
-
     def _get_metadata_cols(self, data_ref: DataReference, engine: Engine) -> pd.DataFrame:
         """Get metadata with proper source handling"""
         adapter = self._get_adapter(DBMSType.from_engine(engine))
@@ -446,7 +502,8 @@ class DataQualityComparator:
         return columns_meta
 
     def _get_metadata_pk(self, data_ref: DataReference, engine: Engine) -> pd.DataFrame:
-        """Get metadata with proper source handling"""
+        """Get metadata with proper source handling
+        """
         adapter = self._get_adapter(DBMSType.from_engine(engine))
 
         query, params = adapter.build_primary_key_query(data_ref)
