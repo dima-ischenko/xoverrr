@@ -26,10 +26,9 @@ services:
       ORACLE_PWD: test
     shm_size: 2g
     volumes:
-      - ./oracle/:/opt/oracle/scripts/setup/
+      - ./oracle/init.sql:/opt/oracle/scripts/startup/init.sql
     healthcheck:
       test: ["CMD-SHELL", "/opt/oracle/checkDBStatus.sh"]
-      #test: ["CMD-SHELL", "echo 'select 1 from dual;' | sqlplus -s system/test@//localhost:1521/FREEPDB1 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 15
@@ -44,8 +43,8 @@ services:
       CLICKHOUSE_USER: default
       CLICKHOUSE_PASSWORD: abcde
     ports:
-      - "8123:8123"  # HTTP порт
-      - "9000:9000"  # Native порт
+      - "8123:8123" 
+      - "9000:9000"
     volumes:
       - ./clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql
     mem_limit: 1g
