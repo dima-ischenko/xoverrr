@@ -8,7 +8,7 @@ started via Docker.
 - Brew
 - Docker
 - Docker Compose
-- Colima
+- Colima (required for macOS with M cpus for Oracle instance)
 - Python 3.9+
 - Installed project dependencies
 
