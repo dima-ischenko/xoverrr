@@ -26,9 +26,10 @@ services:
       ORACLE_PWD: test
     shm_size: 2g
     volumes:
-      - ./oracle/init.sql:/opt/oracle/scripts/setup/init.sql
+      - ./oracle/:/opt/oracle/scripts/setup/
     healthcheck:
-      test: ["CMD-SHELL", "healthcheck.sh"]
+      test: ["CMD-SHELL", "/opt/oracle/checkDBStatus.sh"]
+      #test: ["CMD-SHELL", "echo 'select 1 from dual;' | sqlplus -s system/test@//localhost:1521/FREEPDB1 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 15
