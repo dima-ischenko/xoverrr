@@ -4,11 +4,17 @@ This folder contains integration tests for xoverrr using real databases
 started via Docker.
 
 ## Prerequisites
+- Linux/Mac environment
+- Brew
 - Docker
 - Docker Compose
+- Colima
 - Python 3.9+
 - Installed project dependencies
 
+```bash
+brew install colima docker docker-compose lima-additional-guestagents   
+```
 ---
 
 ## Start databases

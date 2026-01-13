@@ -41,8 +41,11 @@ EXCEPTION
     WHEN OTHERS THEN NULL;
 END;
 /
+*/
 
-CREATE TABLE SRC.customers (
+ALTER SESSION SET CONTAINER = FREEPDB1;
+
+CREATE TABLE customers (
     id          NUMBER PRIMARY KEY,
     name        VARCHAR2(100),
     created_at  DATE,
@@ -50,13 +53,14 @@ CREATE TABLE SRC.customers (
 );
 
 -- One intentional mismatch vs Postgres (name for id=2)
-INSERT INTO SRC.customers VALUES (1, 'Alice',   DATE '2024-01-01', DATE '2024-01-01');
-INSERT INTO SRC.customers VALUES (2, 'Bob',     DATE '2024-01-02', DATE '2024-01-02');
-INSERT INTO SRC.customers VALUES (3, 'Charlie', DATE '2024-01-03', DATE '2024-01-03');
+INSERT INTO customers VALUES (1, 'Alice',   DATE '2024-01-01', DATE '2024-01-01');
+INSERT INTO customers VALUES (2, 'Bob',     DATE '2024-01-02', DATE '2024-01-02');
+INSERT INTO customers VALUES (3, 'Charlie', DATE '2024-01-03', DATE '2024-01-03');
+
 
 COMMIT;
 
-
+/*
 -- Empty table
 BEGIN
     EXECUTE IMMEDIATE 'DROP TABLE SRC.empty_table';
