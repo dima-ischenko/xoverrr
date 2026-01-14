@@ -39,7 +39,7 @@ services:
   clickhouse:
     image: clickhouse/clickhouse-server:23.8
     environment:
-      CLICKHOUSE_DB: default
+      CLICKHOUSE_DB: test_db
       CLICKHOUSE_USER: test_user
       CLICKHOUSE_PASSWORD: test_pass
     ports:
