@@ -3,27 +3,28 @@ services:
     image: postgres:15.4
     environment:
       POSTGRES_USER: test
-      POSTGRES_PASSWORD: test
-      POSTGRES_DB: testdb
+      POSTGRES_PASSWORD: test_pass
+      POSTGRES_DB: test_db
     ports:
       - "5433:5432"
     volumes:
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
     mem_limit: 512m
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U test -d testdb"]
+      test: ["CMD-SHELL", "pg_isready -U test -d test_db"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  oracle-free:
+  oracle:
     image: container-registry.oracle.com/database/free:23.26.0.0-lite
     container_name: oracle-free
     platform: linux/amd64
     ports:
       - "1521:1521"
     environment:
-      ORACLE_PWD: test
+      ORACLE_PWD: test_pass
+      ORACLE_PDB: test_db
     shm_size: 2g
     volumes:
       - ./oracle/init.sql:/opt/oracle/scripts/startup/init.sql
@@ -35,13 +36,12 @@ services:
       start_period: 120s
     restart: unless-stopped
 
-
   clickhouse:
     image: clickhouse/clickhouse-server:23.8
     environment:
       CLICKHOUSE_DB: default
-      CLICKHOUSE_USER: default
-      CLICKHOUSE_PASSWORD: abcde
+      CLICKHOUSE_USER: test_user
+      CLICKHOUSE_PASSWORD: test_pass
     ports:
       - "8123:8123" 
       - "9000:9000"
@@ -57,4 +57,3 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
-

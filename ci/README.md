@@ -14,6 +14,8 @@ started via Docker.
 
 ```bash
 brew install colima docker docker-compose lima-additional-guestagents   
+colima start --arch x86_64 --memory 4 --cpu 2 --disk 40
+docker context use colima
 ```
 ---
 
