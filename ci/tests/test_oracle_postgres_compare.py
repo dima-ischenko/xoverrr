@@ -31,8 +31,8 @@ class TestOraclePostgresComparison:
         )
 
         status, report, stats, details = comparator.compare_counts(
-            source_table=DataReference("orders", "SRC"),
-            target_table=DataReference("orders", "public"),
+            source_table=DataReference("orders", "test"),
+            target_table=DataReference("orders", "test"),
             date_column="created_at",
             date_range=("2024-01-01", "2024-01-05"),
             tolerance_percentage=0.0,
@@ -55,8 +55,8 @@ class TestOraclePostgresComparison:
         )
 
         status, report, stats, details = comparator.compare_sample(
-            source_table=DataReference("customers", "SRC"),
-            target_table=DataReference("customers", "public"),
+            source_table=DataReference("customers", "test"),
+            target_table=DataReference("customers", "test"),
             date_column="created_at",
             update_column="updated_at",
             date_range=("2024-01-01", "2024-01-03"),
@@ -80,8 +80,8 @@ class TestOraclePostgresComparison:
         )
 
         status, report, stats, details = comparator.compare_sample(
-            source_table=DataReference("empty_table", "SRC"),
-            target_table=DataReference("empty_table", "public"),
+            source_table=DataReference("empty_table", "test"),
+            target_table=DataReference("empty_table", "test"),
             date_column="created_at",
             date_range=("1999-01-01", "1999-01-02"),
         )
