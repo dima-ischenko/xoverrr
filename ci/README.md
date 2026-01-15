@@ -1,40 +1,144 @@
-# Integration tests (CI)
+# Integration Tests (CI)
 
-This folder contains integration tests for xoverrr using real databases
-started via Docker.
+This folder contains integration tests for xoverrr using real databases started via Docker.
 
 ## Prerequisites
-- Linux/Mac environment
-- Brew
-- Docker
-- Docker Compose
-- Colima (required for macOS with M cpus for Oracle instance)
-- Python 3.9+
-- Installed project dependencies
+
+- **Linux/macOS environment**
+- **Python 3.9+** with `venv` module available
+- **Docker**
+- **Docker Compose**
+
+### macOS-specific Requirements (Apple Silicon M1/M2/M3 processors)
+For macOS with Apple Silicon (M1/M2/M3) processors, Oracle database requires x86_64 architecture. Use Colima to run x86_64 containers:
 
 ```bash
-brew install colima docker docker-compose lima-additional-guestagents   
+# Install required tools via Homebrew
+brew install colima docker docker-compose
+
+# Start Colima with x86_64 architecture
 colima start --arch x86_64 --memory 6 --cpu 2 --disk 40
+
+# Set Docker context to Colima
 docker context use colima
 ```
----
 
-## Start databases
+**Note for Linux/Intel Mac users:** Colima is not required. You can use Docker Desktop or native Docker directly.
+
+## Installation & Setup
+
+### 1. Create and Activate Virtual Environment
 
 ```bash
-docker-compose -f docker/docker-compose.yml up -d
+# Create virtual environment in project root
+python -m venv venv
+
+# Activate it (Linux/macOS)
+source venv/bin/activate
 ```
 
-## Restart databases (clean state)
+### 2. Install Dependencies
 
 ```bash
+# Install package in development mode with test dependencies
+pip install -e ".[dev,test]"
+
+# Or install all dependencies
+pip install -e .
+pip install pytest pytest-cov
+```
+
+### 3. Start Test Databases
+
+```bash
+# Navigate to ci directory
+cd ci
+
+# Start all databases in detached mode
+docker-compose -f docker/docker-compose.yml up -d
+
+# Wait for databases to be ready (healthchecks will complete)
+# Check status
+docker-compose -f docker/docker-compose.yml ps
+```
+
+### 4. Reset Databases (Clean State)
+
+```bash
+# Stop and remove containers with volumes
 docker-compose -f docker/docker-compose.yml down -v
+
+# Restart fresh
 docker-compose -f docker/docker-compose.yml up -d
 ```
 
-## Run all/pair/single integration tests
+## Running Tests
+
+From the project root directory (with virtual environment activated):
+
 ```bash
-pytest tests -v
-pytest tests/test_oracle_postgres_compare.py -v
-pytest tests/test_oracle_postgres_compare.py::TestOraclePostgresComparison::test_compare_counts_success -v
+# Run all integration tests
+pytest ci/tests -v
+
+# Run specific test file
+pytest ci/tests/test_oracle_postgres_compare.py -v
+
+# Run specific test method
+pytest ci/tests/test_oracle_postgres_compare.py::TestOraclePostgresComparison::test_compare_counts_success -v
+
+# Run with coverage report
+pytest ci/tests --cov=src --cov-report=html -v
+```
+
+## Test Database Credentials
+
+The test containers use the following credentials:
+
+| Database   | Host      | Port | User     | Password  | Database |
+|------------|-----------|------|----------|-----------|----------|
+| PostgreSQL | localhost | 5433 | test     | test_pass | test_db  |
+| Oracle     | localhost | 1521 | test     | test_pass | test_db  |
+| ClickHouse | localhost | 8123 | test_user| test_pass | test_db  |
+
+## Troubleshooting
+
+### Oracle Connection Issues on macOS
+If Oracle tests fail on Apple Silicon Mac:
+1. Ensure Colima is running with x86_64 architecture
+2. Verify Docker context is set to Colima: `docker context use colima`
+3. Restart containers: `docker-compose -f docker/docker-compose.yml down -v && docker-compose -f docker/docker-compose.yml up -d`
+
+### Virtual Environment Issues
+If package imports fail:
+```bash
+# Ensure you're in the project root
+cd /path/to/xoverrr
+
+# Reactivate virtual environment
+deactivate
+source venv/bin/activate
+
+# Reinstall in development mode
+pip install -e ".[dev,test]"
+```
+
+### Database Health Checks
+Check if databases are healthy:
+```bash
+docker-compose -f ci/docker/docker-compose.yml ps
+
+# Check individual container logs
+docker-compose -f ci/docker/docker-compose.yml logs postgres
+docker-compose -f ci/docker/docker-compose.yml logs oracle
+```
+
+## Cleaning Up
+
+```bash
+# Stop all test containers
+docker-compose -f ci/docker/docker-compose.yml down
+
+# Remove virtual environment (when done)
+deactivate
+rm -rf venv/
 ```
