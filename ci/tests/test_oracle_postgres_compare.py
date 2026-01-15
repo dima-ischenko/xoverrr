@@ -1,6 +1,10 @@
 import pytest
+import sys
+import os
 
-from xoverrr import (
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src'))
+
+from src import (
     DataQualityComparator,
     DataReference,
     COMPARISON_SUCCESS,
