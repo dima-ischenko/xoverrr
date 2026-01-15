@@ -1,13 +1,7 @@
--- ClickHouse initialization script for integration tests
-
--- Create database / schema
 
 CREATE DATABASE IF NOT EXISTS test;
-
--- Use the test database
 USE test;
 
--- Drop and create orders table
 DROP TABLE IF EXISTS orders;
 
 CREATE TABLE orders (
@@ -18,7 +12,7 @@ CREATE TABLE orders (
 ENGINE = MergeTree()
 ORDER BY id;
 
--- Insert test data
+
 INSERT INTO orders(id, created_at, amount)
 select 1, toDate('2024-01-01'), 100 union all
 select 2, toDate('2024-01-02'), 150 union all
@@ -26,7 +20,7 @@ select 3, toDate('2024-01-03'), 200 union all
 select 4, toDate('2024-01-04'), 250 union all
 select 5, toDate('2024-01-05'), 300;
 
--- Drop and create empty table
+
 DROP TABLE IF EXISTS empty_table;
 
 CREATE TABLE empty_table (
@@ -36,7 +30,6 @@ CREATE TABLE empty_table (
 ENGINE = MergeTree()
 ORDER BY id;
 
--- Drop and create customers table
 DROP TABLE IF EXISTS customers;
 
 CREATE TABLE customers (

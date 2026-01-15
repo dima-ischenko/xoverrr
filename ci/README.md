@@ -14,7 +14,7 @@ started via Docker.
 
 ```bash
 brew install colima docker docker-compose lima-additional-guestagents   
-colima start --arch x86_64 --memory 4 --cpu 2 --disk 40
+colima start --arch x86_64 --memory 6 --cpu 2 --disk 40
 docker context use colima
 ```
 ---
@@ -34,7 +34,7 @@ docker-compose -f docker/docker-compose.yml up -d
 
 ## Run all/pair/single integration tests
 ```bash
-pytest tests
-pytest tests/test_oracle_postgres_compare.py
-pytest tests/test_oracle_postgres_compare.py::TestOraclePostgresComparison::test_compare_counts_success
+pytest tests -v
+pytest tests/test_oracle_postgres_compare.py -v
+pytest tests/test_oracle_postgres_compare.py::TestOraclePostgresComparison::test_compare_counts_success -v
 ```

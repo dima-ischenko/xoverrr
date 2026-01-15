@@ -21,7 +21,7 @@ INSERT INTO orders (id, created_at, amount) VALUES (3, DATE '2024-01-03', 200);
 INSERT INTO orders (id, created_at, amount) VALUES (4, DATE '2024-01-04', 250);
 INSERT INTO orders (id, created_at, amount) VALUES (5, DATE '2024-01-05', 300);
 
--- Таблица customers
+
 CREATE TABLE customers (
     id          NUMBER PRIMARY KEY,
     name        VARCHAR2(100),
@@ -33,10 +33,8 @@ INSERT INTO customers VALUES (1, 'Alice',   DATE '2024-01-01', DATE '2024-01-01'
 INSERT INTO customers VALUES (2, 'Bob',     DATE '2024-01-02', DATE '2024-01-02');
 INSERT INTO customers VALUES (3, 'Charlie', DATE '2024-01-03', DATE '2024-01-03');
 
--- Пустая таблица
+
 CREATE TABLE empty_table (
-    id          NUMBER,
+    id          NUMBER PRIMARY KEY,
     created_at  DATE
 );
-
-COMMIT;
