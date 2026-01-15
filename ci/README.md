@@ -31,10 +31,13 @@ docker context use colima
 
 ```bash
 # Create virtual environment in project root
-python -m venv venv
+python3 -m venv venv
 
 # Activate it (Linux/macOS)
 source venv/bin/activate
+
+# Check Python version (should be 3.9+)
+python --version
 ```
 
 ### 2. Install Dependencies
@@ -43,7 +46,10 @@ source venv/bin/activate
 # Install package in development mode with test dependencies
 pip install -e ".[dev,test]"
 
-# Or install all dependencies
+# If pip command is not found, use pip3
+# pip3 install -e ".[dev,test]"
+
+# Or install all dependencies separately
 pip install -e .
 pip install pytest pytest-cov
 ```
@@ -78,24 +84,24 @@ From the project root directory (with virtual environment activated):
 
 ```bash
 # Run all integration tests
-pytest ci/tests -v
+python -m pytest ci/tests -v
 
 # Run specific test file
-pytest ci/tests/test_oracle_postgres_compare.py -v
+python -m pytest ci/tests/test_oracle_postgres_compare.py -v
 
 # Run specific test method
-pytest ci/tests/test_oracle_postgres_compare.py::TestOraclePostgresComparison::test_compare_counts_success -v
+python -m pytest ci/tests/test_oracle_postgres_compare.py::TestOraclePostgresComparison::test_compare_counts_success -v
 
 # Run with coverage report
-pytest ci/tests --cov=src --cov-report=html -v
+python -m pytest ci/tests --cov=src --cov-report=html -v
 ```
 
 ## Test Database Credentials
 
 The test containers use the following credentials:
 
-| Database   | Host      | Port | User     | Password  | Database |
-|------------|-----------|------|----------|-----------|----------|
+| Database   | Host      | Port | User     | Password | Database |
+|------------|-----------|------|----------|----------|----------|
 | PostgreSQL | localhost | 5433 | test     | test_pass | test_db  |
 | Oracle     | localhost | 1521 | test     | test_pass | test_db  |
 | ClickHouse | localhost | 8123 | test_user| test_pass | test_db  |
@@ -120,6 +126,16 @@ source venv/bin/activate
 
 # Reinstall in development mode
 pip install -e ".[dev,test]"
+```
+
+### Python Command Issues
+If `python` command is not found:
+```bash
+# Use python3 explicitly
+python3 -m venv venv
+source venv/bin/activate
+python3 -m pip install -e ".[dev,test]"
+python3 -m pytest ci/tests -v
 ```
 
 ### Database Health Checks
