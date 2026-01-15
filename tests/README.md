@@ -57,8 +57,8 @@ pip install pytest pytest-cov
 ### 3. Start Test Databases
 
 ```bash
-# Navigate to ci directory
-cd ci
+# Navigate to integration directory
+cd tests/integration
 
 # Start all databases in detached mode
 docker-compose -f docker/docker-compose.yml up -d
@@ -84,16 +84,16 @@ From the project root directory (with virtual environment activated):
 
 ```bash
 # Run all integration tests
-python -m pytest ci/tests -v
+python -m pytest tests/integration -v
 
 # Run specific test file
-python -m pytest ci/tests/test_oracle_postgres_compare.py -v
+python -m pytest tests/integration/test_oracle_postgres_compare.py -v
 
 # Run specific test method
-python -m pytest ci/tests/test_oracle_postgres_compare.py::TestOraclePostgresComparison::test_compare_counts_success -v
+python -m pytest tests/integration/test_oracle_postgres_compare.py::TestOraclePostgresComparison::test_compare_counts_success -v
 
 # Run with coverage report
-python -m pytest ci/tests --cov=src --cov-report=html -v
+python -m pytest tests --cov=src --cov-report=html -v
 ```
 
 ## Test Database Credentials
@@ -135,24 +135,24 @@ If `python` command is not found:
 python3 -m venv venv
 source venv/bin/activate
 python3 -m pip install -e ".[dev,test]"
-python3 -m pytest ci/tests -v
+python3 -m pytest tests -v
 ```
 
 ### Database Health Checks
 Check if databases are healthy:
 ```bash
-docker-compose -f ci/docker/docker-compose.yml ps
+docker-compose -f docker/docker-compose.yml ps
 
 # Check individual container logs
-docker-compose -f ci/docker/docker-compose.yml logs postgres
-docker-compose -f ci/docker/docker-compose.yml logs oracle
+docker-compose -f docker/docker-compose.yml logs postgres
+docker-compose -f docker/docker-compose.yml logs oracle
 ```
 
 ## Cleaning Up
 
 ```bash
 # Stop all test containers
-docker-compose -f ci/docker/docker-compose.yml down
+docker-compose -f docker/docker-compose.yml down
 
 # Remove virtual environment (when done)
 deactivate
