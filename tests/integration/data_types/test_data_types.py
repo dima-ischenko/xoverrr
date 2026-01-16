@@ -42,18 +42,18 @@ class TestDataTypesComparison:
             conn.execute(text("""
                 CREATE TABLE test_timestamps (
                     id NUMBER PRIMARY KEY,
-                    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
-                    updated_at TIMESTAMP WITH TIME ZONE,
+                    created_at TIMESTAMP NOT NULL,
+                    updated_at TIMESTAMP,
                     description VARCHAR2(100)
                 )
             """))
             
-            # Insert test data
+            # Insert test data (implicitly in +05:00)
             conn.execute(text("""
                 INSERT INTO test_timestamps (id, created_at, updated_at, description) VALUES
-                (1, TIMESTAMP '2024-01-01 10:00:00 +00:00', TIMESTAMP '2024-01-01 10:00:00 +00:00', 'First record'),
-                (2, TIMESTAMP '2024-01-02 11:30:00 +01:00', TIMESTAMP '2024-01-02 11:30:00 +01:00', 'Second record'),
-                (3, TIMESTAMP '2024-01-03 14:45:00 +09:00', TIMESTAMP '2024-01-03 14:45:00 +09:00', 'Third record')
+                (1, TIMESTAMP '2024-01-01 15:00:00', TIMESTAMP '2024-01-01 15:00:00', 'First record'),
+                (2, TIMESTAMP '2024-01-02 15:30:00', TIMESTAMP '2024-01-02 15:30:00', 'Second record'),
+                (3, TIMESTAMP '2024-01-03 10:45:00', TIMESTAMP '2024-01-03 10:45:00', 'Third record')
             """))
             
             # Create test_dates table
@@ -102,9 +102,9 @@ class TestDataTypesComparison:
             # Insert test data
             conn.execute(text("""
                 INSERT INTO test_timestamps (id, created_at, updated_at, description) VALUES
-                (1, '2024-01-01 10:00:00 UTC', '2024-01-01 10:00:00 UTC', 'First record'),
-                (2, '2024-01-02 11:30:00 Europe/London', '2024-01-02 11:30:00 Europe/London', 'Second record'),
-                (3, '2024-01-03 14:45:00 Asia/Tokyo', '2024-01-03 14:45:00 Asia/Tokyo', 'Third record')
+                (1, '2024-01-01 10:00:00 +00:00', '2024-01-01 10:00:00 +00:00', 'First record'),
+                (2, '2024-01-02 11:30:00 +01:00', '2024-01-02 11:30:00 +01:00', 'Second record'),
+                (3, '2024-01-03 14:45:00 +09:00', '2024-01-03 14:45:00 +09:00', 'Third record')
             """))
             
             # Create test_dates table
@@ -134,7 +134,7 @@ class TestDataTypesComparison:
         comparator = DataQualityComparator(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
-            timezone="UTC",
+            timezone="+05:00",
         )
 
         status, report, stats, details = comparator.compare_sample(
