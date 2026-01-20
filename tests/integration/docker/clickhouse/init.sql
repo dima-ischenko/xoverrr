@@ -29,18 +29,3 @@ CREATE TABLE empty_table (
 )
 ENGINE = MergeTree()
 ORDER BY id;
-
-DROP TABLE IF EXISTS customers;
-
-CREATE TABLE customers (
-    id          UInt32,
-    name        String,
-    created_at  Date
-)
-ENGINE = MergeTree()
-ORDER BY id;
-
-INSERT INTO customers(id, name, created_at)
-select  1, 'Alice', toDate('2024-01-01') union all
-select  2, 'Robert', toDate('2024-01-02') union all
-select  3, 'Charlie', toDate('2024-01-03');

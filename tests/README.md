@@ -43,6 +43,7 @@ python --version
 ### 2. Install Dependencies
 
 ```bash
+# Navigate to the root directory
 # Install package in development mode with test dependencies
 pip install -e ".[dev,test]"
 
@@ -57,7 +58,7 @@ pip install pytest pytest-cov
 ### 3. Start Test Databases
 
 ```bash
-# Navigate to integration directory
+# Navigate to the integration directory
 cd tests/integration
 
 # Start all databases in detached mode
@@ -87,10 +88,10 @@ From the project root directory (with virtual environment activated):
 python -m pytest tests/integration -v
 
 # Run specific test file
-python -m pytest tests/integration/test_oracle_postgres_compare.py -v
+python -m pytest tests/integration/data_types/test_data_types.py -v
 
 # Run specific test method
-python -m pytest tests/integration/test_oracle_postgres_compare.py::TestOraclePostgresComparison::test_compare_counts_success -v
+python -m pytest tests/integration/test_edge_cases.py::TestCustomQueryComparison::test_custom_query_comparison -v
 
 # Run with coverage report
 python -m pytest tests --cov=src --cov-report=html -v
