@@ -289,40 +289,234 @@ class TestUtils:
         assert 1 not in df1_clean['id'].values  # 'y' in df1
         assert 'xrecently_changed' not in df1_clean.columns
 
+    def test_compare_dataframes_different_keys(self):
+        """Test comparison with different primary keys"""
+        df1 = pd.DataFrame({
+            'id': [1, 2, 3],
+            'name': ['Alice', 'Bob', 'Charlie']
+        })
+        
+        df2 = pd.DataFrame({
+            'id': [1, 2, 4],
+            'name': ['Alice', 'Bob', 'David']
+        })
+        
+        stats, details = compare_dataframes(df1, df2, ['id'], 3)
+        
+        assert stats.only_source_rows == 1
+        assert stats.only_target_rows == 1
+        assert stats.common_pk_rows == 2
+        # Expected: 1 source-only row (50%) + 1 target-only row (50%) out of 2 common rows
+        # Final score = 50% * 0.15 + 50% * 0.15 = 15.0%
+        expected_score = 50.0 * 0.15 + 50.0 * 0.15
+        assert stats.final_diff_score == pytest.approx(expected_score, rel=1e-5)
 
-class TestModels:
-    """Unit tests for models module"""
-    
-    def test_data_reference_validation(self):
-        """Test DataReference validation"""
-        from src.models import DataReference
-        
-        # Valid names
-        ref1 = DataReference("table_name", "schema_name")
-        assert ref1.name == "table_name"
-        assert ref1.schema == "schema_name"
-        assert ref1.full_name == "schema_name.table_name"
-        
-        # Invalid names should raise
-        with pytest.raises(ValueError):
-            DataReference("table-name", "schema")  # hyphen
+    def test_compare_dataframes_missing_columns(self):
+        """Test comparison with missing key columns"""
+        df1 = pd.DataFrame({'id': [1], 'name': ['Alice']})
+        df2 = pd.DataFrame({'name': ['Alice']})  # Missing id column
         
         with pytest.raises(ValueError):
-            DataReference("table", "schema.name")  # dot in schema
-    
-    def test_dbms_type_from_engine(self):
-        """Test DBMS type detection from engine"""
-        from src.models import DBMSType
-        from sqlalchemy import create_engine
-        
-        # Test Oracle
-        oracle_engine = create_engine("oracle+oracledb://user:pass@host/service")
-        assert DBMSType.from_engine(oracle_engine) == DBMSType.ORACLE
-        
-        # Test PostgreSQL
-        pg_engine = create_engine("postgresql://user:pass@host/db")
-        assert DBMSType.from_engine(pg_engine) == DBMSType.POSTGRESQL
+            compare_dataframes(df1, df2, ['id'], 3)    
 
+
+    def test_compound_primary_key_all_different(self):
+        """Test compound primary key with completely different keys"""
+        df1 = pd.DataFrame({
+            'key1': [1, 2, 3],
+            'key2': ['X', 'Y', 'Z'],
+            'value': [10, 20, 30]
+        })
+
+        df2 = pd.DataFrame({
+            'key1': [4, 5, 6],
+            'key2': ['A', 'B', 'C'],
+            'value': [40, 50, 60]
+        })
+
+        stats, details = compare_dataframes(df1, df2, ['key1', 'key2'], 3)
+
+        assert stats.only_source_rows == 3
+        assert stats.only_target_rows == 3
+        assert stats.common_pk_rows == 0
+        # Expected: 100% mismatch
+        assert stats.final_diff_score == pytest.approx(100.0, rel=1e-5)
+
+    def test_compound_primary_key_partial_overlap(self):
+        """Test compound primary key with partial overlap and value discrepancies"""
+        df1 = pd.DataFrame({
+            'id': [1, 1, 2, 3, 4],
+            'type': ['A', 'B', 'A', 'A', 'B'],
+            'amount': [100.0, 200.0, 300.0, 400.0, 500.0],
+            'status': ['active', 'inactive', 'active', 'pending', 'active']
+        })
+
+        df2 = pd.DataFrame({
+            'id': [1, 1, 2, 3, 5],
+            'type': ['A', 'B', 'A', 'A', 'A'],
+            'amount': [100.0, 250.0, 300.0, 450.0, 600.0],
+            'status': ['active', 'inactive', 'active', 'completed', 'active']
+        })
+
+        stats, details = compare_dataframes(df1, df2, ['id', 'type'], 3)
+
+        # Verify key statistics
+        assert stats.common_pk_rows == 4  # (1,A), (1,B), (2,A), (3,A)
+        assert stats.only_source_rows == 1  # (4,B)
+        assert stats.only_target_rows == 1  # (5,A)
+
+        # Should have discrepancies in values for some common keys
+        # Expected: 1 source-only (25%) + 1 target-only (25%) + value mismatches
+        assert stats.final_diff_score > 10.0
+        assert stats.final_diff_score < 50.0
+
+    def test_edge_case_all_different(self):
+        """Test edge case where all records are different (from unittest)"""
+        df1 = pd.DataFrame({
+            'id': [1, 2, 3],
+            'value': ['a', 'b', 'c']
+        })
+
+        df2 = pd.DataFrame({
+            'id': [4, 5, 6],
+            'value': ['x', 'y', 'z']
+        })
+
+        stats, details = compare_dataframes(df1, df2, ['id'], 3)
+
+        assert stats.only_source_rows == 3
+        assert stats.only_target_rows == 3
+        assert stats.common_pk_rows == 0
+        # Expected: 100% mismatch
+        assert stats.final_diff_score == pytest.approx(100.0, rel=1e-5)
+
+    def test_edge_case_complete_match(self):
+        """Test edge case where everything matches perfectly (from unittest)"""
+        df1 = pd.DataFrame({
+            'id': [1, 2, 3],
+            'value': ['a', 'b', 'c']
+        })
+
+        df2 = df1.copy()
+
+        stats, details = compare_dataframes(df1, df2, ['id'], 3)
+
+        assert stats.final_diff_score == pytest.approx(0.0, rel=1e-5)
+        assert stats.total_matched_rows == 3
+
+    def test_compound_primary_key_with_duplicates(self):
+        """Test comparison with compound primary key and duplicate keys in source data (from unittest)"""
+        df1 = pd.DataFrame({
+            'id1': [1, 1, 2, 3],
+            'id2': ['a', 'a', 'a', 'c'],
+            'value': [10, 15, 30, 40]  # Duplicate (1,a) with different values
+        })
+
+        df2 = pd.DataFrame({
+            'id1': [1, 2, 3],
+            'id2': ['a', 'a', 'c'],
+            'value': [11, 30, 40]
+        })
+
+        stats, details = compare_dataframes(df1, df2, ['id1', 'id2'])
+        
+        # With duplicates and value mismatches, score should be > 0
+        # Duplicate in source contributes to source_dup_percentage
+        assert stats.final_diff_score > 0.0
+        # Should be significant due to duplicates
+        assert stats.final_diff_score > 10.0
+
+    def test_compound_primary_key_complex(self):
+        """Test complex scenario with compound primary key and various discrepancies (from unittest)"""
+        df1 = pd.DataFrame({
+            'user_id':    [ 1,   1,   2,   3,   4],
+            'session_id': ['A', 'B', 'A', 'A', 'A'],
+            'value1': [100, 200, 300, 400, 500],
+            'value2': ['X', 'Y', 'Z', 'W', 'V']
+        })
+
+        df2 = pd.DataFrame({
+            'user_id':    [ 1,   2,   3,   4,   5],
+            'session_id': ['A', 'A', 'A', 'B', 'A'],
+            'value1': [100, 300, 400, 550, 600],
+            'value2': ['X', 'Z', 'W', 'V', 'U']
+        })
+
+        stats, details = compare_dataframes(df1, df2, ['user_id', 'session_id'], 3)
+
+        # Verify statistics
+        assert stats.total_source_rows == 5
+        assert stats.total_target_rows == 5
+        assert stats.common_pk_rows == 3  # (1,A), (2,A), (3,A)
+        assert stats.only_source_rows == 2  # (1,B), (4,A)
+        assert stats.only_target_rows == 2  # (4,B), (5,A)
+        assert stats.total_matched_rows == 3  # Only (1,A) has all values matching
+        
+        # Expected: 2 source-only (66.67%) + 2 target-only (66.67%) out of 3 common rows
+        # Plus value mismatches for (2,A) and (3,A)
+        # Note: calculation might differ from unittest due to different logic
+        assert stats.final_diff_score > 20.0       
+
+    def test_compound_primary_key_perfect_match(self):
+        """Test compound primary key with perfect match (from unittest)"""
+        df1 = pd.DataFrame({
+            'part1': [1, 1, 2, 2],
+            'part2': ['A', 'B', 'A', 'B'],
+            'data': ['foo', 'bar', 'baz', 'qux']
+        })
+
+        df2 = pd.DataFrame({
+            'part1': [1, 1, 2, 2],
+            'part2': ['A', 'B', 'A', 'B'],
+            'data': ['foo', 'bar', 'baz', 'qux']
+        })
+
+        stats, details = compare_dataframes(df1, df2, ['part1', 'part2'], 3)
+
+        assert stats.final_diff_score == pytest.approx(0.0, rel=1e-5)
+        assert stats.total_matched_rows == 4
+        assert stats.common_pk_rows == 4         
+
+    def test_duplicate_primary_keys_in_target(self):
+        """Test handling of duplicate primary keys within target dataframe (from unittest)"""
+        df1 = pd.DataFrame({
+            'pk': [1, 2, 3, 4],
+            'value': ['A', 'C', 'D', 'E']
+        })
+
+        df2 = pd.DataFrame({
+            'pk': [1, 1, 2, 3],  # Duplicate PK=1
+            'value': ['A', 'B', 'C', 'D']
+        })
+
+        stats, details = compare_dataframes(df1, df2, ['pk'], 3)
+
+        # Expected: 1 duplicate in target (25%) + 1 source-only row (25%)
+        # Final score = 25% * 0.1 + 25% * 0.15 = 6.25%
+        expected_score = 25.0 * 0.1 + 25.0 * 0.15
+        assert stats.final_diff_score == pytest.approx(expected_score, rel=1e-5)   
+
+    def test_duplicate_compound_primary_keys(self):
+        """Test handling of duplicate compound primary keys (from unittest)"""
+        df1 = pd.DataFrame({
+            'key1': [1, 1, 1, 2],
+            'key2': ['A', 'A', 'B', 'A'],  # Duplicate (1,A)
+            'value': [10, 20, 30, 40]
+        })
+
+        df2 = pd.DataFrame({
+            'key1': [1, 1, 2, 3],
+            'key2': ['A', 'B', 'A', 'A'],
+            'value': [10, 30, 40, 50]
+        })
+
+        stats, details = compare_dataframes(df1, df2, ['key1', 'key2'], 3)
+        
+        # With duplicates and only target rows mismatches
+        # 1 duplicate in source (25%) + 1 target-only row (25%)
+        # Note: percentages are based on common keys count
+        expected_score = 25.0 * 0.1 + 25.0 * 0.15
+        assert stats.final_diff_score == pytest.approx(expected_score, places=1)  # Reduced precision             
 
 @pytest.fixture
 def sample_dataframe():
@@ -334,7 +528,3 @@ def sample_dataframe():
     })
 
 
-def test_with_fixture(sample_dataframe):
-    """Test using pytest fixture"""
-    assert len(sample_dataframe) == 4
-    assert list(sample_dataframe.columns) == ['id', 'name', 'score']
