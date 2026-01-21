@@ -480,7 +480,7 @@ class TestClickHouseNumericTypes:
         )
 
         status, report, stats, details = comparator.compare_sample(
-            source_table=DataReference("test_ch_numerics", "test_db"),
+            source_table=DataReference("test_ch_numerics", "test"),
             target_table=DataReference("test_ch_numerics", "test"),
             date_column="created_at",
             date_range=("2024-01-01", "2024-01-05"),
@@ -489,7 +489,7 @@ class TestClickHouseNumericTypes:
         print(report)
 
         assert status == COMPARISON_SUCCESS
-        print(f"✓ ClickHouse numeric types comparison passed: {stats.final_score:.2f}%")
+        print(f"ClickHouse numeric types comparison passed: {stats.final_score:.2f}%")
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

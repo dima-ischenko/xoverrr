@@ -327,7 +327,7 @@ class TestClickHouseNullValues:
         )
 
         status, report, stats, details = comparator.compare_sample(
-            source_table=DataReference("test_ch_nulls", "test_db"),
+            source_table=DataReference("test_ch_nulls", "test"),
             target_table=DataReference("test_ch_nulls", "test"),
             date_column="created_at",
             date_range=("2024-01-01", "2024-01-05"),

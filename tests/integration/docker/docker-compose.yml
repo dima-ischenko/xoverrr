@@ -41,7 +41,7 @@ services:
     image: clickhouse/clickhouse-server:23.8
     container_name: clickhouse
     environment:
-      CLICKHOUSE_DB: test_db
+      CLICKHOUSE_DB: test
       CLICKHOUSE_USER: test_user
       CLICKHOUSE_PASSWORD: test_pass
     ports:

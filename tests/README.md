@@ -154,7 +154,7 @@ The test containers use the following credentials:
 |------------|-----------|------|----------|----------|----------|
 | PostgreSQL | localhost | 5433 | test     | test_pass | test_db  |
 | Oracle     | localhost | 1521 | test     | test_pass | test_db  |
-| ClickHouse | localhost | 8123 | test_user| test_pass | test_db  |
+| ClickHouse | localhost | 8123 | test_user| test_pass | test     |
 
 ## Troubleshooting
 
