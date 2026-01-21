@@ -17,7 +17,7 @@ def wait_for_database(engine, db_name: str):
     """Wait for database to be ready with retry logic"""
     logger.info(f"Waiting for {db_name} to be ready...")
     with engine.begin() as conn:
-        conn.execute(text("SELECT 1 dummy FROM test.empty_table"))
+        conn.execute(text("SELECT id FROM imalive"))
 
     logger.info(f"{db_name} is ready!")
 
