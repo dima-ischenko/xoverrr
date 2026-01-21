@@ -25,7 +25,7 @@ def wait_for_database(engine, db_name: str):
 def postgres_engine():
     """PostgreSQL SQLAlchemy engine"""
     engine = create_engine(
-        "postgresql+psycopg2://test:test_pass@localhost:5433/test_db",
+        "postgresql+psycopg2://test_user:test_pass@localhost:5433/test_db",
         pool_pre_ping=True,
         pool_recycle=3600,
         connect_args={"connect_timeout": 10}

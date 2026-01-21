@@ -150,11 +150,11 @@ python -m pytest tests/integration/test_edge_cases.py::TestCustomQueryComparison
 
 The test containers use the following credentials:
 
-| Database   | Host      | Port | User     | Password | Database |
-|------------|-----------|------|----------|----------|----------|
-| PostgreSQL | localhost | 5433 | test     | test_pass | test_db  |
-| Oracle     | localhost | 1521 | test     | test_pass | test_db  |
-| ClickHouse | localhost | 8123 | test_user| test_pass | test     |
+| Database   | Host      | Port | User     | Password | Database | Schema |
+|------------|-----------|------|----------|----------|----------|----------|
+| PostgreSQL | localhost | 5433 | test_user| test_pass | test_db  | test     |
+| Oracle     | localhost | 1521 | test     | test_pass | test_db  | test     |
+| ClickHouse | localhost | 8123 | test_user| test_pass | test     | test     |
 
 ## Troubleshooting
 

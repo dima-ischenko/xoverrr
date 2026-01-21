@@ -3,7 +3,7 @@ services:
     image: postgres:15.4
     container_name: postgres
     environment:
-      POSTGRES_USER: test
+      POSTGRES_USER: test_user
       POSTGRES_PASSWORD: test_pass
       POSTGRES_DB: test_db
     ports:
@@ -12,7 +12,7 @@ services:
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
     mem_limit: 512m
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U test -d test_db"]
+      test: ["CMD-SHELL", "pg_isready -U test_user -d test_db"]
       interval: 10s
       timeout: 5s
       retries: 5
