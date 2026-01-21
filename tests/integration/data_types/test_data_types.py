@@ -1,10 +1,7 @@
-# ci/tests/integration/test_data_types.py
+
 import pytest
-import sys
-import os
 from sqlalchemy import text
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src'))
 
 from src import (
     DataQualityComparator,
