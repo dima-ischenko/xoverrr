@@ -453,9 +453,8 @@ class TestUtils:
         assert stats.total_matched_rows == 3  # Only (1,A) has all values matching
         
         # Expected: 2 source-only (66.67%) + 2 target-only (66.67%) out of 3 common rows
-        # Plus value mismatches for (2,A) and (3,A)
-        # Note: calculation might differ from unittest due to different logic
-        assert stats.final_diff_score > 20.0       
+        # No value mismatches in common rows
+        assert stats.final_diff_score == pytest.approx(20, rel=1e-5) 
 
     def test_compound_primary_key_perfect_match(self):
         """Test compound primary key with perfect match (from unittest)"""
@@ -490,18 +489,27 @@ class TestUtils:
         })
 
         stats, details = compare_dataframes(df1, df2, ['pk'], 3)
+        
+        assert stats.only_source_rows == 1
+        assert stats.only_target_rows == 0
+        assert stats.dup_source_rows == 0
+        assert stats.dup_target_rows == 1
+        assert stats.common_pk_rows == 3
 
-        # Expected: 1 duplicate in target (25%) + 1 source-only row (25%)
-        # Final score = 25% * 0.1 + 25% * 0.15 = 6.25%
-        expected_score = 25.0 * 0.1 + 25.0 * 0.15
+        assert stats.dup_source_percentage_rows == 0
+        assert stats.dup_target_percentage_rows == 25
+        assert stats.source_only_percentage_rows == pytest.approx(33.33333, rel=1e-3) 
+        assert stats.target_only_percentage_rows == 0
+
+        expected_score = 25.0 * 0.1 + 33.33333 * 0.15
         assert stats.final_diff_score == pytest.approx(expected_score, rel=1e-5)   
 
     def test_duplicate_compound_primary_keys(self):
         """Test handling of duplicate compound primary keys (from unittest)"""
         df1 = pd.DataFrame({
-            'key1': [1, 1, 1, 2],
-            'key2': ['A', 'A', 'B', 'A'],  # Duplicate (1,A)
-            'value': [10, 20, 30, 40]
+            'key1':  [  1,   1,   1,   2],
+            'key2':  ['A', 'A', 'B', 'A'],  # Duplicate (1,A)
+            'value': [ 10,  20,  30,  40]
         })
 
         df2 = pd.DataFrame({
@@ -510,13 +518,18 @@ class TestUtils:
             'value': [10, 30, 40, 50]
         })
 
+
         stats, details = compare_dataframes(df1, df2, ['key1', 'key2'], 3)
-        
-        # With duplicates and only target rows mismatches
-        # 1 duplicate in source (25%) + 1 target-only row (25%)
-        # Note: percentages are based on common keys count
-        expected_score = 25.0 * 0.1 + 25.0 * 0.15
-        assert stats.final_diff_score == pytest.approx(expected_score, places=1)  # Reduced precision             
+        assert stats.common_pk_rows == 3  
+        assert stats.dup_source_percentage_rows == (1/4)*100
+        assert stats.dup_target_percentage_rows == 0
+        assert stats.total_matched_rows == 3
+        assert stats.only_source_rows == 0
+        assert stats.only_target_rows == 1
+
+        # With duplicates and only trg rows mismatches
+        expected_score = (1/4 * 0.1 + 1/3 * 0.15)*100
+        assert stats.final_diff_score == pytest.approx(expected_score, rel=1e-5)  # Reduced precision             
 
 @pytest.fixture
 def sample_dataframe():

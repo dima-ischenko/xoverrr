@@ -18,6 +18,7 @@ A tool for comparing data across sources, with detailed analysis and discrepancy
 - **Detailed reporting**: In‑depth column‑level discrepancy analysis with example records (column view / record view)
 - **Flexible configuration**: Column exclusion/inclusion, tolerance thresholds, custom primary‑key specification
 - **Unit tests**: Coverage for comparison methods, functional and performance validation
+- **Integrations tests**: contains integration tests for xoverrr using real databases started via Docker
 
 ## Example Report
 ```
@@ -302,13 +303,3 @@ if status == COMPARISON_FAILED:
 
 ---
 
-## Running Unit Tests
-**Single:**
-```bash
-python -m unittest run_unit_tests.TestUtils.test_compound_primary_key
-```
-
-**Full suite:**
-```bash
-python -m unittest run_unit_tests.TestUtils
-```
