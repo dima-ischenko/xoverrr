@@ -234,7 +234,6 @@ class TestCustomQueryComparison:
     def test_custom_query_comparison(self, oracle_engine, postgres_engine):
         """
         Test custom query comparison between databases.
-        Uses existing customers table.
         """
         comparator = DataQualityComparator(
             source_engine=oracle_engine,
