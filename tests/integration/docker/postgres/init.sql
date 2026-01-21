@@ -3,6 +3,8 @@ CREATE SCHEMA IF NOT EXISTS test;
 
 SET search_path TO test;
 
+ALTER USER test_user SET SEARCH_PATH TO test, public;
+
 DROP TABLE IF EXISTS orders;
 CREATE TABLE orders (
     id          INTEGER PRIMARY KEY,
