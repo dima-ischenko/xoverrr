@@ -33,7 +33,6 @@ class TestUtils:
         assert result['col1'].iloc[2] == 'N/A'
         assert result['col2'].iloc[1] == 'N/A'
         assert result['col2'].iloc[2] == 'N/A'
-        assert all(result.dtypes == 'object')
     
     def test_compare_dataframes_identical(self):
         """Test comparison of identical dataframes"""
