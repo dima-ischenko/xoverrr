@@ -3,11 +3,11 @@ import pytest
 from sqlalchemy import text
 
 
-from src.core import (
+from xoverrr.core import (
     DataQualityComparator,
     DataReference )
 
-from src.constants import (
+from xoverrr.constants import (
     COMPARISON_SUCCESS,
     COMPARISON_FAILED,
     COMPARISON_SKIPPED)
