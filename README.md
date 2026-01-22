@@ -18,6 +18,7 @@ A tool for comparing data across sources, with detailed analysis and discrepancy
 - **Detailed reporting**: In‑depth column‑level discrepancy analysis with example records (column view / record view)
 - **Flexible configuration**: Column exclusion/inclusion, tolerance thresholds, custom primary‑key specification
 - **Unit tests**: Coverage for comparison methods, functional and performance validation
+- **Integrations tests**: contains integration tests for xoverrr using real databases started via Docker
 
 ## Example Report
 ```
@@ -223,9 +224,9 @@ All methods return a tuple:
 ### Structured Logging
 Logs include timing information and structured context:
 ```
-2024-01-15 10:30:45 - INFO - xover.core._compare_samples - Query executed in 2.34s
-2024-01-15 10:30:46 - INFO - xover.core._compare_samples - Source: 150000 rows, Target: 149950 rows
-2024-01-15 10:30:47 - INFO - xover.utils.compare_dataframes - Comparison completed in 1.2s
+2024-01-15 10:30:45 - INFO - xoverrr.core._compare_samples - Query executed in 2.34s
+2024-01-15 10:30:46 - INFO - xoverrr.core._compare_samples - Source: 150000 rows, Target: 149950 rows
+2024-01-15 10:30:47 - INFO - xoverrr.utils.compare_dataframes - Comparison completed in 1.2s
 ```
 
 ### Tolerance Percentage
@@ -240,7 +241,7 @@ Logs include timing information and structured context:
 **Sample comparison** (Greenplum vs Oracle):
 
 ```python
-from xover import DataQualityComparator, DataReference, COMPARISON_SUCCESS, COMPARISON_FAILED, COMPARISON_SKIPPED
+from xoverrr import DataQualityComparator, DataReference, COMPARISON_SUCCESS, COMPARISON_FAILED, COMPARISON_SKIPPED
 import os
 from datetime import date, timedelta
 
@@ -302,13 +303,3 @@ if status == COMPARISON_FAILED:
 
 ---
 
-## Running Unit Tests
-**Single:**
-```bash
-python -m unittest run_unit_tests.TestUtils.test_compound_primary_key
-```
-
-**Full suite:**
-```bash
-python -m unittest run_unit_tests.TestUtils
-```

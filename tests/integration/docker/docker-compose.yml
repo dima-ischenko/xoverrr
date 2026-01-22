@@ -1,0 +1,61 @@
+services:
+  postgres:
+    image: postgres:15.4
+    container_name: postgres
+    environment:
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_pass
+      POSTGRES_DB: test_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user -d test_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  oracle:
+    image: container-registry.oracle.com/database/free:23.26.0.0-lite
+    container_name: oracle
+    platform: linux/amd64
+    ports:
+      - "1521:1521"
+    environment:
+      ORACLE_PWD: test_pass
+      ORACLE_PDB: test_db
+    shm_size: 2g
+    volumes:
+      - ./oracle/init.sql:/opt/oracle/scripts/startup/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/oracle/checkDBStatus.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 15
+      start_period: 120s
+    restart: unless-stopped
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:23.8
+    container_name: clickhouse
+    environment:
+      CLICKHOUSE_DB: test
+      CLICKHOUSE_USER: test_user
+      CLICKHOUSE_PASSWORD: test_pass
+    ports:
+      - "8123:8123" 
+      - "9000:9000"
+    volumes:
+      - ./clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql
+    mem_limit: 1g
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3

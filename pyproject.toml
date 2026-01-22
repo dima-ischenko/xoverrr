@@ -1,0 +1,67 @@
+# pyproject.toml
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "xoverrr"
+version = "1.1.3"
+description = "A tool for comparing data across databases."
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [
+    {name = "Dmitry Ischenko", email = "hotmori@gmail.com"}
+]
+license = {text = "MIT"}
+keywords = ["data-quality", "comparison", "database"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Database",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "pandas>=2.0.0",
+    "sqlalchemy>=2.0.0",
+    "numpy>=1.24.0",
+    "oracledb>=2.0.0",
+    "psycopg2-binary>=2.9.0",
+    "clickhouse-sqlalchemy>=0.2.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/dima-ischenko/xoverrr"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "mypy>=1.0.0",
+    "pre-commit>=3.0.0",
+    "tenacity>=8.2.0"
+]
+test = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "tenacity>=8.2.0"
+]
+lint = [
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-v"
