@@ -224,9 +224,9 @@ All methods return a tuple:
 ### Structured Logging
 Logs include timing information and structured context:
 ```
-2024-01-15 10:30:45 - INFO - xover.core._compare_samples - Query executed in 2.34s
-2024-01-15 10:30:46 - INFO - xover.core._compare_samples - Source: 150000 rows, Target: 149950 rows
-2024-01-15 10:30:47 - INFO - xover.utils.compare_dataframes - Comparison completed in 1.2s
+2024-01-15 10:30:45 - INFO - xoverrr.core._compare_samples - Query executed in 2.34s
+2024-01-15 10:30:46 - INFO - xoverrr.core._compare_samples - Source: 150000 rows, Target: 149950 rows
+2024-01-15 10:30:47 - INFO - xoverrr.utils.compare_dataframes - Comparison completed in 1.2s
 ```
 
 ### Tolerance Percentage
@@ -241,7 +241,7 @@ Logs include timing information and structured context:
 **Sample comparison** (Greenplum vs Oracle):
 
 ```python
-from xover import DataQualityComparator, DataReference, COMPARISON_SUCCESS, COMPARISON_FAILED, COMPARISON_SKIPPED
+from xoverrr import DataQualityComparator, DataReference, COMPARISON_SUCCESS, COMPARISON_FAILED, COMPARISON_SKIPPED
 import os
 from datetime import date, timedelta
 
