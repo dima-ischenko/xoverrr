@@ -1,6 +1,6 @@
 # xoverrr (pronounced “crossover”)
 
-A tool for comparing data across sources, with detailed analysis and discrepancy reporting.
+A tool for cross-database and intra-source data comparison with detailed discrepancy analysis and reporting.
 
 ## Key Features
 - **Multi‑DBMS support**: Oracle, PostgreSQL (+ Greenplum), ClickHouse (extensible via adapter layer) — tables and views.

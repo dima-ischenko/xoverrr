@@ -5,24 +5,19 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "xoverrr"
-version = "1.1.3"
-description = "A tool for comparing data across databases."
+version = "1.1.4"
+description = "A tool for cross-database and intra-source data comparison with detailed discrepancy analysis and reporting."
 readme = "README.md"
 requires-python = ">=3.9"
 authors = [
     {name = "Dmitry Ischenko", email = "hotmori@gmail.com"}
 ]
 license = {text = "MIT"}
-keywords = ["data-quality", "comparison", "database"]
+keywords = ["data-quality", "comparison", "database", "data", "quality", "engineering"]
 classifiers = [
-    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Topic :: Database",
     "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
 ]
 
 dependencies = [
