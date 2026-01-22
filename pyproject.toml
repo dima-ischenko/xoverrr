@@ -5,8 +5,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "xoverrr"
-version = "1.1.0"
-description = "A tool for comparing data across databases..."
+version = "1.1.1"
+description = "A tool for comparing data across databases."
 readme = "README.md"
 requires-python = ">=3.9"
 authors = [
@@ -33,6 +33,9 @@ dependencies = [
     "psycopg2-binary>=2.9.0",
     "clickhouse-sqlalchemy>=0.2.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/dima-ischenko/xoverrr"
 
 [project.optional-dependencies]
 dev = [

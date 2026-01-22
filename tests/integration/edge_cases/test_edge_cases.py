@@ -3,13 +3,15 @@ import pytest
 from sqlalchemy import text
 
 
-from src import (
+from src.core import (
     DataQualityComparator,
-    DataReference,
+    DataReference )
+
+from src.constants import (
     COMPARISON_SUCCESS,
     COMPARISON_FAILED,
-    COMPARISON_SKIPPED,
-)
+    COMPARISON_SKIPPED)
+
 
 class TestNullValuesComparison:
     """Tests for NULL values comparison"""
