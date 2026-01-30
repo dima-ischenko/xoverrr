@@ -11,25 +11,16 @@ class TestNullValuesComparison:
     """Tests for NULL values comparison"""
     
     @pytest.fixture(autouse=True)
-    def setup_null_data(self, oracle_engine, postgres_engine):
+    def setup_null_data(self, oracle_engine, postgres_engine, table_helper):
         """Setup NULL test data"""
         
         table_name = "test_edge_nulls"
         
-        # Oracle
-        with oracle_engine.begin() as conn:
-            conn.execute(text(f"""
-                BEGIN
-                    EXECUTE IMMEDIATE 'DROP TABLE {table_name} CASCADE CONSTRAINTS';
-                EXCEPTION
-                    WHEN OTHERS THEN
-                        IF SQLCODE != -942 THEN
-                            RAISE;
-                        END IF;
-                END;
-            """))
-            
-            conn.execute(text(f"""
+      # Oracle
+        table_helper.create_table(
+            engine=oracle_engine,
+            table_name=table_name,
+            create_sql=f"""
                 CREATE TABLE {table_name} (
                     id NUMBER PRIMARY KEY,
                     nullable_string VARCHAR2(100),
@@ -37,20 +28,20 @@ class TestNullValuesComparison:
                     nullable_date DATE,
                     created_at DATE NOT NULL
                 )
-            """))
-            
-            conn.execute(text(f"""
+            """,
+            insert_sql=f"""
                 INSERT INTO {table_name} (id, nullable_string, nullable_number, nullable_date, created_at) VALUES
                 (1, NULL, NULL, NULL, DATE '2024-01-01'),
                 (2, 'Some text', 123, DATE '2024-01-02', DATE '2024-01-02'),
                 (3, NULL, 456, NULL, DATE '2024-01-03')
-            """))
+            """
+        )
         
-        # PostgreSQL
-        with postgres_engine.begin() as conn:
-            conn.execute(text(f"DROP TABLE IF EXISTS {table_name} CASCADE"))
-            
-            conn.execute(text(f"""
+      # PostgreSQL
+        table_helper.create_table(
+            engine=postgres_engine,
+            table_name=table_name,
+            create_sql=f"""
                 CREATE TABLE {table_name} (
                     id INTEGER PRIMARY KEY,
                     nullable_string TEXT,
@@ -58,26 +49,16 @@ class TestNullValuesComparison:
                     nullable_date DATE,
                     created_at DATE NOT NULL
                 )
-            """))
-            
-            conn.execute(text(f"""
+            """,
+            insert_sql=f"""
                 INSERT INTO {table_name} (id, nullable_string, nullable_number, nullable_date, created_at) VALUES
                 (1, NULL, NULL, NULL, '2024-01-01'),
                 (2, 'Some text', 123, '2024-01-02', '2024-01-02'),
                 (3, NULL, 456, NULL, '2024-01-03')
-            """))
+            """
+        )
         
         yield
-        
-        # Cleanup
-        with oracle_engine.begin() as conn:
-            try:
-                conn.execute(text(f"DROP TABLE {table_name} CASCADE CONSTRAINTS"))
-            except:
-                pass
-        
-        with postgres_engine.begin() as conn:
-            conn.execute(text(f"DROP TABLE IF EXISTS {table_name} CASCADE"))
 
     def test_null_values_comparison(self, oracle_engine, postgres_engine):
         """

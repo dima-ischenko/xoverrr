@@ -11,25 +11,16 @@ class TestNumericTypesComparison:
     """Tests for numeric type comparison"""
     
     @pytest.fixture(autouse=True)
-    def setup_numeric_data(self, oracle_engine, postgres_engine):
+    def setup_numeric_data(self, oracle_engine, postgres_engine, table_helper):
         """Setup numeric test data"""
         
         table_name = "test_types_numeric"
         
-        # Oracle
-        with oracle_engine.begin() as conn:
-            conn.execute(text(f"""
-                BEGIN
-                    EXECUTE IMMEDIATE 'DROP TABLE {table_name} CASCADE CONSTRAINTS';
-                EXCEPTION
-                    WHEN OTHERS THEN
-                        IF SQLCODE != -942 THEN
-                            RAISE;
-                        END IF;
-                END;
-            """))
-            
-            conn.execute(text(f"""
+      # Oracle
+        table_helper.create_table(
+            engine=oracle_engine,
+            table_name=table_name,
+            create_sql=f"""
                 CREATE TABLE {table_name} (
                     id NUMBER PRIMARY KEY,
                     price NUMBER(10,2),
@@ -37,20 +28,20 @@ class TestNumericTypesComparison:
                     discount FLOAT,
                     created_at DATE
                 )
-            """))
-            
-            conn.execute(text(f"""
+            """,
+            insert_sql=f"""
                 INSERT INTO {table_name} (id, price, quantity, discount, created_at) VALUES
                 (1, 100.50, 10, 0.1, DATE '2024-01-01'),
                 (2, 250.75, 5, 0.15, DATE '2024-01-02'),
                 (3, 99.99, 20, 0.05, DATE '2024-01-03')
-            """))
+            """
+        )
         
-        # PostgreSQL
-        with postgres_engine.begin() as conn:
-            conn.execute(text(f"DROP TABLE IF EXISTS {table_name} CASCADE"))
-            
-            conn.execute(text(f"""
+      # PostgreSQL
+        table_helper.create_table(
+            engine=postgres_engine,
+            table_name=table_name,
+            create_sql=f"""
                 CREATE TABLE {table_name} (
                     id INTEGER PRIMARY KEY,
                     price NUMERIC(10,2),
@@ -58,26 +49,16 @@ class TestNumericTypesComparison:
                     discount DOUBLE PRECISION,
                     created_at DATE
                 )
-            """))
-            
-            conn.execute(text(f"""
+            """,
+            insert_sql=f"""
                 INSERT INTO {table_name} (id, price, quantity, discount, created_at) VALUES
                 (1, 100.50, 10, 0.1, '2024-01-01'),
                 (2, 250.75, 5, 0.15, '2024-01-02'),
                 (3, 99.99, 20, 0.05, '2024-01-03')
-            """))
+            """
+        )
         
         yield
-        
-        # Cleanup
-        with oracle_engine.begin() as conn:
-            try:
-                conn.execute(text(f"DROP TABLE {table_name} CASCADE CONSTRAINTS"))
-            except:
-                pass
-        
-        with postgres_engine.begin() as conn:
-            conn.execute(text(f"DROP TABLE IF EXISTS {table_name} CASCADE"))
 
     def test_numeric_types_comparison(self, oracle_engine, postgres_engine):
         """

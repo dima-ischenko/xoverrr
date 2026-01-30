@@ -11,19 +11,17 @@ class TestClickHouseTableVsTable:
     """Self-comparison tests within ClickHouse database"""
     
     @pytest.fixture(autouse=True)
-    def setup_table_vs_table_data(self, clickhouse_engine):
+    def setup_table_vs_table_data(self, clickhouse_engine, table_helper):
         """Setup test data for ClickHouse table vs table comparison"""
         
         table_name_main = "test_self_ch_table_main"
         table_name_copy = "test_self_ch_table_copy"
         
-        with clickhouse_engine.begin() as conn:
-            # Clean up
-            conn.execute(text(f"DROP TABLE IF EXISTS {table_name_main}"))
-            conn.execute(text(f"DROP TABLE IF EXISTS {table_name_copy}"))
-            
-            # Create main table
-            conn.execute(text(f"""
+      # Create main table
+        table_helper.create_table(
+            engine=clickhouse_engine,
+            table_name=table_name_main,
+            create_sql=f"""
                 CREATE TABLE {table_name_main} (
                     id UInt32,
                     value String,
@@ -31,17 +29,17 @@ class TestClickHouseTableVsTable:
                 )
                 ENGINE = MergeTree()
                 ORDER BY id
-            """))
-            
-            # Insert data
-            conn.execute(text(f"""
+            """,
+            insert_sql=f"""
                 INSERT INTO {table_name_main} VALUES
                 (1, 'Value A', '2024-01-01'),
                 (2, 'Value B', '2024-01-02'),
                 (3, 'Value C', '2024-01-03')
-            """))
-            
-            # Create copy table (identical structure, same data)
+            """
+        )
+        
+      # Create copy table (identical structure, same data)
+        with clickhouse_engine.begin() as conn:
             conn.execute(text(f"""
                 CREATE TABLE {table_name_copy} (
                     id UInt32,
@@ -58,11 +56,6 @@ class TestClickHouseTableVsTable:
             """))
         
         yield
-        
-        # Cleanup
-        with clickhouse_engine.begin() as conn:
-            conn.execute(text(f"DROP TABLE IF EXISTS {table_name_main}"))
-            conn.execute(text(f"DROP TABLE IF EXISTS {table_name_copy}"))
 
     def test_clickhouse_table_vs_table(self, clickhouse_engine):
         """

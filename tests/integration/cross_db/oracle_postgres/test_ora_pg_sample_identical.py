@@ -11,25 +11,16 @@ class TestOraclePostgresHRData:
     """HR data comparison between Oracle and PostgreSQL"""
     
     @pytest.fixture(autouse=True)
-    def setup_hr_data(self, oracle_engine, postgres_engine):
+    def setup_hr_data(self, oracle_engine, postgres_engine, table_helper):
         """Setup HR test data"""
         
         table_name = "test_ora_pg_hr"
         
-        # Oracle setup
-        with oracle_engine.begin() as conn:
-            conn.execute(text(f"""
-                BEGIN
-                    EXECUTE IMMEDIATE 'DROP TABLE {table_name} CASCADE CONSTRAINTS';
-                EXCEPTION
-                    WHEN OTHERS THEN
-                        IF SQLCODE != -942 THEN
-                            RAISE;
-                        END IF;
-                END;
-            """))
-            
-            conn.execute(text(f"""
+      # Oracle setup
+        table_helper.create_table(
+            engine=oracle_engine,
+            table_name=table_name,
+            create_sql=f"""
                 CREATE TABLE {table_name} (
                     employee_id NUMBER PRIMARY KEY,
                     first_name VARCHAR2(50),
@@ -39,21 +30,21 @@ class TestOraclePostgresHRData:
                     salary NUMBER(10,2),
                     department_id NUMBER
                 )
-            """))
-            
-            conn.execute(text(f"""
+            """,
+            insert_sql=f"""
                 INSERT INTO {table_name} 
                 (employee_id, first_name, last_name, email, hire_date, salary, department_id) 
                 VALUES
                 (101, 'John', 'Doe', 'john.doe@company.com', DATE '2020-01-15', 60000.00, 10),
                 (102, 'Jane', 'Smith', 'jane.smith@company.com', DATE '2019-03-20', 75000.00, 20)
-            """))
+            """
+        )
         
-        # PostgreSQL setup
-        with postgres_engine.begin() as conn:
-            conn.execute(text(f"DROP TABLE IF EXISTS {table_name} CASCADE"))
-            
-            conn.execute(text(f"""
+      # PostgreSQL setup
+        table_helper.create_table(
+            engine=postgres_engine,
+            table_name=table_name,
+            create_sql=f"""
                 CREATE TABLE {table_name} (
                     employee_id INTEGER PRIMARY KEY,
                     first_name TEXT,
@@ -63,27 +54,17 @@ class TestOraclePostgresHRData:
                     salary NUMERIC(10,2),
                     department_id INTEGER
                 )
-            """))
-            
-            conn.execute(text(f"""
+            """,
+            insert_sql=f"""
                 INSERT INTO {table_name} 
                 (employee_id, first_name, last_name, email, hire_date, salary, department_id) 
                 VALUES
                 (101, 'John', 'Doe', 'john.doe@company.com', '2020-01-15', 60000.00, 10),
                 (102, 'Jane', 'Smith', 'jane.smith@company.com', '2019-03-20', 75000.00, 20)
-            """))
+            """
+        )
         
         yield
-        
-        # Cleanup
-        with oracle_engine.begin() as conn:
-            try:
-                conn.execute(text(f"DROP TABLE {table_name} CASCADE CONSTRAINTS"))
-            except:
-                pass
-        
-        with postgres_engine.begin() as conn:
-            conn.execute(text(f"DROP TABLE IF EXISTS {table_name} CASCADE"))
 
     def test_hr_data_comparison(self, oracle_engine, postgres_engine):
         """

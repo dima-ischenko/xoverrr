@@ -12,57 +12,50 @@ class TestTimestampWithTimezone:
     """Tests for timestamp with timezone comparison"""
     
     @pytest.fixture(autouse=True)
-    def setup_timestamp_data(self, oracle_engine, postgres_engine):
+    def setup_timestamp_data(self, oracle_engine, postgres_engine, table_helper):
         """Setup timestamp test data"""
-        # Oracle
-        with oracle_engine.begin() as conn:
-            conn.execute(text("""
-                BEGIN
-                    EXECUTE IMMEDIATE 'DROP TABLE test_timestamps CASCADE CONSTRAINTS';
-                EXCEPTION
-                    WHEN OTHERS THEN
-                        IF SQLCODE != -942 THEN
-                            RAISE;
-                        END IF;
-                END;
-            """))
-            
-            conn.execute(text("""
-                CREATE TABLE test_timestamps (
+        
+        table_name = "test_timestamps"
+        
+      # Oracle
+        table_helper.create_table(
+            engine=oracle_engine,
+            table_name=table_name,
+            create_sql=f"""
+                CREATE TABLE {table_name} (
                     id NUMBER PRIMARY KEY,
                     created_at TIMESTAMP NOT NULL,
                     updated_at TIMESTAMP,
                     description VARCHAR2(100)
                 )
-            """))
-            
-            # Insert test data (implicitly in +05:00)
-            conn.execute(text("""
-                INSERT INTO test_timestamps (id, created_at, updated_at, description) VALUES
+            """,
+            insert_sql=f"""
+                INSERT INTO {table_name} (id, created_at, updated_at, description) VALUES
                 (1, TIMESTAMP '2024-01-01 15:00:00', TIMESTAMP '2024-01-01 15:00:00', 'First record'),
                 (2, TIMESTAMP '2024-01-02 15:30:00', TIMESTAMP '2024-01-02 15:30:00', 'Second record'),
                 (3, TIMESTAMP '2024-01-03 10:45:00', TIMESTAMP '2024-01-03 10:45:00', 'Third record')
-            """))
+            """
+        )
         
-        # PostgreSQL
-        with postgres_engine.begin() as conn:
-            conn.execute(text("DROP TABLE IF EXISTS test_timestamps CASCADE"))
-            
-            conn.execute(text("""
-                CREATE TABLE test_timestamps (
+      # PostgreSQL
+        table_helper.create_table(
+            engine=postgres_engine,
+            table_name=table_name,
+            create_sql=f"""
+                CREATE TABLE {table_name} (
                     id INTEGER PRIMARY KEY,
                     created_at TIMESTAMPTZ NOT NULL,
                     updated_at TIMESTAMPTZ,
                     description TEXT
                 )
-            """))
-            
-            conn.execute(text("""
-                INSERT INTO test_timestamps (id, created_at, updated_at, description) VALUES
+            """,
+            insert_sql=f"""
+                INSERT INTO {table_name} (id, created_at, updated_at, description) VALUES
                 (1, '2024-01-01 10:00:00 +00:00', '2024-01-01 10:00:00 +00:00', 'First record'),
                 (2, '2024-01-02 11:30:00 +01:00', '2024-01-02 11:30:00 +01:00', 'Second record'),
                 (3, '2024-01-03 14:45:00 +09:00', '2024-01-03 14:45:00 +09:00', 'Third record')
-            """))
+            """
+        )
         
         yield
 

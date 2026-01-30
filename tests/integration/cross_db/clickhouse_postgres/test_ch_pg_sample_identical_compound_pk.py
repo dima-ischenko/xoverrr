@@ -11,16 +11,16 @@ class TestClickHousePostgresCompoundKey:
     """Cross-database sample comparison with compound primary key"""
     
     @pytest.fixture(autouse=True)
-    def setup_compound_key_data(self, clickhouse_engine, postgres_engine):
+    def setup_compound_key_data(self, clickhouse_engine, postgres_engine, table_helper):
         """Setup test data with compound primary key"""
         
         table_name = "test_ch_pg_compound_key"
         
-        # ClickHouse setup
-        with clickhouse_engine.begin() as conn:
-            conn.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
-            
-            conn.execute(text(f"""
+      # ClickHouse setup
+        table_helper.create_table(
+            engine=clickhouse_engine,
+            table_name=table_name,
+            create_sql=f"""
                 CREATE TABLE {table_name} (
                     user_id UInt32,
                     session_id String,
@@ -31,20 +31,20 @@ class TestClickHousePostgresCompoundKey:
                 )
                 ENGINE = MergeTree()
                 ORDER BY (user_id, session_id)
-            """))
-            
-            conn.execute(text(f"""
+            """,
+            insert_sql=f"""
                 INSERT INTO {table_name} (user_id, session_id, page_views, duration, event_date, device_type) VALUES
                 (1001, 'sess_001', 15, 120.5, '2024-01-01', 'mobile'),
                 (1002, 'sess_002', 8, 45.25, '2024-01-01', 'desktop'),
                 (1001, 'sess_004', 12, 95.75, '2024-01-02', 'mobile')
-            """))
+            """
+        )
         
-        # PostgreSQL setup
-        with postgres_engine.begin() as conn:
-            conn.execute(text(f"DROP TABLE IF EXISTS {table_name} CASCADE"))
-            
-            conn.execute(text(f"""
+      # PostgreSQL setup
+        table_helper.create_table(
+            engine=postgres_engine,
+            table_name=table_name,
+            create_sql=f"""
                 CREATE TABLE {table_name} (
                     user_id INTEGER,
                     session_id TEXT,
@@ -53,13 +53,15 @@ class TestClickHousePostgresCompoundKey:
                     event_date DATE,
                     device_type TEXT
                 )
-            """))
-            
-            conn.execute(text(f"""
+            """,
+            insert_sql=f"""
                 ALTER TABLE {table_name} 
                 ADD PRIMARY KEY (user_id, session_id)
-            """))
-            
+                """
+        )
+        
+      # Вставка данных для PostgreSQL
+        with postgres_engine.begin() as conn:
             conn.execute(text(f"""
                 INSERT INTO {table_name} (user_id, session_id, page_views, duration, event_date, device_type) VALUES
                 (1001, 'sess_001', 15, 120.5, '2024-01-01', 'mobile'),
@@ -68,13 +70,6 @@ class TestClickHousePostgresCompoundKey:
             """))
         
         yield
-        
-        # Cleanup
-        with clickhouse_engine.begin() as conn:
-            conn.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
-        
-        with postgres_engine.begin() as conn:
-            conn.execute(text(f"DROP TABLE IF EXISTS {table_name} CASCADE"))
 
     def test_sample_with_compound_key(self, clickhouse_engine, postgres_engine):
         """

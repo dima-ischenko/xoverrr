@@ -11,69 +11,50 @@ class TestBooleanComparison:
     """Tests for boolean type comparison"""
     
     @pytest.fixture(autouse=True)
-    def setup_boolean_data(self, oracle_engine, postgres_engine):
+    def setup_boolean_data(self, oracle_engine, postgres_engine, table_helper):
         """Setup boolean test data"""
         
         table_name = "test_types_boolean"
         
-        # Oracle: boolean as NUMBER(1)
-        with oracle_engine.begin() as conn:
-            conn.execute(text(f"""
-                BEGIN
-                    EXECUTE IMMEDIATE 'DROP TABLE {table_name} CASCADE CONSTRAINTS';
-                EXCEPTION
-                    WHEN OTHERS THEN
-                        IF SQLCODE != -942 THEN
-                            RAISE;
-                        END IF;
-                END;
-            """))
-            
-            conn.execute(text(f"""
+      # Oracle: boolean as NUMBER(1)
+        table_helper.create_table(
+            engine=oracle_engine,
+            table_name=table_name,
+            create_sql=f"""
                 CREATE TABLE {table_name} (
                     id NUMBER PRIMARY KEY,
                     is_active NUMBER(1) CHECK (is_active IN (0, 1)),
                     created_at DATE
                 )
-            """))
-            
-            conn.execute(text(f"""
+            """,
+            insert_sql=f"""
                 INSERT INTO {table_name} (id, is_active, created_at) VALUES
                 (1, 1, DATE '2024-01-01'),
                 (2, 0, DATE '2024-01-02'),
                 (3, 1, DATE '2024-01-03')
-            """))
+            """
+        )
         
-        # PostgreSQL: boolean as BOOLEAN
-        with postgres_engine.begin() as conn:
-            conn.execute(text(f"DROP TABLE IF EXISTS {table_name} CASCADE"))
-            
-            conn.execute(text(f"""
+      # PostgreSQL: boolean as BOOLEAN
+        table_helper.create_table(
+            engine=postgres_engine,
+            table_name=table_name,
+            create_sql=f"""
                 CREATE TABLE {table_name} (
                     id INTEGER PRIMARY KEY,
                     is_active BOOLEAN,
                     created_at DATE
                 )
-            """))
-            
-            conn.execute(text(f"""
+            """,
+            insert_sql=f"""
                 INSERT INTO {table_name} (id, is_active, created_at) VALUES
                 (1, TRUE, '2024-01-01'),
                 (2, FALSE, '2024-01-02'),
                 (3, TRUE, '2024-01-03')
-            """))
+            """
+        )
         
         yield
-        
-        # Cleanup
-        with oracle_engine.begin() as conn:
-            try:
-                conn.execute(text(f"DROP TABLE {table_name} CASCADE CONSTRAINTS"))
-            except:
-                pass
-        
-        with postgres_engine.begin() as conn:
-            conn.execute(text(f"DROP TABLE IF EXISTS {table_name} CASCADE"))
 
     def test_boolean_comparison(self, oracle_engine, postgres_engine):
         """
@@ -96,6 +77,6 @@ class TestBooleanComparison:
             tolerance_percentage=0.0,
         )
 
-        # Adapters should convert both to string representation
+      # Adapters should convert both to string representation
         assert status == COMPARISON_SUCCESS
         print(f"Boolean comparison passed: {stats.final_score:.2f}%")

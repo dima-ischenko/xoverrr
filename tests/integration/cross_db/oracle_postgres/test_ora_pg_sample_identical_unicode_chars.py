@@ -3,7 +3,6 @@ Test Unicode and special characters comparison between Oracle and PostgreSQL.
 """
 
 import pytest
-from sqlalchemy import text
 from xoverrr.core import DataQualityComparator, DataReference
 from xoverrr.constants import COMPARISON_SUCCESS
 
@@ -12,56 +11,50 @@ class TestUnicodeComparison:
     """Tests for Unicode and special characters"""
     
     @pytest.fixture(autouse=True)
-    def setup_unicode_data(self, oracle_engine, postgres_engine):
+    def setup_unicode_data(self, oracle_engine, postgres_engine, table_helper):
         """Setup Unicode test data"""
-        # Oracle
-        with oracle_engine.begin() as conn:
-            conn.execute(text("""
-                BEGIN
-                    EXECUTE IMMEDIATE 'DROP TABLE test_unicode CASCADE CONSTRAINTS';
-                EXCEPTION
-                    WHEN OTHERS THEN
-                        IF SQLCODE != -942 THEN
-                            RAISE;
-                        END IF;
-                END;
-            """))
-            
-            conn.execute(text("""
-                CREATE TABLE test_unicode (
+        
+        table_name = "test_unicode"
+        
+      # Oracle
+        table_helper.create_table(
+            engine=oracle_engine,
+            table_name=table_name,
+            create_sql=f"""
+                CREATE TABLE {table_name} (
                     id NUMBER PRIMARY KEY,
                     text_english VARCHAR2(200),
                     text_russian VARCHAR2(200),
                     text_emoji VARCHAR2(200),
                     created_date DATE
                 )
-            """))
-            
-            conn.execute(text("""
-                INSERT INTO test_unicode (id, text_english, text_russian, text_emoji, created_date) VALUES
+            """,
+            insert_sql=f"""
+                INSERT INTO {table_name} (id, text_english, text_russian, text_emoji, created_date) VALUES
                 (1, 'Hello World', 'Привет мир', '😀 🚀 📊', DATE '2024-01-01'),
                 (2, 'Test data', 'Тестовые данные', '✅ ❌ ⚠️', DATE '2024-01-02')
-            """))
+            """
+        )
         
-        # PostgreSQL
-        with postgres_engine.begin() as conn:
-            conn.execute(text("DROP TABLE IF EXISTS test_unicode CASCADE"))
-            
-            conn.execute(text("""
-                CREATE TABLE test_unicode (
+      # PostgreSQL
+        table_helper.create_table(
+            engine=postgres_engine,
+            table_name=table_name,
+            create_sql=f"""
+                CREATE TABLE {table_name} (
                     id INTEGER PRIMARY KEY,
                     text_english TEXT,
                     text_russian TEXT,
                     text_emoji TEXT,
                     created_date DATE
                 )
-            """))
-            
-            conn.execute(text("""
-                INSERT INTO test_unicode (id, text_english, text_russian, text_emoji, created_date) VALUES
+            """,
+            insert_sql=f"""
+                INSERT INTO {table_name} (id, text_english, text_russian, text_emoji, created_date) VALUES
                 (1, 'Hello World', 'Привет мир', '😀 🚀 📊', '2024-01-01'),
                 (2, 'Test data', 'Тестовые данные', '✅ ❌ ⚠️', '2024-01-02')
-            """))
+            """
+        )
         
         yield
 

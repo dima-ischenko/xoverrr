@@ -11,19 +11,17 @@ class TestClickHouseTableVsView:
     """Self-comparison tests for ClickHouse table vs view"""
     
     @pytest.fixture(autouse=True)
-    def setup_table_vs_view_data(self, clickhouse_engine):
+    def setup_table_vs_view_data(self, clickhouse_engine, table_helper):
         """Setup test data for ClickHouse table vs view comparison"""
         
         table_name = "test_self_ch_table_view_main"
         view_name = "v_test_self_ch_table_view"
         
-        with clickhouse_engine.begin() as conn:
-            # Clean up
-            conn.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
-            conn.execute(text(f"DROP VIEW IF EXISTS {view_name}"))
-            
-            # Create main table
-            conn.execute(text(f"""
+      # Create main table
+        table_helper.create_table(
+            engine=clickhouse_engine,
+            table_name=table_name,
+            create_sql=f"""
                 CREATE TABLE {table_name} (
                     id UInt32,
                     name String,
@@ -33,17 +31,17 @@ class TestClickHouseTableVsView:
                 )
                 ENGINE = MergeTree()
                 ORDER BY id
-            """))
-            
-            # Insert data
-            conn.execute(text(f"""
+            """,
+            insert_sql=f"""
                 INSERT INTO {table_name} VALUES
                 (1, 'Product A', 99.99, '2024-01-01', 1),
                 (2, 'Product B', 149.50, '2024-01-02', 0),
                 (3, 'Product C', 199.00, '2024-01-03', 1)
-            """))
-            
-            # Create a view
+            """
+        )
+        
+      # Create a view
+        with clickhouse_engine.begin() as conn:
             conn.execute(text(f"""
                 CREATE VIEW {view_name} AS
                 SELECT 
@@ -55,11 +53,6 @@ class TestClickHouseTableVsView:
             """))
         
         yield
-        
-        # Cleanup
-        with clickhouse_engine.begin() as conn:
-            conn.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
-            conn.execute(text(f"DROP VIEW IF EXISTS {view_name}"))
 
     def test_clickhouse_table_vs_view(self, clickhouse_engine):
         """

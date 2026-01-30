@@ -12,56 +12,50 @@ class TestCustomQueryComparison:
     """Tests for custom query comparison"""
     
     @pytest.fixture(autouse=True)
-    def setup_custom_data(self, oracle_engine, postgres_engine):
+    def setup_custom_data(self, oracle_engine, postgres_engine, table_helper):
         """Setup custom query test data"""
-        # Oracle
-        with oracle_engine.begin() as conn:
-            conn.execute(text("""
-                BEGIN
-                    EXECUTE IMMEDIATE 'DROP TABLE test_custom_data CASCADE CONSTRAINTS';
-                EXCEPTION
-                    WHEN OTHERS THEN
-                        IF SQLCODE != -942 THEN
-                            RAISE;
-                        END IF;
-                END;
-            """))
-            
-            conn.execute(text("""
-                CREATE TABLE test_custom_data (
+        
+        table_name = "test_custom_data"
+        
+      # Oracle
+        table_helper.create_table(
+            engine=oracle_engine,
+            table_name=table_name,
+            create_sql=f"""
+                CREATE TABLE {table_name} (
                     id          INTEGER PRIMARY KEY,
                     name        varchar2(256) NOT NULL,
                     created_at  DATE NOT NULL,
                     updated_at  TIMESTAMP NOT NULL
                 )
-            """))
-            
-            conn.execute(text("""
-                INSERT INTO test_custom_data (id, name, created_at, updated_at) VALUES
+            """,
+            insert_sql=f"""
+                INSERT INTO {table_name} (id, name, created_at, updated_at) VALUES
                 (1, 'Alice',   date'2024-01-01', timestamp'2024-01-01 10:00:00'),
                 (2, 'Robert',  date'2024-01-02', timestamp'2024-01-02 11:00:00'),
                 (3, 'Charlie', date'2024-01-03', timestamp'2024-01-03 12:00:00')
-            """))
+            """
+        )
         
-        # PostgreSQL
-        with postgres_engine.begin() as conn:
-            conn.execute(text("DROP TABLE IF EXISTS test_custom_data CASCADE"))
-            
-            conn.execute(text("""
-                CREATE TABLE test_custom_data (
+      # PostgreSQL
+        table_helper.create_table(
+            engine=postgres_engine,
+            table_name=table_name,
+            create_sql=f"""
+                CREATE TABLE {table_name} (
                     id          INTEGER PRIMARY KEY,
                     name        TEXT NOT NULL,
                     created_at  DATE NOT NULL,
                     updated_at  TIMESTAMP NOT NULL
                 )
-            """))
-            
-            conn.execute(text("""
-                INSERT INTO test_custom_data (id, name, created_at, updated_at) VALUES
+            """,
+            insert_sql=f"""
+                INSERT INTO {table_name} (id, name, created_at, updated_at) VALUES
                 (1, 'Alice',   '2024-01-01', '2024-01-01 10:00:00'),
                 (2, 'Robert',  '2024-01-02', '2024-01-02 11:00:00'),
                 (3, 'Charlie', '2024-01-03', '2024-01-03 12:00:00')
-            """))
+            """
+        )
         
         yield
 
