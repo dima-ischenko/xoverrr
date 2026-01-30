@@ -38,7 +38,7 @@ services:
     restart: unless-stopped
 
   clickhouse:
-    image: clickhouse/clickhouse-server:23.8
+    image: clickhouse/clickhouse-server:23.8-alpine
     container_name: clickhouse
     environment:
       CLICKHOUSE_DB: test
@@ -49,7 +49,8 @@ services:
       - "9000:9000"
     volumes:
       - ./clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql
-    mem_limit: 1g
+    mem_limit: 2g
+    memswap_limit: 4g
     ulimits:
       nofile:
         soft: 262144

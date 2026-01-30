@@ -208,9 +208,8 @@ class DataQualityComparator:
             )
             target_counts = self._execute_query((target_query, target_params), self.target_engine, self.timezone)
 
+
             source_counts_filled, target_counts_filled = cross_fill_missing_dates(source_counts, target_counts)
-            source_counts_filled['dt'] = pd.to_datetime(source_counts_filled['dt'], format='%Y-%m-%d')
-            target_counts_filled['dt'] = pd.to_datetime(target_counts_filled['dt'], format='%Y-%m-%d')
 
             merged = source_counts_filled.merge(target_counts_filled, on='dt')
             total_count_source = source_counts_filled['cnt'].sum()

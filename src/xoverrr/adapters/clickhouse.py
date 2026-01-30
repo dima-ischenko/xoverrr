@@ -101,7 +101,7 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
                          start_date: Optional[str], end_date: Optional[str]) -> Tuple[str, Dict]:
         query = f"""
             SELECT
-                toDate({date_column}) as dt,
+                formatDateTime(toDate({date_column}), '%%Y-%%m-%%d') as dt,
                 count(*) as cnt
             FROM {data_ref.full_name}
             WHERE 1=1
@@ -165,6 +165,7 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
         return {
             r'datetime\(': lambda x: pd.to_datetime(x, utc=True, errors='coerce').dt.tz_convert(timezone).dt.tz_localize(None).strftime(DATETIME_FORMAT).str.replace(r'\s00:00:00$', '', regex=True),
             r'datetime64': lambda x: pd.to_datetime(x, utc=True, errors='coerce').dt.tz_convert(timezone).dt.tz_localize(None).strftime(DATETIME_FORMAT).str.replace(r'\s00:00:00$', '', regex=True),
+            r'datetime': lambda x: pd.to_datetime(x, errors='coerce').dt.strftime(DATETIME_FORMAT).str.replace(r'\s00:00:00$', '', regex=True),
             r'date': lambda x: pd.to_datetime(x, errors='coerce').dt.strftime(DATE_FORMAT).str.replace(r'\s00:00:00$', '', regex=True),
             r'uint64|uint8|float|decimal|int32': lambda x: x.astype(str).str.replace(r'\.0+$', '', regex=True),
         }

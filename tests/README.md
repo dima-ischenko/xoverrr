@@ -98,7 +98,8 @@ For macOS with Apple Silicon (M1/M2/M3) processors, Oracle database requires x86
 brew install colima docker docker-compose
 
 # Start Colima with x86_64 architecture
-colima start --arch x86_64 --memory 6 --cpu 2 --disk 40
+colima start --arch x86_64 --memory 8 --cpu 4 --disk 40 --vm-type=vz --mount-type=sshfs
+
 
 # Set Docker context to Colima
 docker context use colima
