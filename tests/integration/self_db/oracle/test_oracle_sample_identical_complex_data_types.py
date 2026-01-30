@@ -5,7 +5,7 @@ Test Oracle self-comparison with complex data types.
 import pytest
 from sqlalchemy import text
 from xoverrr.core import DataQualityComparator, DataReference
-from xoverrr.constants import COMPARISON_SUCCESS
+from xoverrr.constants import COMPARISON_SUCCESS, COMPARISON_SKIPPED
 
 
 class TestOracleComplexDataTypes:
@@ -51,7 +51,7 @@ class TestOracleComplexDataTypes:
                 (1, 'Standard text', 123.456, 
                  DATE '2024-01-01', 
                  TIMESTAMP '2024-01-01 10:30:45.123456',
-                 TIMESTAMP '2024-01-01 10:30:45.123456 UTC',
+                 TIMESTAMP '2024-01-01 10:30:45.123456 +00:00',
                  INTERVAL '1 2:30:45' DAY TO SECOND,
                  HEXTORAW('414243'),
                  'This is a CLOB text with multiple lines
