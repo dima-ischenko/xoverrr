@@ -11,16 +11,16 @@ class TestClickHousePostgresCountsComparison:
     """Cross-database count-based comparison tests ClickHouse ↔ PostgreSQL"""
     
     @pytest.fixture(autouse=True)
-    def setup_count_data(self, clickhouse_engine, postgres_engine):
+    def setup_count_data(self, clickhouse_engine, postgres_engine, table_helper):
         """Setup test data for count comparison"""
         
         table_name = "test_ch_pg_counts"
         
         # ClickHouse setup
-        with clickhouse_engine.begin() as conn:
-            conn.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
-            
-            conn.execute(text(f"""
+        table_helper.create_table(
+            engine=clickhouse_engine,
+            table_name=table_name,
+            create_sql=f"""
                 CREATE TABLE {table_name} (
                     id UInt32,
                     event_date Date,
@@ -28,43 +28,39 @@ class TestClickHousePostgresCountsComparison:
                 )
                 ENGINE = MergeTree()
                 ORDER BY id
-            """))
-            
-            # 3 records on 2024-01-01, 2 on 2024-01-02
-            conn.execute(text(f"""
+            """,
+            insert_sql=f"""
                 INSERT INTO {table_name} (id, event_date, event_type) VALUES
                 (1, '2024-01-01', 'login'),
                 (2, '2024-01-01', 'purchase'),
                 (3, '2024-01-01', 'logout'),
                 (4, '2024-01-02', 'login'),
                 (5, '2024-01-02', 'view')
-            """))
+            """
+        )
         
         # PostgreSQL setup
-        with postgres_engine.begin() as conn:
-            conn.execute(text(f"DROP TABLE IF EXISTS {table_name} CASCADE"))
-            
-            conn.execute(text(f"""
+        table_helper.create_table(
+            engine=postgres_engine,
+            table_name=table_name,
+            create_sql=f"""
                 CREATE TABLE {table_name} (
                     id INTEGER PRIMARY KEY,
                     event_date DATE,
                     event_type TEXT
                 )
-            """))
-            
-            # Same counts
-            conn.execute(text(f"""
+            """,
+            insert_sql=f"""
                 INSERT INTO {table_name} (id, event_date, event_type) VALUES
                 (1, '2024-01-01', 'login'),
                 (2, '2024-01-01', 'purchase'),
                 (3, '2024-01-01', 'logout'),
                 (4, '2024-01-02', 'login'),
                 (5, '2024-01-02', 'view')
-            """))
+            """
+        )
         
         yield
-        
-        
 
     def test_counts_comparison(self, clickhouse_engine, postgres_engine):
         """

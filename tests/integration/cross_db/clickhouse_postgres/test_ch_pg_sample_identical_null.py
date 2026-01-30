@@ -12,14 +12,17 @@ class TestClickHouseNullValues:
     """Tests for NULL values comparison with ClickHouse"""
     
     @pytest.fixture(autouse=True)
-    def setup_clickhouse_null_data(self, clickhouse_engine, postgres_engine):
+    def setup_clickhouse_null_data(self, clickhouse_engine, postgres_engine, table_helper):
         """Setup NULL test data for ClickHouse vs PostgreSQL"""
-        # ClickHouse
-        with clickhouse_engine.begin() as conn:
-            conn.execute(text("DROP TABLE IF EXISTS test_ch_nulls"))
-            
-            conn.execute(text("""
-                CREATE TABLE test_ch_nulls (
+        
+        table_name = "test_ch_nulls"
+        
+        # ClickHouse setup
+        table_helper.create_table(
+            engine=clickhouse_engine,
+            table_name=table_name,
+            create_sql=f"""
+                CREATE TABLE {table_name} (
                     id UInt32,
                     nullable_string Nullable(String),
                     nullable_number Nullable(Int32),
@@ -28,35 +31,35 @@ class TestClickHouseNullValues:
                 )
                 ENGINE = MergeTree()
                 ORDER BY id
-            """))
-            
-            conn.execute(text("""
-                INSERT INTO test_ch_nulls (id, nullable_string, nullable_number, nullable_date, created_at) VALUES
+            """,
+            insert_sql=f"""
+                INSERT INTO {table_name} (id, nullable_string, nullable_number, nullable_date, created_at) VALUES
                 (1, NULL, NULL, NULL, '2024-01-01'),
                 (2, 'Some text', 123, '2024-01-02', '2024-01-02'),
                 (3, NULL, 456, NULL, '2024-01-03')
-            """))
+            """
+        )
         
-        # PostgreSQL
-        with postgres_engine.begin() as conn:
-            conn.execute(text("DROP TABLE IF EXISTS test_ch_nulls CASCADE"))
-            
-            conn.execute(text("""
-                CREATE TABLE test_ch_nulls (
+        # PostgreSQL setup
+        table_helper.create_table(
+            engine=postgres_engine,
+            table_name=table_name,
+            create_sql=f"""
+                CREATE TABLE {table_name} (
                     id INTEGER PRIMARY KEY,
                     nullable_string TEXT,
                     nullable_number INTEGER,
                     nullable_date DATE,
                     created_at DATE NOT NULL
                 )
-            """))
-            
-            conn.execute(text("""
-                INSERT INTO test_ch_nulls (id, nullable_string, nullable_number, nullable_date, created_at) VALUES
+            """,
+            insert_sql=f"""
+                INSERT INTO {table_name} (id, nullable_string, nullable_number, nullable_date, created_at) VALUES
                 (1, NULL, NULL, NULL, '2024-01-01'),
                 (2, 'Some text', 123, '2024-01-02', '2024-01-02'),
                 (3, NULL, 456, NULL, '2024-01-03')
-            """))
+            """
+        )
         
         yield
 

@@ -11,16 +11,16 @@ class TestClickHousePostgresColumnExclusion:
     """Cross-database sample comparison with column exclusion"""
     
     @pytest.fixture(autouse=True)
-    def setup_column_exclusion_data(self, clickhouse_engine, postgres_engine):
+    def setup_column_exclusion_data(self, clickhouse_engine, postgres_engine, table_helper):
         """Setup test data for column exclusion test"""
         
         table_name = "test_ch_pg_col_exclusion"
         
         # ClickHouse setup
-        with clickhouse_engine.begin() as conn:
-            conn.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
-            
-            conn.execute(text(f"""
+        table_helper.create_table(
+            engine=clickhouse_engine,
+            table_name=table_name,
+            create_sql=f"""
                 CREATE TABLE {table_name} (
                     id UInt32,
                     name String,
@@ -30,19 +30,19 @@ class TestClickHousePostgresColumnExclusion:
                 )
                 ENGINE = MergeTree()
                 ORDER BY id
-            """))
-            
-            conn.execute(text(f"""
+            """,
+            insert_sql=f"""
                 INSERT INTO {table_name} (id, name, created_at, internal_id, public_data) VALUES
                 (1, 'Item A', '2024-01-01 10:00:00', 999, 'Public A'),
                 (2, 'Item B', '2024-01-02 11:00:00', 888, 'Public B')
-            """))
+            """
+        )
         
         # PostgreSQL setup
-        with postgres_engine.begin() as conn:
-            conn.execute(text(f"DROP TABLE IF EXISTS {table_name} CASCADE"))
-            
-            conn.execute(text(f"""
+        table_helper.create_table(
+            engine=postgres_engine,
+            table_name=table_name,
+            create_sql=f"""
                 CREATE TABLE {table_name} (
                     id INTEGER PRIMARY KEY,
                     name TEXT,
@@ -50,22 +50,15 @@ class TestClickHousePostgresColumnExclusion:
                     internal_id INTEGER,
                     public_data TEXT
                 )
-            """))
-            
-            conn.execute(text(f"""
+            """,
+            insert_sql=f"""
                 INSERT INTO {table_name} (id, name, created_at, internal_id, public_data) VALUES
                 (1, 'Item A', '2024-01-01 10:00:00', 999, 'Public A'),
                 (2, 'Item B', '2024-01-02 11:00:00', 888, 'Public B')
-            """))
+            """
+        )
         
         yield
-        
-        # Cleanup
-        with clickhouse_engine.begin() as conn:
-            conn.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
-        
-        with postgres_engine.begin() as conn:
-            conn.execute(text(f"DROP TABLE IF EXISTS {table_name} CASCADE"))
 
     def test_sample_with_column_exclusion(self, clickhouse_engine, postgres_engine):
         """
