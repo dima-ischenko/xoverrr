@@ -1,0 +1,23 @@
+deactivate
+rm -rf venv/
+python3 -m venv venv
+source venv/bin/activate
+
+pip install -e ".[dev,test]"
+
+python -m pytest tests/unit
+python -m pytest tests/integration
+
+#publish
+pip install --upgrade pip
+pip install --upgrade build twine
+python -m build
+python -m twine upload dist/* --skip-existing
+
+python -m twine upload --repository-url https://test.pypi.org/legacy/ dist/*
+
+# Протестируйте установку
+pip install --index-url https://test.pypi.org/simple/ xoverrr
+
+pip install xoverrr
+pip install --index-url https://pypi.org/simple xoverrr
