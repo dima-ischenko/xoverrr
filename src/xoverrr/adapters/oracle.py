@@ -1,7 +1,7 @@
 import pandas as pd
 from typing import Optional, Dict, Callable, List, Tuple, Union
-from datetime import datetime, timedelta
-from ..constants import DATE_FORMAT,DATETIME_FORMAT
+
+from ..constants import DATETIME_FORMAT
 from .base import BaseDatabaseAdapter, Engine
 from ..models import DataReference, ObjectType
 from ..exceptions import QueryExecutionError

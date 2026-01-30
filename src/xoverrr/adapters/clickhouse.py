@@ -101,7 +101,7 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
                          start_date: Optional[str], end_date: Optional[str]) -> Tuple[str, Dict]:
         query = f"""
             SELECT
-                toDate({date_column}) as dt,
+                formatDateTime(toDate({date_column}), '%%Y-%%m-%%d') as dt,
                 count(*) as cnt
             FROM {data_ref.full_name}
             WHERE 1=1
