@@ -41,8 +41,10 @@ class TestClickHouseTableVsView:
         )
         
       # Create a view
-        with clickhouse_engine.begin() as conn:
-            conn.execute(text(f"""
+        table_helper.create_view(
+            engine=clickhouse_engine,
+            view_name=view_name,
+            view_sql=f"""
                 CREATE VIEW {view_name} AS
                 SELECT 
                     id,
@@ -50,8 +52,8 @@ class TestClickHouseTableVsView:
                     price,
                     created_at
                 FROM {table_name}
-            """))
-        
+            """
+        )
         yield
 
     def test_clickhouse_table_vs_view(self, clickhouse_engine):

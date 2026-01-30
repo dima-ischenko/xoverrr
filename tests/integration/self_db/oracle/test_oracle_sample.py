@@ -68,7 +68,7 @@ class TestOracleSelfComparison:
         """
         Compare Oracle table with view on the same data.
         """
-      # Create a view for testing
+        # Create a view for testing
         table_helper.create_view(
             engine=oracle_engine,
             view_name="v_test_oracle_self",

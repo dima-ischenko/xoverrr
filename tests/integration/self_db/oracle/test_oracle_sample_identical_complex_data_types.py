@@ -14,22 +14,16 @@ class TestOracleComplexDataTypes:
     """
     
     @pytest.fixture(autouse=True)
-    def setup_oracle_complex_data(self, oracle_engine):
+    def setup_oracle_complex_data(self, oracle_engine, table_helper):
         """Setup Oracle test data with complex types for self-comparison"""
-        with oracle_engine.begin() as conn:
-            conn.execute(text("""
-                BEGIN
-                    EXECUTE IMMEDIATE 'DROP TABLE test_oracle_complex CASCADE CONSTRAINTS';
-                EXCEPTION
-                    WHEN OTHERS THEN
-                        IF SQLCODE != -942 THEN
-                            RAISE;
-                        END IF;
-                END;
-            """))
-            
-            conn.execute(text("""
-                CREATE TABLE test_oracle_complex (
+        
+        table_name = "test_oracle_complex"
+        
+        table_helper.create_table(
+            engine=oracle_engine,
+            table_name=table_name,
+            create_sql=f"""
+                CREATE TABLE {table_name} (
                     id               NUMBER PRIMARY KEY,
                     varchar_col      VARCHAR2(200),
                     number_col       NUMBER(10,3),
@@ -41,10 +35,9 @@ class TestOracleComplexDataTypes:
                     clob_col         CLOB,
                     created_at       DATE NOT NULL
                 )
-            """))
-            
-            conn.execute(text("""
-                INSERT INTO test_oracle_complex (
+            """,
+            insert_sql=f"""
+                INSERT INTO {table_name} (
                     id, varchar_col, number_col, date_col, timestamp_col,
                     timestamp_tz_col, interval_col, raw_col, clob_col, created_at
                 ) VALUES
@@ -75,16 +68,10 @@ class TestOracleComplexDataTypes:
                  NULL,
                  NULL,
                  DATE '2024-01-03')
-            """))
+            """
+        )
         
         yield
-        
-        # Cleanup
-        with oracle_engine.begin() as conn:
-            try:
-                conn.execute(text("DROP TABLE test_oracle_complex CASCADE CONSTRAINTS"))
-            except:
-                pass
 
     def test_oracle_complex_types_self_comparison(self, oracle_engine):
         """

@@ -14,36 +14,40 @@ class TestPostgresSelfComparison:
     """
     
     @pytest.fixture(autouse=True)
-    def setup_postgres_data(self, postgres_engine):
+    def setup_postgres_data(self, postgres_engine, table_helper):
         """Setup PostgreSQL test data for self-comparison"""
-        with postgres_engine.begin() as conn:
-            conn.execute(text("DROP TABLE IF EXISTS test_custom_data2 CASCADE"))
-            
-            conn.execute(text("""
-                CREATE TABLE test_custom_data2 (
+        
+        table_name = "test_custom_data2"
+        
+        table_helper.create_table(
+            engine=postgres_engine,
+            table_name=table_name,
+            create_sql=f"""
+                CREATE TABLE {table_name} (
                     id          INTEGER PRIMARY KEY,
                     name        TEXT NOT NULL,
                     created_at  DATE NOT NULL,
                     updated_at  TIMESTAMP NOT NULL
                 )
-            """))
-            
-            conn.execute(text("""
-                INSERT INTO test_custom_data2 (id, name, created_at, updated_at) VALUES
+            """,
+            insert_sql=f"""
+                INSERT INTO {table_name} (id, name, created_at, updated_at) VALUES
                 (1, 'Alice',   '2024-01-01', '2024-01-01 10:00:00'),
                 (2, 'Robert',  '2024-01-02', '2024-01-02 11:00:00'),
                 (3, 'Charlie', '2024-01-03', '2024-01-03 12:00:00')
-            """))
-
-        """Setup view for PostgreSQL self-comparison"""
-        with postgres_engine.begin() as conn:
-            # Create a view
-            conn.execute(text("DROP VIEW IF EXISTS vtest_custom_data2 CASCADE"))
-            conn.execute(text("""
+            """
+        )
+        
+        # Create a view
+        table_helper.create_view(
+            engine=postgres_engine,
+            view_name="vtest_custom_data2",
+            view_sql=f"""
                 CREATE VIEW vtest_custom_data2 AS
                 SELECT id, name, created_at, updated_at
-                FROM test_custom_data2
-            """))
+                FROM {table_name}
+            """
+        )
         
         yield
 

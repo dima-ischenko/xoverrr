@@ -39,8 +39,10 @@ class TestClickHouseTableVsTable:
         )
         
       # Create copy table (identical structure, same data)
-        with clickhouse_engine.begin() as conn:
-            conn.execute(text(f"""
+        table_helper.create_table(
+            engine=clickhouse_engine,
+            table_name=table_name_copy,
+            create_sql=f"""
                 CREATE TABLE {table_name_copy} (
                     id UInt32,
                     value String,
@@ -48,12 +50,14 @@ class TestClickHouseTableVsTable:
                 )
                 ENGINE = MergeTree()
                 ORDER BY id
-            """))
-            
-            conn.execute(text(f"""
-                INSERT INTO {table_name_copy} 
-                SELECT * FROM {table_name_main}
-            """))
+            """,
+            insert_sql=f"""
+                INSERT INTO {table_name_copy} VALUES
+                (1, 'Value A', '2024-01-01'),
+                (2, 'Value B', '2024-01-02'),
+                (3, 'Value C', '2024-01-03')
+            """
+        )
         
         yield
 
