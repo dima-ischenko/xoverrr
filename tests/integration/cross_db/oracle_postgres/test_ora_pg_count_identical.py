@@ -103,4 +103,4 @@ class TestOraclePostgresCountsComparison:
         print(report)
         assert status == COMPARISON_SUCCESS
         assert stats.final_score == 100.0
-        print(f"✓ Oracle → PostgreSQL count comparison passed: {stats.final_score:.2f}%")
+        print(f"Oracle → PostgreSQL count comparison passed: {stats.final_score:.2f}%")

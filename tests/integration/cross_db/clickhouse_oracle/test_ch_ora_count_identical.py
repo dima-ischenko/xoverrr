@@ -104,4 +104,4 @@ class TestClickHouseOracleCountsComparison:
         )
         print(report)
         assert status == COMPARISON_SUCCESS
-        print(f"✓ ClickHouse → Oracle count comparison passed: {stats.final_score:.2f}%")
+        print(f"ClickHouse → Oracle count comparison passed: {stats.final_score:.2f}%")

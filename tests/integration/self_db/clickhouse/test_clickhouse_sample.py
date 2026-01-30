@@ -84,4 +84,4 @@ class TestClickHouseTableVsView:
         )
 
         assert status == COMPARISON_SUCCESS
-        print(f"✓ ClickHouse table vs view comparison passed: {stats.final_score:.2f}%")
+        print(f"ClickHouse table vs view comparison passed: {stats.final_score:.2f}%")

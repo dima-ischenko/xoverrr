@@ -100,4 +100,4 @@ class TestNullValuesComparison:
         )
 
         assert status == COMPARISON_SUCCESS
-        print(f"✓ NULL values comparison passed: {stats.final_score:.2f}%")
+        print(f"NULL values comparison passed: {stats.final_score:.2f}%")

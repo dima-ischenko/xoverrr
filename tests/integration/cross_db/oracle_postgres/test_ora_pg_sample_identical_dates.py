@@ -83,4 +83,4 @@ class TestDateTypeComparison:
 
         assert status == COMPARISON_SUCCESS
         assert stats.final_diff_score == 0.0
-        print(f"✓ Date type comparison passed: {stats.final_score:.2f}%")
+        print(f"Date type comparison passed: {stats.final_score:.2f}%")

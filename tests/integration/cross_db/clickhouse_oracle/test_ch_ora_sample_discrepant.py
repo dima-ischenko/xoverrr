@@ -107,4 +107,4 @@ class TestClickHouseOracleDataWithDiscrepancies:
         print (report)
         assert status == COMPARISON_SUCCESS  # Should pass with tolerance
         assert stats.final_diff_score > 0.0
-        print(f"✓ ClickHouse → Oracle with discrepancies comparison passed: {stats.final_score:.2f}%")
+        print(f"ClickHouse → Oracle with discrepancies comparison passed: {stats.final_score:.2f}%")

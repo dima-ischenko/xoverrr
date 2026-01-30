@@ -100,4 +100,4 @@ class TestNumericTypesComparison:
         )
 
         assert status == COMPARISON_SUCCESS
-        print(f"✓ Numeric types comparison passed: {stats.final_score:.2f}%")
+        print(f"Numeric types comparison passed: {stats.final_score:.2f}%")

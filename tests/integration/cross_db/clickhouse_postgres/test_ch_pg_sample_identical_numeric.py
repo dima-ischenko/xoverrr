@@ -79,4 +79,4 @@ class TestClickHouseNumericTypes:
         )
 
         assert status == COMPARISON_SUCCESS
-        print(f"✓ ClickHouse numeric types comparison passed: {stats.final_score:.2f}%")
+        print(f"ClickHouse numeric types comparison passed: {stats.final_score:.2f}%")

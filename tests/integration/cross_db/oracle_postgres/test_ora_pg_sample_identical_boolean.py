@@ -98,4 +98,4 @@ class TestBooleanComparison:
 
         # Adapters should convert both to string representation
         assert status == COMPARISON_SUCCESS
-        print(f"✓ Boolean comparison passed: {stats.final_score:.2f}%")
+        print(f"Boolean comparison passed: {stats.final_score:.2f}%")

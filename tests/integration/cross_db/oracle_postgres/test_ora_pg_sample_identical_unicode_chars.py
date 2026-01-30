@@ -84,4 +84,4 @@ class TestUnicodeComparison:
         )
 
         assert status == COMPARISON_SUCCESS
-        print(f"✓ Unicode comparison passed: {stats.final_score:.2f}%")
+        print(f"Unicode comparison passed: {stats.final_score:.2f}%")

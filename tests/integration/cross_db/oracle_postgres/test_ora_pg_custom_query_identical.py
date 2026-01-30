@@ -99,4 +99,4 @@ class TestCustomQueryComparison:
         )
 
         assert status == COMPARISON_SUCCESS
-        print(f"✓ Custom query comparison passed: {stats.final_score:.2f}%")
+        print(f"Custom query comparison passed: {stats.final_score:.2f}%")

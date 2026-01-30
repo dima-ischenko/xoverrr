@@ -101,4 +101,4 @@ class TestOraclePostgresCustomPrimaryKey:
 
         # Should detect duplicates
         assert stats.dup_source_rows > 0
-        print(f"✓ Oracle → PostgreSQL with custom PK passed: {stats.final_score:.2f}%")
+        print(f"Oracle → PostgreSQL with custom PK passed: {stats.final_score:.2f}%")

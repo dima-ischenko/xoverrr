@@ -79,4 +79,4 @@ class TestClickHouseNullValues:
         )
 
         assert status == COMPARISON_SUCCESS
-        print(f"✓ ClickHouse NULL values comparison passed: {stats.final_score:.2f}%")
+        print(f"ClickHouse NULL values comparison passed: {stats.final_score:.2f}%")

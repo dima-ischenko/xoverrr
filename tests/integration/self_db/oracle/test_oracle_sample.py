@@ -75,7 +75,7 @@ class TestOracleSelfComparison:
 
         assert status == COMPARISON_SUCCESS
         assert stats.final_diff_score == 0.0
-        print(f"✓ Oracle self-comparison passed: {stats.final_score:.2f}%")
+        print(f"Oracle self-comparison passed: {stats.final_score:.2f}%")
 
     def test_oracle_table_vs_view(self, oracle_engine):
         """
@@ -122,4 +122,4 @@ class TestOracleSelfComparison:
                 pass
 
         assert status == COMPARISON_SUCCESS
-        print(f"✓ Oracle table vs view comparison passed: {stats.final_score:.2f}%")
+        print(f"Oracle table vs view comparison passed: {stats.final_score:.2f}%")
