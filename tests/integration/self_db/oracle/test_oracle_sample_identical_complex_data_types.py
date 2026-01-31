@@ -80,7 +80,7 @@ class TestOracleComplexDataTypes:
         comparator = DataQualityComparator(
             source_engine=oracle_engine,
             target_engine=oracle_engine,
-            timezone="UTC",
+            timezone="Europe/Athens",
         )
 
         status, report, stats, details = comparator.compare_sample(
@@ -103,7 +103,7 @@ class TestOracleComplexDataTypes:
         comparator = DataQualityComparator(
             source_engine=oracle_engine,
             target_engine=oracle_engine,
-            timezone="UTC",
+            timezone="Europe/Athens",
         )
 
         status, report, stats, details = comparator.compare_sample(
@@ -126,7 +126,7 @@ class TestOracleComplexDataTypes:
         comparator = DataQualityComparator(
             source_engine=oracle_engine,
             target_engine=oracle_engine,
-            timezone="UTC",
+            timezone="Europe/Athens",
         )
 
         status, report, stats, details = comparator.compare_sample(

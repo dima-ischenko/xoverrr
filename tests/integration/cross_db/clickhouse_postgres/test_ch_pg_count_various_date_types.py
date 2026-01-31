@@ -102,7 +102,7 @@ class TestClickHousePostgresCountsWithVariousDateTypes:
         comparator = DataQualityComparator(
             source_engine=clickhouse_engine,
             target_engine=postgres_engine,
-            timezone="UTC",
+            timezone="Europe/Athens",
         )
 
         status, report, stats, details = comparator.compare_counts(
@@ -124,7 +124,7 @@ class TestClickHousePostgresCountsWithVariousDateTypes:
         comparator = DataQualityComparator(
             source_engine=clickhouse_engine,
             target_engine=postgres_engine,
-            timezone="UTC",
+            timezone="Europe/Athens",
         )
 
         status, report, stats, details = comparator.compare_counts(
@@ -146,7 +146,7 @@ class TestClickHousePostgresCountsWithVariousDateTypes:
         comparator = DataQualityComparator(
             source_engine=clickhouse_engine,
             target_engine=postgres_engine,
-            timezone="UTC",
+            timezone="Europe/Athens",
         )
 
         status, report, stats, details = comparator.compare_counts(

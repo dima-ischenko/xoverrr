@@ -58,7 +58,7 @@ class TestPostgresSelfComparison:
         comparator = DataQualityComparator(
             source_engine=postgres_engine,
             target_engine=postgres_engine,
-            timezone="UTC",
+            timezone="Europe/Athens",
         )
 
         status, report, stats, details = comparator.compare_sample(

@@ -2,6 +2,70 @@
 
 A tool for cross-database and intra-source data comparison with detailed discrepancy analysis and reporting.
 
+## Usage Example
+**Sample comparison** (Greenplum vs Oracle):
+
+```python
+from xoverrr import DataQualityComparator, DataReference, COMPARISON_SUCCESS, COMPARISON_FAILED, COMPARISON_SKIPPED
+import os
+from datetime import date, timedelta
+
+USER_ORA = os.getenv('USER_ORA', '')
+PASSWORD_ORA = os.getenv('PASSWORD_ORA', '')
+
+USER_GP = os.getenv('USER_GP', '')
+PASSWORD_GP = os.getenv('PASSWORD_GP', '')
+
+HOST = os.getenv('HOST', '')
+
+def create_src_engine(user, password, host):
+    """Source engine (Oracle)"""
+    os.environ['NLS_LANG'] = '.AL32UTF8'
+    return create_engine(f'oracle+oracledb://{user}:{password}@{host}:1521/?service_name=dwh')
+
+def create_trg_engine(user, password, host):
+    """Target engine (Postgres/Greenplum)"""
+    connection_string = f'postgresql+psycopg2://{user}:{password}@{host}:5432/adb'
+    engine = create_engine(connection_string)
+    return engine
+
+
+
+src_engine = create_src_engine(USER_ORA, PASSWORD_ORA, HOST)
+trg_engine = create_trg_engine(USER_GP, PASSWORD_GP, HOST)
+
+comparator = DataQualityComparator(
+    source_engine=src_engine,
+    target_engine=trg_engine,
+    timezone='Asia/Yekaterinburg'
+)
+
+source = DataReference("users", "schema1")
+target = DataReference("users", "schema2")
+
+FORMAT = '%Y-%m-%d'
+recent_range_end = date.today()
+recent_range_begin = recent_range_end - timedelta(days=1)
+
+status, report, stats, details = comparator.compare_sample(
+    source,
+    target,
+    date_column="created_at",
+    update_column="modified_date",
+    exclude_columns=["audit_timestamp", "internal_id"],
+    exclude_recent_hours=24,
+    date_range=(
+        recent_range_begin.strftime(FORMAT),
+        recent_range_end.strftime(FORMAT)
+    ),
+    tolerance_percentage=0
+)
+
+print(report)
+if status == COMPARISON_FAILED:
+    raise Exception("Sample check failed")
+```
+
 ## Key Features
 - **Multi‑DBMS support**: Oracle, PostgreSQL (+ Greenplum), ClickHouse (extensible via adapter layer) — tables and views.
 - **Universal connections**: Provide SQLAlchemy Engine objects for source and target databases.
@@ -234,72 +298,4 @@ Logs include timing information and structured context:
 - If `final_diff_score > tolerance`: status = `COMPARISON_FAILED`
 - If `final_diff_score ≤ tolerance`: status = `COMPARISON_SUCCESS`
 - Enables configuration of acceptable discrepancy levels.
-
----
-
-## Usage Example
-**Sample comparison** (Greenplum vs Oracle):
-
-```python
-from xoverrr import DataQualityComparator, DataReference, COMPARISON_SUCCESS, COMPARISON_FAILED, COMPARISON_SKIPPED
-import os
-from datetime import date, timedelta
-
-USER_ORA = os.getenv('USER_ORA', '')
-PASSWORD_ORA = os.getenv('PASSWORD_ORA', '')
-
-USER_GP = os.getenv('USER_GP', '')
-PASSWORD_GP = os.getenv('PASSWORD_GP', '')
-
-HOST = os.getenv('HOST', '')
-
-def create_src_engine(user, password, host):
-    """Source engine (Oracle)"""
-    os.environ['NLS_LANG'] = '.AL32UTF8'
-    return create_engine(f'oracle+oracledb://{user}:{password}@{host}:1521/?service_name=dwh')
-
-def create_trg_engine(user, password, host):
-    """Target engine (Postgres/Greenplum)"""
-    connection_string = f'postgresql+psycopg2://{user}:{password}@{host}:5432/adb'
-    engine = create_engine(connection_string)
-    return engine
-
-
-
-src_engine = create_src_engine(USER_ORA, PASSWORD_ORA, HOST)
-trg_engine = create_trg_engine(USER_GP, PASSWORD_GP, HOST)
-
-comparator = DataQualityComparator(
-    source_engine=src_engine,
-    target_engine=trg_engine,
-    timezone='Asia/Yekaterinburg'
-)
-
-source = DataReference("users", "schema1")
-target = DataReference("users", "schema2")
-
-FORMAT = '%Y-%m-%d'
-recent_range_end = date.today()
-recent_range_begin = recent_range_end - timedelta(days=1)
-
-status, report, stats, details = comparator.compare_sample(
-    source,
-    target,
-    date_column="created_at",
-    update_column="modified_date",
-    exclude_columns=["audit_timestamp", "internal_id"],
-    exclude_recent_hours=24,
-    date_range=(
-        recent_range_begin.strftime(FORMAT),
-        recent_range_end.strftime(FORMAT)
-    ),
-    tolerance_percentage=0
-)
-
-print(report)
-if status == COMPARISON_FAILED:
-    raise Exception("Sample check failed")
-```
-
----
 

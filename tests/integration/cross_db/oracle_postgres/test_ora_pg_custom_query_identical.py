@@ -66,7 +66,7 @@ class TestCustomQueryComparison:
         comparator = DataQualityComparator(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
-            timezone="UTC",
+            timezone="Europe/Athens",
         )
 
         source_query = """
