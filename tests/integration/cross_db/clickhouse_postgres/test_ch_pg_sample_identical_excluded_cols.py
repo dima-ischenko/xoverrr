@@ -53,8 +53,8 @@ class TestClickHousePostgresColumnExclusion:
             """,
             insert_sql=f"""
                 INSERT INTO {table_name} (id, name, created_at, internal_id, public_data) VALUES
-                (1, 'Item A', '2024-01-01 10:00:00', 999, 'Public A'),
-                (2, 'Item B', '2024-01-02 11:00:00', 888, 'Public B')
+                (1, 'Item A', '2024-01-01 12:00:00', 999, 'Public A'),
+                (2, 'Item B', '2024-01-02 13:00:00', 888, 'Public B')
             """
         )
         
@@ -80,7 +80,7 @@ class TestClickHousePostgresColumnExclusion:
             exclude_columns=["internal_id"],  # Exclude internal column
             tolerance_percentage=0.0,
         )
-
+        print(report)
         assert status == COMPARISON_SUCCESS
         assert stats.final_diff_score == 0.0
         print(f"ClickHouse → PostgreSQL with column exclusion passed: {stats.final_score:.2f}%")

@@ -52,11 +52,12 @@ class TestClickHouseOracleIdenticalData:
                         )
                     """,
             insert_sql=f"""
+                -- implicitly assume Europe/Athens tz
                 INSERT INTO {table_name} VALUES
-                (1, 'Transaction A', 1000.50, DATE '2024-01-01', TIMESTAMP '2024-01-01 10:00:00', 1, 'Category 1'),
-                (2, 'Transaction B', 2500.75, DATE '2024-01-02', TIMESTAMP '2024-01-02 11:30:00', 1, 'Category 2'),
-                (3, 'Transaction C', 500.00, DATE '2024-01-03', TIMESTAMP '2024-01-03 14:45:00', 0, NULL),
-                (4, 'Transaction D', 750.25, DATE '2024-01-04', TIMESTAMP '2024-01-04 09:15:00', 1, 'Category 3')
+                (1, 'Transaction A', 1000.50, DATE '2024-01-01', TIMESTAMP '2024-01-01 12:00:00', 1, 'Category 1'),
+                (2, 'Transaction B', 2500.75, DATE '2024-01-02', TIMESTAMP '2024-01-02 13:30:00', 1, 'Category 2'),
+                (3, 'Transaction C', 500.00, DATE '2024-01-03', TIMESTAMP '2024-01-03 16:45:00', 0, NULL),
+                (4, 'Transaction D', 750.25, DATE '2024-01-04', TIMESTAMP '2024-01-04 11:15:00', 1, 'Category 3')
             """
         )
         
@@ -84,7 +85,7 @@ class TestClickHouseOracleIdenticalData:
             exclude_recent_hours=24,
             tolerance_percentage=0.0,
         )
-        
+        print(report)
         assert status == COMPARISON_SUCCESS
         assert stats.final_diff_score == 0.0
         print(f"ClickHouse → Oracle identical data comparison passed: {stats.final_score:.2f}%")

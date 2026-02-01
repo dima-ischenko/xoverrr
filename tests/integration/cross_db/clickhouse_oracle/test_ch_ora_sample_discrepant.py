@@ -53,9 +53,10 @@ class TestClickHouseOracleDataWithDiscrepancies:
                 )
                     """,
             insert_sql=f"""
+                -- Implicitly assume Europe/Athens tz
                 INSERT INTO {table_name} (id, name, amount, transaction_date, updated_at, is_active) VALUES
-                (1, 'Transaction A', 1001.50, DATE '2024-01-01', TIMESTAMP '2024-01-01 10:00:00', 1),
-                (3, 'Transaction C', 500.00, DATE '2024-01-03', TIMESTAMP '2024-01-03 14:45:00', 0)
+                (1, 'Transaction A', 1001.50, DATE '2024-01-01', TIMESTAMP '2024-01-01 12:00:00', 1),
+                (3, 'Transaction C', 500.00, DATE '2024-01-03', TIMESTAMP '2024-01-03 16:45:00', 0)
             """
         )
         
@@ -82,7 +83,7 @@ class TestClickHouseOracleDataWithDiscrepancies:
             update_column="updated_at",
             date_range=("2024-01-01", "2024-01-05"),
             exclude_recent_hours=24,
-            tolerance_percentage=35.0,  # Allow 5% tolerance
+            tolerance_percentage=35.0, 
         )
         print (report)
         assert status == COMPARISON_SUCCESS  # Should pass with tolerance

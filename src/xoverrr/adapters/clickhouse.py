@@ -161,11 +161,14 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
 
         return None, None
 
-    def _get_type_conversion_rules(self, timezone:str ) -> Dict[str, Callable]:
+    def _get_type_conversion_rules(self, timezone: str) -> Dict[str, Callable]:
         return {
-            r'datetime\(': lambda x: pd.to_datetime(x, utc=True, errors='coerce').dt.tz_convert(timezone).dt.tz_localize(None).strftime(DATETIME_FORMAT).str.replace(r'\s00:00:00$', '', regex=True),
-            r'datetime64': lambda x: pd.to_datetime(x, utc=True, errors='coerce').dt.tz_convert(timezone).dt.tz_localize(None).strftime(DATETIME_FORMAT).str.replace(r'\s00:00:00$', '', regex=True),
-            r'datetime': lambda x: pd.to_datetime(x, errors='coerce').dt.strftime(DATETIME_FORMAT).str.replace(r'\s00:00:00$', '', regex=True),
-            r'date': lambda x: pd.to_datetime(x, errors='coerce').dt.strftime(DATE_FORMAT).str.replace(r'\s00:00:00$', '', regex=True),
-            r'uint64|uint8|float|decimal|int32': lambda x: x.astype(str).str.replace(r'\.0+$', '', regex=True),
-        }
+                r'datetime64|datetime': lambda x: pd.to_datetime(x, utc=True, errors='coerce')
+                                                .dt.tz_convert(timezone)
+                                                .dt.strftime(DATETIME_FORMAT)
+                                                .str.replace(r'\s00:00:00$', '', regex=True),
+                r'date': lambda x: pd.to_datetime(x, errors='coerce')
+                                    .dt.strftime(DATE_FORMAT)
+                                    .str.replace(r'\s00:00:00$', '', regex=True),
+                r'uint64|uint8|float|decimal|int32': lambda x: x.astype(str).str.replace(r'\.0+$', '', regex=True),
+        } 
