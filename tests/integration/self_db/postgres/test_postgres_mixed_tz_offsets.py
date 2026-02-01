@@ -152,7 +152,7 @@ class TestPostgresMixedTimezoneOffsets:
         comparator = DataQualityComparator(
             source_engine=postgres_engine,
             target_engine=postgres_engine,
-            timezone="Asia/Yekaterinburg",  # Non-UTC timezone
+            timezone="Europe/Athens",  # Non-UTC timezone
         )
 
         status, report, stats, details = comparator.compare_sample(
@@ -207,11 +207,10 @@ class TestPostgresMixedTimezoneOffsets:
             """
         )
         
-        # Must use UTC for tz-aware comparisons
         comparator = DataQualityComparator(
             source_engine=postgres_engine,
             target_engine=postgres_engine,
-            timezone="UTC",  # Required for tz-aware columns
+            timezone="Asia/Tokyo",  # Required for tz-aware columns
         )
 
         status, report, stats, details = comparator.compare_sample(
@@ -238,7 +237,7 @@ class TestPostgresMixedTimezoneOffsets:
         comparator_local = DataQualityComparator(
             source_engine=postgres_engine,
             target_engine=postgres_engine,
-            timezone="Europe/Moscow",  # Local timezone for tz-naive
+            timezone="Europe/Paris",  # Local timezone for tz-naive
         )
 
         status_local, _, _, _ = comparator_local.compare_sample(
@@ -253,11 +252,11 @@ class TestPostgresMixedTimezoneOffsets:
         assert status_local == COMPARISON_SUCCESS
         print("Tz-naive columns comparison with local timezone passed")
         
-        # Test 2: Compare only tz-aware columns with UTC
+      
         comparator_utc = DataQualityComparator(
             source_engine=postgres_engine,
             target_engine=postgres_engine,
-            timezone="UTC",  # UTC for tz-aware
+            timezone="US/Pacific",  
         )
 
         status_utc, _, _, _ = comparator_utc.compare_sample(
@@ -281,7 +280,7 @@ class TestPostgresMixedTimezoneOffsets:
         comparator = DataQualityComparator(
             source_engine=postgres_engine,
             target_engine=postgres_engine,
-            timezone="UTC",  # Must use UTC for consistent date filtering
+            timezone="Asia/Tokyo", 
         )
 
         # Test filtering on the boundary date
@@ -297,4 +296,3 @@ class TestPostgresMixedTimezoneOffsets:
         assert status == COMPARISON_SUCCESS
         # Should have the boundary record (id=6)
         assert stats.common_pk_rows == 1
-        print(f"PostgreSQL date boundary filtering with UTC passed: {stats.final_score:.2f}%")
