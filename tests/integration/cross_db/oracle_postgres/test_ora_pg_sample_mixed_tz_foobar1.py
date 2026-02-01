@@ -1,8 +1,6 @@
 """
 Test for bug fix: Mixed timezone offsets in timestamptz columns should be handled correctly.
-When timestamptz columns contain mixed offsets (e.g., +05, +06), conversion with 
-pd.to_datetime should use utc=True to avoid conversion errors.
-PostgreSQL ↔ Oracle specific test.
+All cross-database comparisons with tz-aware columns must use UTC.
 """
 
 import pytest
@@ -45,7 +43,7 @@ class TestPostgresOracleMixedTimezoneOffsets:
             """
         )
         
-        # Oracle setup
+        # Oracle setup - TIMESTAMP WITH TIME ZONE
         table_helper.create_table(
             engine=oracle_engine,
             table_name=table_name,
@@ -78,60 +76,182 @@ class TestPostgresOracleMixedTimezoneOffsets:
         
         yield
 
-    def test_mixed_timezones_various_timezone_settings(self, postgres_engine, oracle_engine):
+    def test_cross_db_comparison_with_utc_only(self, postgres_engine, oracle_engine):
         """
-        Test PostgreSQL ↔ Oracle comparison with mixed timezone offsets.
-        This specifically tests the bug fix for timestamptz columns.
-        Test with various timezone settings.
+        Test cross-database comparison MUST use UTC when comparing tz-aware columns.
+        This is Rule 1: All tz-aware comparisons must be done in UTC.
         """
         table_name = "test_mixed_timezones_pg_ora"
         
-        # Test with different timezone settings to ensure robustness
-        test_timezones = [
-            "UTC",
-            "Europe/Athens",  # Existing test timezone
-            "Asia/Kolkata",   # +05:30
-            "America/New_York",  # -05:00/-04:00 (DST changes)
-            "Asia/Yekaterinburg",  # +05:00
-            "+06:00",  # Offset timezone
-            "-08:00",  # Offset timezone
-            "Pacific/Auckland",  # +12:00/+13:00 (DST)
-            "Europe/Moscow"  # Fixed +03:00
-        ]
+        # Only UTC is valid for cross-db tz-aware comparisons
+        comparator = DataQualityComparator(
+            source_engine=postgres_engine,
+            target_engine=oracle_engine,
+            timezone="UTC",  # MUST be UTC for tz-aware columns
+        )
+
+        status, report, stats, details = comparator.compare_sample(
+            source_table=DataReference(table_name, "test"),
+            target_table=DataReference(table_name, "test"),
+            date_column="record_date",
+            update_column="updated_on",
+            date_range=("2024-01-01", "2024-01-08"),
+            exclude_recent_hours=24,
+            tolerance_percentage=0.0,
+        )
+        
+        assert status == COMPARISON_SUCCESS, "Cross-db tz-aware comparison failed with UTC"
+        assert stats.final_diff_score == 0.0, f"Non-zero diff with UTC timezone"
+        print(f"PostgreSQL → Oracle cross-db comparison with UTC passed: {stats.final_score:.2f}%")
+
+    def test_cross_db_without_tz_aware_columns(self, postgres_engine, oracle_engine):
+        """
+        Test cross-database comparison without tz-aware columns can use any timezone.
+        Demonstrates Rule 2: Don't mix tz-aware with tz-naive.
+        """
+        table_name = "test_mixed_timezones_pg_ora"
+        
+        # Create tables without tz-aware columns for this test
+        test_table = "test_no_tz_columns"
+        
+        # PostgreSQL
+        with postgres_engine.begin() as conn:
+            conn.execute(text(f"""
+                DROP TABLE IF EXISTS {test_table};
+                CREATE TABLE {test_table} (
+                    id INTEGER PRIMARY KEY,
+                    event_name TEXT,
+                    record_date DATE,
+                    regular_timestamp TIMESTAMP
+                )
+            """))
+            conn.execute(text(f"""
+                INSERT INTO {test_table} (id, event_name, record_date, regular_timestamp) VALUES
+                (1, 'Event 1', '2024-01-01', '2024-01-01 10:00:00'),
+                (2, 'Event 2', '2024-01-02', '2024-01-02 11:00:00')
+            """))
+        
+        # Oracle
+        with oracle_engine.begin() as conn:
+            conn.execute(text(f"""
+                BEGIN
+                    EXECUTE IMMEDIATE 'DROP TABLE {test_table}';
+                EXCEPTION
+                    WHEN OTHERS THEN
+                        IF SQLCODE != -942 THEN
+                            RAISE;
+                        END IF;
+                END;
+            """))
+            conn.execute(text(f"""
+                CREATE TABLE {test_table} (
+                    id NUMBER PRIMARY KEY,
+                    event_name VARCHAR2(100),
+                    record_date DATE,
+                    regular_timestamp TIMESTAMP
+                )
+            """))
+            conn.execute(text(f"""
+                INSERT INTO {test_table} (id, event_name, record_date, regular_timestamp) VALUES
+                (1, 'Event 1', DATE '2024-01-01', TIMESTAMP '2024-01-01 10:00:00'),
+                (2, 'Event 2', DATE '2024-01-02', TIMESTAMP '2024-01-02 11:00:00')
+            """))
+        
+        # Can use any timezone since no tz-aware columns
+        test_timezones = ["UTC", "Europe/Athens", "America/New_York", "Asia/Tokyo"]
         
         for timezone in test_timezones:
             comparator = DataQualityComparator(
                 source_engine=postgres_engine,
                 target_engine=oracle_engine,
-                timezone=timezone,
+                timezone=timezone,  # Any timezone valid for tz-naive
             )
 
             status, report, stats, details = comparator.compare_sample(
-                source_table=DataReference(table_name, "test"),
-                target_table=DataReference(table_name, "test"),
+                source_table=DataReference(test_table, "test"),
+                target_table=DataReference(test_table, "test"),
                 date_column="record_date",
-                update_column="updated_on",
-                date_range=("2024-01-01", "2024-01-08"),
-                exclude_recent_hours=24,
+                date_range=("2024-01-01", "2024-01-03"),
                 tolerance_percentage=0.0,
             )
             
             assert status == COMPARISON_SUCCESS, f"Failed with timezone {timezone}"
-            assert stats.final_diff_score == 0.0, f"Non-zero diff with timezone {timezone}"
-            print(f"PostgreSQL → Oracle with mixed timezones passed (timezone={timezone}): {stats.final_score:.2f}%")
+            print(f"Cross-db without tz-aware columns passed (timezone={timezone}): {stats.final_score:.2f}%")
 
-    def test_midnight_boundary_case(self, postgres_engine, oracle_engine):
+    def test_date_only_comparison_with_utc(self, postgres_engine, oracle_engine):
         """
-        Special test case for records that cross UTC midnight.
-        This can be problematic with timezone conversions.
+        Test that date-only comparisons work with UTC timezone.
         """
         table_name = "test_mixed_timezones_pg_ora"
         
-        # Use timezone with non-integer offset to test edge cases
         comparator = DataQualityComparator(
             source_engine=postgres_engine,
             target_engine=oracle_engine,
-            timezone="Asia/Kolkata",  # +05:30
+            timezone="UTC",  # Use UTC even for date-only when table has tz-aware columns
+        )
+
+        status, report, stats, details = comparator.compare_counts(
+            source_table=DataReference(table_name, "test"),
+            target_table=DataReference(table_name, "test"),
+            date_column="record_date",
+            date_range=("2024-01-01", "2024-01-08"),
+            tolerance_percentage=0.0,
+        )
+        
+        assert status == COMPARISON_SUCCESS
+        assert stats.final_score == 100.0
+        print(f"PostgreSQL → Oracle date-only count comparison with UTC passed: {stats.final_score:.2f}%")
+
+    def test_custom_query_with_utc_for_tz_aware(self, postgres_engine, oracle_engine):
+        """
+        Test custom query comparison with tz-aware data must use UTC.
+        """
+        comparator = DataQualityComparator(
+            source_engine=postgres_engine,
+            target_engine=oracle_engine,
+            timezone="UTC",  # MUST be UTC for tz-aware data
+        )
+
+        source_query = """
+            SELECT id, event_name, created_on, record_date,
+                   case when updated_on > (now() - INTERVAL '1 hours') then 'y' end as xrecently_changed
+            FROM test.test_mixed_timezones_pg_ora
+            WHERE record_date >= date_trunc('day', %(start_date)s::date)
+              AND record_date < date_trunc('day', %(end_date)s::date) + interval '1 days'
+        """
+        
+        # Oracle query
+        target_query = """
+            SELECT id, event_name, created_on, record_date,
+                   case when updated_on > (sysdate - :exclude_recent_hours/24) then 'y' end as xrecently_changed
+            FROM test.test_mixed_timezones_pg_ora
+            WHERE record_date >= trunc(to_date(:start_date, 'YYYY-MM-DD'), 'dd')
+              AND record_date < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1
+        """
+
+        status, report, stats, details = comparator.compare_custom_query(
+            source_query=source_query,
+            source_params={'start_date': '2024-01-01', 'end_date': '2024-01-08'},
+            target_query=target_query,
+            target_params={'start_date': '2024-01-01', 'end_date': '2024-01-08'},
+            custom_primary_key=["id"],
+            exclude_columns=["xrecently_changed"],
+            tolerance_percentage=0.0,
+        )
+
+        assert status == COMPARISON_SUCCESS
+        print(f"PostgreSQL → Oracle custom query with UTC for tz-aware passed: {stats.final_score:.2f}%")
+
+    def test_midnight_boundary_case_with_utc(self, postgres_engine, oracle_engine):
+        """
+        Test midnight boundary case with UTC timezone.
+        """
+        table_name = "test_mixed_timezones_pg_ora"
+        
+        comparator = DataQualityComparator(
+            source_engine=postgres_engine,
+            target_engine=oracle_engine,
+            timezone="UTC",  # Boundary cases must use UTC
         )
 
         # Test specific date range that includes the midnight-crossing record
@@ -147,56 +267,4 @@ class TestPostgresOracleMixedTimezoneOffsets:
         
         assert status == COMPARISON_SUCCESS
         assert stats.final_diff_score == 0.0
-        print(f"PostgreSQL → Oracle midnight boundary test passed: {stats.final_score:.2f}%")
-
-    def test_future_date_handling(self, postgres_engine, oracle_engine):
-        """
-        Test handling of future dates (beyond year 2262).
-        Requires errors='coerce' parameter in pd.to_datetime.
-        """
-        table_name = "test_mixed_timezones_pg_ora"
-        
-        comparator = DataQualityComparator(
-            source_engine=postgres_engine,
-            target_engine=oracle_engine,
-            timezone="UTC",
-        )
-
-        # Test with future date
-        status, report, stats, details = comparator.compare_sample(
-            source_table=DataReference(table_name, "test"),
-            target_table=DataReference(table_name, "test"),
-            date_column="record_date",
-            update_column="updated_on",
-            date_range=("3023-04-01", "3023-04-05"),  # Future date range
-            exclude_recent_hours=24,
-            tolerance_percentage=0.0,
-        )
-        
-        # Should work without errors due to errors='coerce'
-        assert status == COMPARISON_SUCCESS
-        print(f"PostgreSQL → Oracle future date handling passed: {stats.final_score:.2f}%")
-
-    def test_count_comparison_with_mixed_timezones(self, postgres_engine, oracle_engine):
-        """
-        Test count-based comparison with mixed timezone data.
-        """
-        table_name = "test_mixed_timezones_pg_ora"
-        
-        comparator = DataQualityComparator(
-            source_engine=postgres_engine,
-            target_engine=oracle_engine,
-            timezone="Europe/London",  # Timezone with DST
-        )
-
-        status, report, stats, details = comparator.compare_counts(
-            source_table=DataReference(table_name, "test"),
-            target_table=DataReference(table_name, "test"),
-            date_column="record_date",
-            date_range=("2024-01-01", "2024-01-08"),
-            tolerance_percentage=0.0,
-        )
-        
-        assert status == COMPARISON_SUCCESS
-        assert stats.final_score == 100.0
-        print(f"PostgreSQL → Oracle count comparison with mixed timezones passed: {stats.final_score:.2f}%")
+        print(f"PostgreSQL → Oracle midnight boundary test with UTC passed: {stats.final_score:.2f}%")

@@ -528,7 +528,7 @@ def prepare_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 
 
     df = df.fillna(NULL_REPLACEMENT)
-    df = df.replace(r'(?i)^(None|nan|NaN|\s*)$', NULL_REPLACEMENT, regex=True)
+    df = df.replace(r'(?i)^(None|nan|NaN|NaT|\s*)$', NULL_REPLACEMENT, regex=True)
 
     df = df.astype(str)
 

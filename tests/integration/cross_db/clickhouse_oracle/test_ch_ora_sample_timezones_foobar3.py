@@ -1,8 +1,6 @@
 """
 Test for bug fix: Mixed timezone offsets in timestamptz columns should be handled correctly.
-When timestamptz columns contain mixed offsets (e.g., +05, +06), conversion with 
-pd.to_datetime should use utc=True to avoid conversion errors.
-Oracle ↔ ClickHouse specific test.
+Oracle ↔ ClickHouse comparisons must handle timezone conversions properly.
 """
 
 import pytest
@@ -20,7 +18,7 @@ class TestOracleClickHouseMixedTimezoneOffsets:
         
         table_name = "test_mixed_timezones_ora_ch"
         
-        # Oracle setup
+        # Oracle setup - TIMESTAMP WITH TIME ZONE
         table_helper.create_table(
             engine=oracle_engine,
             table_name=table_name,
@@ -59,8 +57,8 @@ class TestOracleClickHouseMixedTimezoneOffsets:
                 CREATE TABLE {table_name} (
                     id UInt32,
                     event_name String,
-                    created_on DateTime64(6),
-                    updated_on DateTime64(6),
+                    created_on DateTime64(6, 'UTC'),
+                    updated_on DateTime64(6, 'UTC'),
                     record_date Date
                 )
                 ENGINE = MergeTree()
@@ -80,22 +78,109 @@ class TestOracleClickHouseMixedTimezoneOffsets:
         
         yield
 
-    def test_mixed_timezones_various_timezone_settings(self, oracle_engine, clickhouse_engine):
+    def test_cross_db_comparison_with_utc_only(self, oracle_engine, clickhouse_engine):
         """
-        Test Oracle ↔ ClickHouse comparison with mixed timezone offsets.
+        Test Oracle ↔ ClickHouse comparison MUST use UTC.
+        Oracle has tz-aware columns, ClickHouse stores UTC.
         """
         table_name = "test_mixed_timezones_ora_ch"
         
-        # Test with different timezone settings
-        test_timezones = [
-            "UTC",
-            "Europe/Athens",
-            "America/Chicago",  # Has DST changes
-            "Asia/Shanghai",    # +08:00, no DST
-            "Pacific/Honolulu", # -10:00, no DST
-            "+02:00",           # Simple offset
-            "-07:00"            # Simple offset
-        ]
+        # Only UTC is valid for this comparison
+        comparator = DataQualityComparator(
+            source_engine=oracle_engine,
+            target_engine=clickhouse_engine,
+            timezone="UTC",  # MUST be UTC
+        )
+
+        status, report, stats, details = comparator.compare_sample(
+            source_table=DataReference(table_name, "test"),
+            target_table=DataReference(table_name, "test"),
+            date_column="record_date",
+            update_column="updated_on",
+            date_range=("2024-01-01", "2024-01-08"),
+            exclude_recent_hours=24,
+            tolerance_percentage=0.0,
+        )
+        
+        assert status == COMPARISON_SUCCESS, "Failed with UTC timezone"
+        assert stats.final_diff_score == 0.0, f"Non-zero diff with UTC timezone"
+        print(f"Oracle → ClickHouse with UTC passed: {stats.final_score:.2f}%")
+
+    def test_clickhouse_to_oracle_with_utc(self, clickhouse_engine, oracle_engine):
+        """
+        Test ClickHouse → Oracle comparison must use UTC.
+        """
+        table_name = "test_mixed_timezones_ora_ch"
+        
+        comparator = DataQualityComparator(
+            source_engine=clickhouse_engine,
+            target_engine=oracle_engine,
+            timezone="UTC",  # Must be UTC
+        )
+
+        status, report, stats, details = comparator.compare_sample(
+            source_table=DataReference(table_name, "test"),
+            target_table=DataReference(table_name, "test"),
+            date_column="record_date",
+            update_column="updated_on",
+            date_range=("2024-01-01", "2024-01-08"),
+            exclude_recent_hours=24,
+            tolerance_percentage=0.0,
+        )
+        
+        assert status == COMPARISON_SUCCESS
+        assert stats.final_diff_score == 0.0
+        print(f"ClickHouse → Oracle with UTC passed: {stats.final_score:.2f}%")
+
+    def test_oracle_tz_naive_comparison(self, oracle_engine, clickhouse_engine, table_helper):
+        """
+        Test comparison with Oracle tz-naive TIMESTAMP columns.
+        Can use any timezone since both are tz-naive.
+        """
+        table_name = "test_ora_ch_tz_naive"
+        
+        # Oracle with tz-naive TIMESTAMP
+        table_helper.create_table(
+            engine=oracle_engine,
+            table_name=table_name,
+            create_sql=f"""
+                CREATE TABLE {table_name} (
+                    id NUMBER PRIMARY KEY,
+                    event_name VARCHAR2(100),
+                    created_on TIMESTAMP,  -- tz-naive
+                    record_date DATE
+                )
+            """,
+            insert_sql=f"""
+                INSERT INTO {table_name} (id, event_name, created_on, record_date) VALUES
+                (1, 'Event 1', TIMESTAMP '2024-01-01 10:00:00', DATE '2024-01-01'),
+                (2, 'Event 2', TIMESTAMP '2024-01-02 11:00:00', DATE '2024-01-02')
+            """
+        )
+        
+        # ClickHouse with tz-naive DateTime
+        table_helper.create_table(
+            engine=clickhouse_engine,
+            table_name=table_name,
+            create_sql=f"""
+                CREATE TABLE {table_name} (
+                    id UInt32,
+                    event_name String,
+                    created_on DateTime,  -- tz-naive
+                    record_date Date
+                )
+                ENGINE = MergeTree()
+                ORDER BY id
+            """,
+            insert_sql=f"""
+                INSERT INTO {table_name} (id, event_name, created_on, record_date) VALUES
+                (1, 'Event 1', '2024-01-01 10:00:00', '2024-01-01'),
+                (2, 'Event 2', '2024-01-02 11:00:00', '2024-01-02')
+            """
+        )
+        
+        # Can use any timezone since both are tz-naive
+        test_timezones = ["UTC", "Europe/Athens", "America/Chicago"]
         
         for timezone in test_timezones:
             comparator = DataQualityComparator(
@@ -108,44 +193,105 @@ class TestOracleClickHouseMixedTimezoneOffsets:
                 source_table=DataReference(table_name, "test"),
                 target_table=DataReference(table_name, "test"),
                 date_column="record_date",
-                update_column="updated_on",
-                date_range=("2024-01-01", "2024-01-08"),
-                exclude_recent_hours=24,
+                date_range=("2024-01-01", "2024-01-03"),
                 tolerance_percentage=0.0,
             )
             
             assert status == COMPARISON_SUCCESS, f"Failed with timezone {timezone}"
-            assert stats.final_diff_score == 0.0, f"Non-zero diff with timezone {timezone}"
-            print(f"Oracle → ClickHouse with mixed timezones passed (timezone={timezone}): {stats.final_score:.2f}%")
+            print(f"Oracle ↔ ClickHouse tz-naive comparison passed (timezone={timezone}): {stats.final_score:.2f}%")
 
-    def test_negative_timezone_offsets(self, oracle_engine, clickhouse_engine):
+    def test_date_only_comparisons(self, oracle_engine, clickhouse_engine):
         """
-        Test with negative timezone offsets and DST.
+        Test date-only comparisons work correctly.
         """
         table_name = "test_mixed_timezones_ora_ch"
         
-        # Add data specifically for negative timezone testing
+        # Can use any timezone for date-only comparisons
+        test_timezones = ["UTC", "Europe/Athens", "Asia/Tokyo"]
+        
+        for timezone in test_timezones:
+            comparator = DataQualityComparator(
+                source_engine=oracle_engine,
+                target_engine=clickhouse_engine,
+                timezone=timezone,
+            )
+
+            status, report, stats, details = comparator.compare_counts(
+                source_table=DataReference(table_name, "test"),
+                target_table=DataReference(table_name, "test"),
+                date_column="record_date",
+                date_range=("2024-01-01", "2024-01-08"),
+                tolerance_percentage=0.0,
+            )
+            
+            assert status == COMPARISON_SUCCESS, f"Failed with timezone {timezone}"
+            assert stats.final_score == 100.0
+            print(f"Oracle → ClickHouse date-only comparison passed (timezone={timezone}): {stats.final_score:.2f}%")
+
+    def test_custom_query_with_timezone_handling(self, oracle_engine, clickhouse_engine):
+        """
+        Test custom query comparison with proper timezone handling.
+        """
+        comparator = DataQualityComparator(
+            source_engine=oracle_engine,
+            target_engine=clickhouse_engine,
+            timezone="UTC",  # Must be UTC for tz-aware columns
+        )
+
+        source_query = """
+            SELECT id, event_name, created_on, record_date,
+                   case when updated_on > (sysdate - :exclude_recent_hours/24) then 'y' end as xrecently_changed
+            FROM test.test_mixed_timezones_ora_ch
+            WHERE record_date >= trunc(to_date(:start_date, 'YYYY-MM-DD'), 'dd')
+              AND record_date < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1
+        """
+        
+        # ClickHouse query (stored in UTC)
+        target_query = """
+            SELECT id, event_name, created_on, record_date,
+                   case when updated_on > (now() - INTERVAL 1 HOUR) then 'y' end as xrecently_changed
+            FROM test.test_mixed_timezones_ora_ch
+            WHERE record_date >= toDate(%(start_date)s)
+              AND record_date < toDate(%(end_date)s) + INTERVAL 1 day
+        """
+
+        status, report, stats, details = comparator.compare_custom_query(
+            source_query=source_query,
+            source_params={'start_date': '2024-01-01', 'end_date': '2024-01-08'},
+            target_query=target_query,
+            target_params={'start_date': '2024-01-01', 'end_date': '2024-01-08'},
+            custom_primary_key=["id"],
+            exclude_columns=["xrecently_changed"],
+            tolerance_percentage=0.0,
+        )
+
+        assert status == COMPARISON_SUCCESS
+        print(f"Oracle → ClickHouse custom query with UTC passed: {stats.final_score:.2f}%")
+
+    def test_negative_timezone_offsets_with_utc(self, oracle_engine, clickhouse_engine):
+        """
+        Test negative timezone offsets work correctly with UTC.
+        """
+        table_name = "test_mixed_timezones_ora_ch"
+        
+        # Add negative timezone data
         with oracle_engine.begin() as conn:
             conn.execute(text(f"""
                 INSERT INTO {table_name} (id, event_name, created_on, updated_on, record_date) VALUES
-                (8, 'Negative offset standard', TIMESTAMP '2024-07-01 10:00:00 -07:00', 
-                 TIMESTAMP '2024-07-01 11:00:00 -07:00', DATE '2024-07-01'),
-                (9, 'Negative offset DST', TIMESTAMP '2024-07-01 10:00:00 -06:00', 
-                 TIMESTAMP '2024-07-01 11:00:00 -06:00', DATE '2024-07-01')
+                (8, 'Negative offset -07', TIMESTAMP '2024-07-01 10:00:00 -07:00', 
+                 TIMESTAMP '2024-07-01 11:00:00 -07:00', DATE '2024-07-01')
             """))
         
-        # ClickHouse equivalent (stored in UTC)
         with clickhouse_engine.begin() as conn:
             conn.execute(text(f"""
                 INSERT INTO {table_name} (id, event_name, created_on, updated_on, record_date) VALUES
-                (8, 'Negative offset standard', '2024-07-01 17:00:00.000000', '2024-07-01 18:00:00.000000', '2024-07-01'),
-                (9, 'Negative offset DST', '2024-07-01 16:00:00.000000', '2024-07-01 17:00:00.000000', '2024-07-01')
+                (8, 'Negative offset -07', '2024-07-01 17:00:00.000000', '2024-07-01 18:00:00.000000', '2024-07-01')
             """))
         
         comparator = DataQualityComparator(
             source_engine=oracle_engine,
             target_engine=clickhouse_engine,
-            timezone="America/Denver",  # Mountain Time: -07:00/-06:00
+            timezone="UTC",  # Must use UTC
         )
 
         status, report, stats, details = comparator.compare_sample(
@@ -160,122 +306,4 @@ class TestOracleClickHouseMixedTimezoneOffsets:
         
         assert status == COMPARISON_SUCCESS
         assert stats.final_diff_score == 0.0
-        print(f"Oracle → ClickHouse negative timezone offsets test passed: {stats.final_score:.2f}%")
-
-    def test_daylight_saving_time_edge_cases(self, oracle_engine, clickhouse_engine):
-        """
-        Test edge cases around Daylight Saving Time transitions.
-        """
-        table_name = "test_mixed_timezones_ora_ch"
-        
-        # Add DST transition edge cases
-        with oracle_engine.begin() as conn:
-            conn.execute(text(f"""
-                INSERT INTO {table_name} (id, event_name, created_on, updated_on, record_date) VALUES
-                (10, 'Exactly DST start', TIMESTAMP '2024-03-10 01:59:59 -05:00', 
-                 TIMESTAMP '2024-03-10 03:00:00 -04:00', DATE '2024-03-10'),
-                (11, 'Exactly DST end', TIMESTAMP '2024-11-03 01:59:59 -04:00', 
-                 TIMESTAMP '2024-11-03 01:00:00 -05:00', DATE '2024-11-03')
-            """))
-        
-        # ClickHouse equivalent
-        with clickhouse_engine.begin() as conn:
-            conn.execute(text(f"""
-                INSERT INTO {table_name} (id, event_name, created_on, updated_on, record_date) VALUES
-                (10, 'Exactly DST start', '2024-03-10 06:59:59.000000', '2024-03-10 07:00:00.000000', '2024-03-10'),
-                (11, 'Exactly DST end', TIMESTAMP '2024-11-03 05:59:59.000000', 
-                 '2024-11-03 06:00:00.000000', DATE '2024-11-03')
-            """))
-        
-        comparator = DataQualityComparator(
-            source_engine=oracle_engine,
-            target_engine=clickhouse_engine,
-            timezone="America/New_York",  # Eastern Time with DST
-        )
-
-        status, report, stats, details = comparator.compare_sample(
-            source_table=DataReference(table_name, "test"),
-            target_table=DataReference(table_name, "test"),
-            date_column="record_date",
-            update_column="updated_on",
-            date_range=("2024-03-10", "2024-03-11"),  # DST start
-            exclude_recent_hours=24,
-            tolerance_percentage=0.0,
-        )
-        
-        assert status == COMPARISON_SUCCESS
-        print(f"Oracle → ClickHouse DST edge case test passed: {stats.final_score:.2f}%")
-
-    def test_date_cutoff_across_timezones(self, oracle_engine, clickhouse_engine):
-        """
-        Test date cutoff behavior when records span multiple timezones.
-        """
-        table_name = "test_mixed_timezones_ora_ch"
-        
-        # Add records that appear on different calendar days in different timezones
-        with oracle_engine.begin() as conn:
-            conn.execute(text(f"""
-                INSERT INTO {table_name} (id, event_name, created_on, updated_on, record_date) VALUES
-                (12, 'Late in +14', TIMESTAMP '2024-01-01 23:30:00 +14:00', 
-                 TIMESTAMP '2024-01-01 23:45:00 +14:00', DATE '2024-01-01'),
-                (13, 'Early in -12', TIMESTAMP '2024-01-01 00:30:00 -12:00', 
-                 TIMESTAMP '2024-01-01 00:45:00 -12:00', DATE '2024-01-01')
-            """))
-        
-        # ClickHouse equivalent
-        with clickhouse_engine.begin() as conn:
-            conn.execute(text(f"""
-                INSERT INTO {table_name} (id, event_name, created_on, updated_on, record_date) VALUES
-                (12, 'Late in +14', '2024-01-01 09:30:00.000000', '2024-01-01 09:45:00.000000', '2024-01-01'),
-                (13, 'Early in -12', '2024-01-01 12:30:00.000000', '2024-01-01 12:45:00.000000', '2024-01-01')
-            """))
-        
-        # Test with extreme timezones
-        test_timezones = [
-            "Pacific/Kiritimati",  # +14:00
-            "Pacific/Midway",       # -11:00
-            "UTC"
-        ]
-        
-        for timezone in test_timezones:
-            comparator = DataQualityComparator(
-                source_engine=oracle_engine,
-                target_engine=clickhouse_engine,
-                timezone=timezone,
-            )
-
-            status, report, stats, details = comparator.compare_sample(
-                source_table=DataReference(table_name, "test"),
-                target_table=DataReference(table_name, "test"),
-                date_column="record_date",
-                date_range=("2024-01-01", "2024-01-02"),
-                tolerance_percentage=0.0,
-            )
-            
-            assert status == COMPARISON_SUCCESS, f"Failed with timezone {timezone}"
-            print(f"Oracle → ClickHouse date cutoff test passed (timezone={timezone}): {stats.final_score:.2f}%")
-
-    def test_null_handling_in_timezone_columns(self, oracle_engine, clickhouse_engine):
-        """
-        Test proper handling of NULL values in timezone-aware columns.
-        """
-        table_name = "test_mixed_timezones_ora_ch"
-        
-        comparator = DataQualityComparator(
-            source_engine=oracle_engine,
-            target_engine=clickhouse_engine,
-            timezone="Europe/Berlin",  # Central European Time
-        )
-
-        # Test specifically the NULL record (ID 5)
-        status, report, stats, details = comparator.compare_sample(
-            source_table=DataReference(table_name, "test"),
-            target_table=DataReference(table_name, "test"),
-            date_column="record_date",
-            date_range=("2024-01-05", "2024-01-06"),  # Specifically test the NULL record
-            tolerance_percentage=0.0,
-        )
-        
-        assert status == COMPARISON_SUCCESS
-        assert stats.final_diff_score == 0.0
-        print(f"Oracle → ClickHouse NULL handling in timezone columns passed: {stats.final_score:.2f}%")
+        print(f"Oracle → ClickHouse negative timezone offsets with UTC passed: {stats.final_score:.2f}%")

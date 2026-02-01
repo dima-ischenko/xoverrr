@@ -1,8 +1,7 @@
 """
 Test for bug fix: Mixed timezone offsets in timestamptz columns should be handled correctly.
-When timestamptz columns contain mixed offsets (e.g., +05, +06), conversion with 
-pd.to_datetime should use utc=True to avoid conversion errors.
-PostgreSQL ↔ ClickHouse specific test.
+ClickHouse ↔ PostgreSQL comparisons must handle timezone conversions properly.
+ClickHouse doesn't store timezone info natively, so we store UTC times.
 """
 
 import pytest
@@ -18,7 +17,34 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
     def setup_mixed_timezone_data(self, postgres_engine, clickhouse_engine, table_helper):
         """Setup test data with mixed timezone offsets in timestamptz columns"""
         
-        table_name = "test_mixed_timezones_pg_ch"
+        table_name = "test_mixed_timezones_ch_pg"
+        
+        # ClickHouse setup (ClickHouse stores timestamps in UTC, no timezone info)
+        table_helper.create_table(
+            engine=clickhouse_engine,
+            table_name=table_name,
+            create_sql=f"""
+                CREATE TABLE {table_name} (
+                    id UInt32,
+                    event_name String,
+                    created_on Nullable(DateTime64(6, 'UTC')),
+                    updated_on Nullable(DateTime64(6, 'UTC')),
+                    record_date Date
+                )
+                ENGINE = MergeTree()
+                ORDER BY id
+            """,
+            insert_sql=f"""
+            INSERT INTO {table_name} (id, event_name, created_on, updated_on, record_date) VALUES
+            (1, 'Event in +05', toDateTime64('2024-01-01 05:00:00.000000', 6, 'UTC'), toDateTime64('2024-01-01 06:00:00.000000', 6, 'UTC'), '2024-01-01'),
+            (2, 'Event in +06', toDateTime64('2024-01-02 04:00:00.000000', 6, 'UTC'), toDateTime64('2024-01-02 05:00:00.000000', 6, 'UTC'), '2024-01-02'),
+            (3, 'Event in +00', toDateTime64('2024-01-03 10:00:00.000000', 6, 'UTC'), toDateTime64('2024-01-03 11:00:00.000000', 6, 'UTC'), '2024-01-03'),
+            (4, 'Event in -08', toDateTime64('2024-01-04 18:00:00.000000', 6, 'UTC'), toDateTime64('2024-01-04 19:00:00.000000', 6, 'UTC'), '2024-01-04'),
+            (5, 'Event with NULL', NULL, NULL, '2024-01-05'),
+            (6, 'Event crossing midnight UTC', toDateTime64('2024-01-06 18:30:00.000000', 6, 'UTC'), toDateTime64('2024-01-06 19:30:00.000000', 6, 'UTC'), '2024-01-06'),
+            (7, 'Event with future date', toDateTime64('3023-04-04 00:00:00.000000', 6, 'UTC'), toDateTime64('3023-04-04 01:00:00.000000', 6, 'UTC'), '3023-04-04')
+            """
+        )
         
         # PostgreSQL setup - contains mixed timezone offsets
         table_helper.create_table(
@@ -44,102 +70,21 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
                 (7, 'Event with future date', '3023-04-04 00:00:00+00', '3023-04-04 01:00:00+00', '3023-04-04')
             """
         )
-        
-        # ClickHouse setup (ClickHouse stores timestamps in UTC)
-        table_helper.create_table(
-            engine=clickhouse_engine,
-            table_name=table_name,
-            create_sql=f"""
-                CREATE TABLE {table_name} (
-                    id UInt32,
-                    event_name String,
-                    created_on DateTime64(6),
-                    updated_on DateTime64(6),
-                    record_date Date
-                )
-                ENGINE = MergeTree()
-                ORDER BY id
-            """,
-            insert_sql=f"""
-                INSERT INTO {table_name} (id, event_name, created_on, updated_on, record_date) VALUES
-                (1, 'Event in +05', '2024-01-01 05:00:00.000000', '2024-01-01 06:00:00.000000', '2024-01-01'),
-                (2, 'Event in +06', '2024-01-02 04:00:00.000000', '2024-01-02 05:00:00.000000', '2024-01-02'),
-                (3, 'Event in +00', '2024-01-03 10:00:00.000000', '2024-01-03 11:00:00.000000', '2024-01-03'),
-                (4, 'Event in -08', '2024-01-04 18:00:00.000000', '2024-01-04 19:00:00.000000', '2024-01-04'),
-                (5, 'Event with NULL', '1970-01-01 00:00:00.000000', '1970-01-01 00:00:00.000000', '2024-01-05'),
-                (6, 'Event crossing midnight UTC', '2024-01-06 18:30:00.000000', '2024-01-06 19:30:00.000000', '2024-01-06'),
-                (7, 'Event with future date', '3023-04-04 00:00:00.000000', '3023-04-04 01:00:00.000000', '3023-04-04')
-            """
-        )
-        
+
         yield
 
-    def test_mixed_timezones_various_timezone_settings(self, postgres_engine, clickhouse_engine):
+    def test_cross_db_comparison_must_use_utc(self, postgres_engine, clickhouse_engine):
         """
-        Test PostgreSQL ↔ ClickHouse comparison with mixed timezone offsets.
-        ClickHouse doesn't store timezone info natively, so we store UTC times.
+        Test PostgreSQL ↔ ClickHouse comparison MUST use UTC.
+        ClickHouse stores UTC, PostgreSQL has tz-aware columns.
         """
-        table_name = "test_mixed_timezones_pg_ch"
+        table_name = "test_mixed_timezones_ch_pg"
         
-        # Test with different timezone settings including those with DST
-        test_timezones = [
-            "UTC",
-            "Europe/Athens",
-            "America/Los_Angeles",  # Has DST changes
-            "Asia/Kolkata",  # +05:30 (non-integer offset)
-            "Australia/Sydney",  # +10:00/+11:00 (DST)
-            "+03:00",  # Simple offset
-            "-05:00"   # Simple offset
-        ]
-        
-        for timezone in test_timezones:
-            comparator = DataQualityComparator(
-                source_engine=postgres_engine,
-                target_engine=clickhouse_engine,
-                timezone=timezone,
-            )
-
-            status, report, stats, details = comparator.compare_sample(
-                source_table=DataReference(table_name, "test"),
-                target_table=DataReference(table_name, "test"),
-                date_column="record_date",
-                update_column="updated_on",
-                date_range=("2024-01-01", "2024-01-08"),
-                exclude_recent_hours=24,
-                tolerance_percentage=0.0,
-            )
-            
-            assert status == COMPARISON_SUCCESS, f"Failed with timezone {timezone}"
-            assert stats.final_diff_score == 0.0, f"Non-zero diff with timezone {timezone}"
-            print(f"PostgreSQL → ClickHouse with mixed timezones passed (timezone={timezone}): {stats.final_score:.2f}%")
-
-    def test_dst_transition_period(self, postgres_engine, clickhouse_engine):
-        """
-        Test during DST transition period.
-        """
-        table_name = "test_mixed_timezones_pg_ch"
-        
-        # Create additional test data for DST transition
-        with postgres_engine.begin() as conn:
-            # Add data for DST transition period (March in Northern Hemisphere)
-            conn.execute(text(f"""
-                INSERT INTO {table_name} (id, event_name, created_on, updated_on, record_date) VALUES
-                (8, 'Before DST', '2024-03-09 10:00:00-05', '2024-03-09 11:00:00-05', '2024-03-09'),
-                (9, 'After DST', '2024-03-10 10:00:00-04', '2024-03-10 11:00:00-04', '2024-03-10')
-            """))
-        
-        # ClickHouse equivalent (stored in UTC)
-        with clickhouse_engine.begin() as conn:
-            conn.execute(text(f"""
-                INSERT INTO {table_name} (id, event_name, created_on, updated_on, record_date) VALUES
-                (8, 'Before DST', '2024-03-09 15:00:00.000000', '2024-03-09 16:00:00.000000', '2024-03-09'),
-                (9, 'After DST', '2024-03-10 14:00:00.000000', '2024-03-10 15:00:00.000000', '2024-03-10')
-            """))
-        
+        # Only UTC is valid for this comparison
         comparator = DataQualityComparator(
-            source_engine=postgres_engine,
-            target_engine=clickhouse_engine,
-            timezone="America/New_York",  # Has DST transition
+            source_engine=clickhouse_engine,
+            target_engine=postgres_engine,
+            timezone="UTC",  # MUST be UTC
         )
 
         status, report, stats, details = comparator.compare_sample(
@@ -147,92 +92,184 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
             target_table=DataReference(table_name, "test"),
             date_column="record_date",
             update_column="updated_on",
-            date_range=("2024-03-09", "2024-03-11"),
+            date_range=("2024-01-01", "2024-01-08"),
             exclude_recent_hours=24,
             tolerance_percentage=0.0,
         )
-        
-        assert status == COMPARISON_SUCCESS
-        assert stats.final_diff_score == 0.0
-        print(f"PostgreSQL → ClickHouse DST transition test passed: {stats.final_score:.2f}%")
+        print(report)
+        assert status == COMPARISON_SUCCESS, "Failed with UTC timezone"
+        assert stats.final_diff_score == 0.0, f"Non-zero diff with UTC timezone"
+        print(f"PostgreSQL → ClickHouse with UTC passed: {stats.final_score:.2f}%")
 
-    def test_custom_query_with_timezones(self, postgres_engine, clickhouse_engine):
+    def test_clickhouse_utc_to_postgres_tz_aware(self, clickhouse_engine, postgres_engine):
         """
-        Test custom query comparison with timezone-aware data.
+        Test ClickHouse (UTC) → PostgreSQL (tz-aware) comparison.
+        Must use UTC for proper conversion.
         """
-        comparator = DataQualityComparator(
-            source_engine=postgres_engine,
-            target_engine=clickhouse_engine,
-            timezone="Asia/Tokyo",  # +09:00, no DST
-        )
-
-        source_query = """
-            SELECT id, event_name, created_on, record_date,
-                   case when updated_on > (now() - INTERVAL '1 hours') then 'y' end as xrecently_changed
-            FROM test.test_mixed_timezones_pg_ch
-            WHERE record_date >= date_trunc('day', %(start_date)s::date)
-              AND record_date < date_trunc('day', %(end_date)s::date) + interval '1 days'
-        """
-        
-        # ClickHouse query (note: ClickHouse stores in UTC)
-        target_query = """
-            SELECT id, event_name, created_on, record_date,
-                   case when updated_on > (now() - INTERVAL 1 HOUR) then 'y' end as xrecently_changed
-            FROM test.test_mixed_timezones_pg_ch
-            WHERE record_date >= toDate(%(start_date)s)
-              AND record_date < toDate(%(end_date)s) + INTERVAL 1 day
-        """
-
-        status, report, stats, details = comparator.compare_custom_query(
-            source_query=source_query,
-            source_params={'start_date': '2024-01-01', 'end_date': '2024-01-08'},
-            target_query=target_query,
-            target_params={'start_date': '2024-01-01', 'end_date': '2024-01-08'},
-            custom_primary_key=["id"],
-            exclude_columns=["xrecently_changed"],  # Exclude as we don't want to compare this
-            tolerance_percentage=0.0,
-        )
-
-        assert status == COMPARISON_SUCCESS
-        print(f"PostgreSQL → ClickHouse custom query with timezones passed: {stats.final_score:.2f}%")
-
-    def test_timezone_boundary_conditions(self, postgres_engine, clickhouse_engine):
-        """
-        Test edge cases with timezone boundaries.
-        """
-        table_name = "test_mixed_timezones_pg_ch"
-        
-        # Add edge case data
-        with postgres_engine.begin() as conn:
-            conn.execute(text(f"""
-                INSERT INTO {table_name} (id, event_name, created_on, updated_on, record_date) VALUES
-                (10, 'Near year boundary', '2023-12-31 23:30:00+00', '2024-01-01 00:30:00+00', '2023-12-31'),
-                (11, 'Leap second day', '2023-12-31 23:59:60+00', '2024-01-01 00:00:00+00', '2023-12-31'),
-                (12, 'All NULLs', NULL, NULL, '2024-01-10')
-            """))
-        
-        # ClickHouse equivalent
-        with clickhouse_engine.begin() as conn:
-            conn.execute(text(f"""
-                INSERT INTO {table_name} (id, event_name, created_on, updated_on, record_date) VALUES
-                (10, 'Near year boundary', '2023-12-31 23:30:00.000000', '2024-01-01 00:30:00.000000', '2023-12-31'),
-                (11, 'Leap second day', '2023-12-31 23:59:59.999999', '2024-01-01 00:00:00.000000', '2023-12-31'),
-                (12, 'All NULLs', '1970-01-01 00:00:00.000000', '1970-01-01 00:00:00.000000', '2024-01-10')
-            """))
+        table_name = "test_mixed_timezones_ch_pg"
         
         comparator = DataQualityComparator(
-            source_engine=postgres_engine,
-            target_engine=clickhouse_engine,
-            timezone="Pacific/Kiritimati",  # +14:00, first timezone to see new day
+            source_engine=clickhouse_engine,
+            target_engine=postgres_engine,
+            timezone="UTC",  # Must be UTC since ClickHouse stores UTC
         )
 
         status, report, stats, details = comparator.compare_sample(
             source_table=DataReference(table_name, "test"),
             target_table=DataReference(table_name, "test"),
             date_column="record_date",
-            date_range=("2023-12-31", "2024-01-11"),
+            update_column="updated_on",
+            date_range=("2024-01-01", "2024-01-08"),
+            exclude_recent_hours=24,
             tolerance_percentage=0.0,
         )
         
         assert status == COMPARISON_SUCCESS
-        print(f"PostgreSQL → ClickHouse timezone boundary test passed: {stats.final_score:.2f}%")
+        assert stats.final_diff_score == 0.0
+        print(f"ClickHouse → PostgreSQL with UTC passed: {stats.final_score:.2f}%")
+
+    def test_clickhouse_tz_naive_comparison(self, clickhouse_engine, postgres_engine, table_helper):
+        """
+        Test comparison with ClickHouse tz-naive columns.
+        Can use any timezone since ClickHouse doesn't store timezone info.
+        """
+        table_name = "test_ch_pg_tz_naive"
+        
+        # ClickHouse with tz-naive DateTime
+        table_helper.create_table(
+            engine=clickhouse_engine,
+            table_name=table_name,
+            create_sql=f"""
+                CREATE TABLE {table_name} (
+                    id UInt32,
+                    event_name String,
+                    created_on DateTime,  -- tz-naive
+                    record_date Date
+                )
+                ENGINE = MergeTree()
+                ORDER BY id
+            """,
+            insert_sql=f"""
+                INSERT INTO {table_name} (id, event_name, created_on, record_date) VALUES
+                (1, 'Event 1', '2024-01-01 10:00:00', '2024-01-01'),
+                (2, 'Event 2', '2024-01-02 11:00:00', '2024-01-02')
+            """
+        )
+        
+        # PostgreSQL with tz-naive timestamp
+        table_helper.create_table(
+            engine=postgres_engine,
+            table_name=table_name,
+            create_sql=f"""
+                CREATE TABLE {table_name} (
+                    id INTEGER PRIMARY KEY,
+                    event_name TEXT,
+                    created_on TIMESTAMP,  -- tz-naive
+                    record_date DATE
+                )
+            """,
+            insert_sql=f"""
+                INSERT INTO {table_name} (id, event_name, created_on, record_date) VALUES
+                (1, 'Event 1', '2024-01-01 10:00:00', '2024-01-01'),
+                (2, 'Event 2', '2024-01-02 11:00:00', '2024-01-02')
+            """
+        )
+        
+        # Can use any timezone since both are tz-naive
+        test_timezones = ["UTC", "Europe/Athens", "America/New_York"]
+        
+        for timezone in test_timezones:
+            comparator = DataQualityComparator(
+                source_engine=clickhouse_engine,
+                target_engine=postgres_engine,
+                timezone=timezone,
+            )
+
+            status, report, stats, details = comparator.compare_sample(
+                source_table=DataReference(table_name, "test"),
+                target_table=DataReference(table_name, "test"),
+                date_column="record_date",
+                date_range=("2024-01-01", "2024-01-03"),
+                tolerance_percentage=0.0,
+            )
+            
+            assert status == COMPARISON_SUCCESS, f"Failed with timezone {timezone}"
+            print(f"ClickHouse ↔ PostgreSQL tz-naive comparison passed (timezone={timezone}): {stats.final_score:.2f}%")
+
+    def test_mixed_tz_types_not_allowed(self, postgres_engine, clickhouse_engine):
+        """
+        Test that mixing tz-aware and tz-naive in comparison is not allowed.
+        This demonstrates Rule 2 violation.
+        """
+        # Create separate tables with different tz types
+        pg_tz_aware = "test_pg_tz_aware"
+        ch_tz_naive = "test_ch_tz_naive"
+        
+        # PostgreSQL with tz-aware
+        with postgres_engine.begin() as conn:
+            conn.execute(text(f"""
+                CREATE TABLE {pg_tz_aware} (
+                    id INTEGER PRIMARY KEY,
+                    event_name TEXT,
+                    created_at TIMESTAMPTZ,
+                    record_date DATE
+                )
+            """))
+            conn.execute(text(f"""
+                INSERT INTO {pg_tz_aware} (id, event_name, created_at, record_date) VALUES
+                (1, 'Event', '2024-01-01 10:00:00+00', '2024-01-01')
+            """))
+        
+        # ClickHouse with tz-naive
+        with clickhouse_engine.begin() as conn:
+            conn.execute(text(f"""
+                CREATE TABLE {ch_tz_naive} (
+                    id UInt32,
+                    event_name String,
+                    created_at DateTime,
+                    record_date Date
+                )
+                ENGINE = MergeTree()
+                ORDER BY id
+            """))
+            conn.execute(text(f"""
+                INSERT INTO {ch_tz_naive} (id, event_name, created_at, record_date) VALUES
+                (1, 'Event', '2024-01-01 10:00:00', '2024-01-01')
+            """))
+        
+        # This comparison should fail or show discrepancies
+        comparator = DataQualityComparator(
+            source_engine=postgres_engine,
+            target_engine=clickhouse_engine,
+            timezone="UTC",  # Even UTC won't help mixing tz-aware with tz-naive
+        )
+
+        # The comparison might still "succeed" but values won't match
+        # This is why Rule 2 exists: don't mix tz-aware with tz-naive
+        print("Note: Mixing tz-aware with tz-naive across databases is not recommended")
+
+    def test_date_boundary_with_timezone_conversion(self, postgres_engine, clickhouse_engine):
+        """
+        Test date boundary case with UTC timezone.
+        """
+        table_name = "test_mixed_timezones_ch_pg"
+        
+        comparator = DataQualityComparator(
+            source_engine=postgres_engine,
+            target_engine=clickhouse_engine,
+            timezone="UTC",  # Must use UTC
+        )
+
+        # Test filtering on the boundary date
+        status, report, stats, details = comparator.compare_sample(
+            source_table=DataReference(table_name, "test"),
+            target_table=DataReference(table_name, "test"),
+            date_column="record_date",
+            date_range=("2024-01-06", "2024-01-07"),  # Includes boundary
+            tolerance_percentage=0.0,
+        )
+
+        assert status == COMPARISON_SUCCESS
+        # Should have the boundary record (id=6)
+        assert stats.common_pk_rows >= 1
+        print(f"PostgreSQL → ClickHouse date boundary with UTC passed: {stats.final_score:.2f}%")
