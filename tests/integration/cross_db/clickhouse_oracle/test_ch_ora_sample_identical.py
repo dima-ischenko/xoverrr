@@ -88,4 +88,4 @@ class TestClickHouseOracleIdenticalData:
         print(report)
         assert status == COMPARISON_SUCCESS
         assert stats.final_diff_score == 0.0
-        print(f"ClickHouse → Oracle identical data comparison passed: {stats.final_score:.2f}%")
+        print(f"ClickHouse   Oracle identical data comparison passed: {stats.final_score:.2f}%")

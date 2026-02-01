@@ -104,11 +104,11 @@ class TestOracleClickHouseMixedTimezoneOffsets:
         
         assert status == COMPARISON_SUCCESS, "Failed with UTC timezone"
         assert stats.final_diff_score == 0.0, f"Non-zero diff with UTC timezone"
-        print(f"Oracle → ClickHouse with UTC passed: {stats.final_score:.2f}%")
+        print(f"Oracle   ClickHouse with UTC passed: {stats.final_score:.2f}%")
 
     def test_clickhouse_to_oracle_with_utc(self, clickhouse_engine, oracle_engine):
         """
-        Test ClickHouse → Oracle comparison must use UTC.
+        Test ClickHouse   Oracle comparison must use UTC.
         """
         table_name = "test_mixed_timezones_ora_ch"
         
@@ -130,7 +130,7 @@ class TestOracleClickHouseMixedTimezoneOffsets:
         
         assert status == COMPARISON_SUCCESS
         assert stats.final_diff_score == 0.0
-        print(f"ClickHouse → Oracle with UTC passed: {stats.final_score:.2f}%")
+        print(f"ClickHouse   Oracle with UTC passed: {stats.final_score:.2f}%")
 
     def test_oracle_tz_naive_comparison(self, oracle_engine, clickhouse_engine, table_helper):
         """
@@ -226,7 +226,7 @@ class TestOracleClickHouseMixedTimezoneOffsets:
             
             assert status == COMPARISON_SUCCESS, f"Failed with timezone {timezone}"
             assert stats.final_score == 100.0
-            print(f"Oracle → ClickHouse date-only comparison passed (timezone={timezone}): {stats.final_score:.2f}%")
+            print(f"Oracle   ClickHouse date-only comparison passed (timezone={timezone}): {stats.final_score:.2f}%")
 
     def test_custom_query_with_timezone_handling(self, oracle_engine, clickhouse_engine):
         """
@@ -266,7 +266,7 @@ class TestOracleClickHouseMixedTimezoneOffsets:
         )
 
         assert status == COMPARISON_SUCCESS
-        print(f"Oracle → ClickHouse custom query with UTC passed: {stats.final_score:.2f}%")
+        print(f"Oracle   ClickHouse custom query with UTC passed: {stats.final_score:.2f}%")
 
     def test_negative_timezone_offsets_with_utc(self, oracle_engine, clickhouse_engine):
         """
@@ -306,4 +306,4 @@ class TestOracleClickHouseMixedTimezoneOffsets:
         
         assert status == COMPARISON_SUCCESS
         assert stats.final_diff_score == 0.0
-        print(f"Oracle → ClickHouse negative timezone offsets with UTC passed: {stats.final_score:.2f}%")
+        print(f"Oracle   ClickHouse negative timezone offsets with UTC passed: {stats.final_score:.2f}%")

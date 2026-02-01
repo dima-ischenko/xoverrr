@@ -99,11 +99,11 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
         print(report)
         assert status == COMPARISON_SUCCESS, "Failed with UTC timezone"
         assert stats.final_diff_score == 0.0, f"Non-zero diff with UTC timezone"
-        print(f"PostgreSQL → ClickHouse with UTC passed: {stats.final_score:.2f}%")
+        print(f"PostgreSQL   ClickHouse with UTC passed: {stats.final_score:.2f}%")
 
     def test_clickhouse_utc_to_postgres_tz_aware(self, clickhouse_engine, postgres_engine):
         """
-        Test ClickHouse (UTC) → PostgreSQL (tz-aware) comparison.
+        Test ClickHouse (UTC)   PostgreSQL (tz-aware) comparison.
         Must use UTC for proper conversion.
         """
         table_name = "test_mixed_timezones_ch_pg"
@@ -126,7 +126,7 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
         
         assert status == COMPARISON_SUCCESS
         assert stats.final_diff_score == 0.0
-        print(f"ClickHouse → PostgreSQL with UTC passed: {stats.final_score:.2f}%")
+        print(f"ClickHouse   PostgreSQL with UTC passed: {stats.final_score:.2f}%")
 
     def test_clickhouse_tz_naive_comparison(self, clickhouse_engine, postgres_engine, table_helper):
         """
@@ -280,4 +280,4 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
         assert status == COMPARISON_SUCCESS
         # Should have the boundary record (id=6)
         assert stats.common_pk_rows >= 1
-        print(f"PostgreSQL → ClickHouse date boundary with UTC passed: {stats.final_score:.2f}%")
+        print(f"PostgreSQL   ClickHouse date boundary with UTC passed: {stats.final_score:.2f}%")

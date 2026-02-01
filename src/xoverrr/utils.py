@@ -3,13 +3,9 @@ import numpy as np
 from typing import Dict, Any, List, Optional, Tuple, defaultdict
 from datetime import datetime
 
-try:
-    from .constants import NULL_REPLACEMENT, DEFAULT_MAX_EXAMPLES, DATETIME_FORMAT
-    from .logger import app_logger
-except ImportError:
-    # for cases when used as standalone script
-    from constants import NULL_REPLACEMENT, DEFAULT_MAX_EXAMPLES, DATETIME_FORMAT
-    from logger import app_logger
+
+from .constants import NULL_REPLACEMENT, DEFAULT_MAX_EXAMPLES, DATETIME_FORMAT
+from .logger import app_logger
 
 from dataclasses import dataclass, field
 

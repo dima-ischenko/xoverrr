@@ -90,4 +90,4 @@ class TestOraclePostgresHRData:
 
         assert status == COMPARISON_SUCCESS
         assert stats.final_diff_score == 0.0
-        print(f"Oracle → PostgreSQL HR data comparison passed: {stats.final_score:.2f}%")
+        print(f"Oracle   PostgreSQL HR data comparison passed: {stats.final_score:.2f}%")

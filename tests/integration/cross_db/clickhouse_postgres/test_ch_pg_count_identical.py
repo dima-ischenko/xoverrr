@@ -84,4 +84,4 @@ class TestClickHousePostgresCountsComparison:
         print(report)
         assert status == COMPARISON_SUCCESS
         assert stats.final_score == 100.0
-        print(f"ClickHouse → PostgreSQL count comparison passed: {stats.final_score:.2f}%")
+        print(f"ClickHouse   PostgreSQL count comparison passed: {stats.final_score:.2f}%")
