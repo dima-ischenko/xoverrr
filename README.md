@@ -16,7 +16,8 @@ PASSWORD_ORA = os.getenv('PASSWORD_ORA', '')
 USER_GP = os.getenv('USER_GP', '')
 PASSWORD_GP = os.getenv('PASSWORD_GP', '')
 
-HOST = os.getenv('HOST', '')
+HOST_ORA = os.getenv('HOST_ORA', '')
+HOST_GP = os.getenv('HOST_GP', '')
 
 def create_src_engine(user, password, host):
     """Source engine (Oracle)"""
@@ -30,14 +31,13 @@ def create_trg_engine(user, password, host):
     return engine
 
 
-
-src_engine = create_src_engine(USER_ORA, PASSWORD_ORA, HOST)
-trg_engine = create_trg_engine(USER_GP, PASSWORD_GP, HOST)
+src_engine = create_src_engine(USER_ORA, PASSWORD_ORA, HOST_ORA)
+trg_engine = create_trg_engine(USER_GP, PASSWORD_GP, HOST_GP)
 
 comparator = DataQualityComparator(
     source_engine=src_engine,
     target_engine=trg_engine,
-    timezone='Asia/Yekaterinburg'
+    timezone='Europe/Athens'
 )
 
 source = DataReference("users", "schema1")
@@ -53,7 +53,7 @@ status, report, stats, details = comparator.compare_sample(
     date_column="created_at",
     update_column="modified_date",
     exclude_columns=["audit_timestamp", "internal_id"],
-    exclude_recent_hours=24,
+    exclude_recent_hours=3,
     date_range=(
         recent_range_begin.strftime(FORMAT),
         recent_range_end.strftime(FORMAT)
