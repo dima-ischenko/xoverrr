@@ -63,7 +63,12 @@ class DataQualityComparator:
             DBMSType.CLICKHOUSE: ClickHouseAdapter(),
         }
         self._reset_stats()
+        from . import __version__
         app_logger.info('start')
+        app_logger.info(f'Version: v{__version__}')
+        app_logger.info(f'Source DB: {self.source_db_type.name}')
+        app_logger.info(f'Target DB: {self.target_db_type.name}')        
+
 
     def reset_stats(self):
         self._reset_stats()
