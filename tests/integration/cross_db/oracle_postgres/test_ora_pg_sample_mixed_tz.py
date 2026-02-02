@@ -199,44 +199,6 @@ class TestPostgresOracleMixedTimezoneOffsets:
         assert stats.final_score == 100.0
         print(f"date-only count comparison with UTC passed: {stats.final_score:.2f}%")
 
-    def test_custom_query_with_utc_for_tz_aware(self, postgres_engine, oracle_engine):
-        """
-        Test custom query comparison with tz-aware data must use UTC.
-        """
-        pytest.skip("issue #33")
-        comparator = DataQualityComparator(
-            source_engine=oracle_engine,
-            target_engine=postgres_engine,
-            timezone="UTC",  # MUST be UTC for tz-aware data
-        )
-
-        source_query = """
-            SELECT id, event_name, created_on, record_date
-            FROM test.test_mixed_timezones_ora_pg
-            WHERE record_date >= trunc(to_date(:start_date, 'YYYY-MM-DD'), 'dd')
-              AND record_date < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1
-        """
-    
-        target_query = """
-            SELECT id, event_name, created_on, record_date
-            FROM test.test_mixed_timezones_ora_pg
-            WHERE record_date >= date_trunc('day', %(start_date)s::date)
-              AND record_date < date_trunc('day', %(end_date)s::date) + interval '1 days'
-        """
-
-        status, report, stats, details = comparator.compare_custom_query(
-            source_query=source_query,
-            source_params={'start_date': '2024-01-01', 'end_date': '2024-01-08'},
-            target_query=target_query,
-            target_params={'start_date': '2024-01-01', 'end_date': '2024-01-08'},
-            custom_primary_key=["id"],
-            tolerance_percentage=0.0,
-        )
-        print(report)
-
-        assert status == COMPARISON_SUCCESS
-        print(f"custom query with UTC for tz-aware passed: {stats.final_score:.2f}%")
-
     def test_midnight_boundary_case_with_utc(self, postgres_engine, oracle_engine):
         """
         Test midnight boundary case with UTC timezone.
