@@ -51,23 +51,19 @@ class TestClickHousePostgresCompoundKey:
                     page_views INTEGER,
                     duration DOUBLE PRECISION,
                     event_date DATE,
-                    device_type TEXT
+                    device_type TEXT,
+                    PRIMARY KEY (user_id, session_id)
                 )
             """,
             insert_sql=f"""
-                ALTER TABLE {table_name} 
-                ADD PRIMARY KEY (user_id, session_id)
+                 INSERT INTO {table_name} (user_id, session_id, page_views, duration, event_date, device_type) VALUES
+                (1001, 'sess_001', 15, 120.5, '2024-01-01', 'mobile'),
+                (1002, 'sess_002', 8, 45.25, '2024-01-01', 'desktop'),
+                (1001, 'sess_004', 12, 95.75, '2024-01-02', 'mobile');
                 """
         )
         
-      # Вставка данных для PostgreSQL
-        with postgres_engine.begin() as conn:
-            conn.execute(text(f"""
-                INSERT INTO {table_name} (user_id, session_id, page_views, duration, event_date, device_type) VALUES
-                (1001, 'sess_001', 15, 120.5, '2024-01-01', 'mobile'),
-                (1002, 'sess_002', 8, 45.25, '2024-01-01', 'desktop'),
-                (1001, 'sess_004', 12, 95.75, '2024-01-02', 'mobile')
-            """))
+
         
         yield
 
