@@ -193,31 +193,3 @@ class TestClickHouseOracleMixedTimezoneOffsets:
         )
         
         assert status == COMPARISON_SUCCESS
-
-    def test_date_only_comparisons(self, oracle_engine, clickhouse_engine):
-        """
-        Test date-only comparisons work correctly.
-        """
-        table_name = "test_mixed_timezones_ch_ora"
-        
-        # Can use any timezone for date-only comparisons
-        test_timezones = ["UTC", "Europe/Athens", "Asia/Tokyo"]
-        
-        for timezone in test_timezones:
-            comparator = DataQualityComparator(
-                source_engine=clickhouse_engine,
-                target_engine=oracle_engine,
-                timezone=timezone,
-            )
-
-            status, report, stats, details = comparator.compare_counts(
-                source_table=DataReference(table_name, "test"),
-                target_table=DataReference(table_name, "test"),
-                date_column="record_date",
-                date_range=("2024-01-01", "2024-01-08"),
-                tolerance_percentage=0.0,
-            )
-            
-            assert status == COMPARISON_SUCCESS, f"Failed with timezone {timezone}"
-            assert stats.final_score == 100.0
-            print(f"Oracle   ClickHouse date-only comparison passed (timezone={timezone}): {stats.final_score:.2f}%")

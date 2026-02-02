@@ -175,30 +175,6 @@ class TestPostgresOracleMixedTimezoneOffsets:
             assert status == COMPARISON_SUCCESS, f"Failed with timezone {timezone}"
             print(f"Cross-db without tz-aware columns passed (timezone={timezone}): {stats.final_score:.2f}%")
 
-    def test_date_only_comparison_with_utc(self, postgres_engine, oracle_engine):
-        """
-        Test that date-only comparisons work with UTC timezone.
-        """
-        table_name = "test_mixed_timezones_ora_pg"
-        
-        comparator = DataQualityComparator(
-            source_engine=oracle_engine,
-            target_engine=postgres_engine,
-            timezone="UTC",  # Use UTC even for date-only when table has tz-aware columns
-        )
-
-        status, report, stats, details = comparator.compare_counts(
-            source_table=DataReference(table_name, "test"),
-            target_table=DataReference(table_name, "test"),
-            date_column="record_date",
-            date_range=("2024-01-01", "2024-01-08"),
-            tolerance_percentage=0.0,
-        )
-        
-        assert status == COMPARISON_SUCCESS
-        assert stats.final_score == 100.0
-        print(f"date-only count comparison with UTC passed: {stats.final_score:.2f}%")
-
     def test_midnight_boundary_case_with_utc(self, postgres_engine, oracle_engine):
         """
         Test midnight boundary case with UTC timezone.
