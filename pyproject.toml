@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "xoverrr"
-version = "1.1.4"
+version = "1.1.5"
 description = "A tool for cross-database and intra-source data comparison with detailed discrepancy analysis and reporting."
 readme = "README.md"
 requires-python = ">=3.9"

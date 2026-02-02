@@ -59,3 +59,118 @@ def clickhouse_engine():
 def db_cleanup():
     """Yield None and cleanup after test if needed"""
     yield
+
+class DBHelper:
+    """Helper class for managing test tables"""
+    
+    def __init__(self):
+        self._cleanup_stack = []
+    
+    @staticmethod
+    def get_drop_sql(engine, object_name: str, object_type: str = "table") -> str:
+        """Get drop SQL for specific database and object type"""
+        dialect = engine.dialect.name
+        
+        if dialect == 'oracle':
+            if object_type == "view":
+                return f"""
+                    BEGIN
+                        EXECUTE IMMEDIATE 'DROP VIEW {object_name}';
+                    EXCEPTION
+                        WHEN OTHERS THEN
+                            IF SQLCODE != -942 THEN
+                                RAISE;
+                            END IF;
+                    END;
+                """
+            else:
+                return f"""
+                    BEGIN
+                        EXECUTE IMMEDIATE 'DROP TABLE {object_name}';
+                    EXCEPTION
+                        WHEN OTHERS THEN
+                            IF SQLCODE != -942 THEN
+                                RAISE;
+                            END IF;
+                    END;
+                """
+        elif dialect == 'clickhouse':
+            if object_type == "view":
+                return f"DROP VIEW IF EXISTS {object_name}"
+            else:
+                return f"DROP TABLE IF EXISTS {object_name}"
+        elif dialect in ('postgresql', 'postgres'):
+            if object_type == "view":
+                return f"DROP VIEW IF EXISTS {object_name} CASCADE"
+            else:
+                return f"DROP TABLE IF EXISTS {object_name} CASCADE"
+        else:
+            raise ValueError(f"Unsupported dialect: {dialect}")
+    
+    def drop_table(self, engine, table_name: str) -> None:
+        """
+        Drop a table from database
+        """
+        drop_sql = self.get_drop_sql(engine, table_name, "table")
+        
+        with engine.begin() as conn:
+            conn.execute(text(drop_sql))
+    
+    def drop_view(self, engine, view_name: str) -> None:
+        """
+        Drop a view from database
+        """
+        drop_sql = self.get_drop_sql(engine, view_name, "view")
+        
+        with engine.begin() as conn:
+            conn.execute(text(drop_sql))
+
+    
+    def create_table(self, engine, table_name: str, create_sql: str, 
+                    insert_sql: str = None) -> None:
+        """
+        Create a test table and register it for automatic cleanup
+        """
+        # Clean up if exists
+        self.drop_table(engine, table_name)
+        
+        # Create table
+        with engine.begin() as conn:
+            conn.execute(text(create_sql))
+            if insert_sql:
+                conn.execute(text(insert_sql))
+        
+        # Register for cleanup
+        self._cleanup_stack.append((engine, table_name, "table"))
+    
+    def create_view(self, engine, view_name: str, view_sql: str) -> None:
+        """
+        Create a view and register it for automatic cleanup
+        """
+        # Clean up if exists
+        self.drop_view(engine, view_name)
+        
+        # Create view
+        with engine.begin() as conn:
+            conn.execute(text(view_sql))
+        
+        # Register for cleanup
+        self._cleanup_stack.append((engine, view_name, "view"))
+    
+    def cleanup(self) -> None:
+        """Cleanup all registered objects in reverse order"""
+        for engine, object_name, object_type in reversed(self._cleanup_stack):
+            if object_type == "table":
+                self.drop_table(engine, object_name)
+            elif object_type == "view":
+                self.drop_view(engine, object_name)
+        self._cleanup_stack.clear()
+
+@pytest.fixture
+def table_helper():
+    """Fixture providing DBHelper instance"""
+    helper = DBHelper()
+    yield helper
+    #helper.cleanup() #do not cleanup for the debug
+
+
