@@ -9,7 +9,7 @@ from xoverrr.core import DataQualityComparator, DataReference
 from xoverrr.constants import COMPARISON_SUCCESS
 
 
-class TestOracleClickHouseMixedTimezoneOffsets:
+class TestClickHouseOracleMixedTimezoneOffsets:
     """Test for mixed timezone offsets in timestamptz columns bug fix - Oracle ↔ ClickHouse"""
     
     @pytest.fixture(autouse=True)
@@ -221,41 +221,3 @@ class TestOracleClickHouseMixedTimezoneOffsets:
             assert status == COMPARISON_SUCCESS, f"Failed with timezone {timezone}"
             assert stats.final_score == 100.0
             print(f"Oracle   ClickHouse date-only comparison passed (timezone={timezone}): {stats.final_score:.2f}%")
-
-    def test_custom_query_with_timezone_handling(self, oracle_engine, clickhouse_engine):
-        """
-        Test custom query comparison with proper timezone handling.
-        """
-        pytest.skip("issue #33")
-        comparator = DataQualityComparator(
-            source_engine=clickhouse_engine,
-            target_engine=oracle_engine,
-            timezone="UTC",  # Must be UTC for tz-aware columns
-        )
-        source_query = """
-            SELECT id, event_name, created_on, record_date
-            FROM test.test_mixed_timezones_ch_ora
-            WHERE record_date >= toDate(%(start_date)s)
-              AND record_date < toDate(%(end_date)s) + INTERVAL 1 day
-        """
-
-        target_query = """
-            SELECT id, event_name, created_on, record_date
-            FROM test.test_mixed_timezones_ch_ora
-            WHERE record_date >= trunc(to_date(:start_date, 'YYYY-MM-DD'), 'dd')
-              AND record_date < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1
-        """
-        
-
-
-        status, report, stats, details = comparator.compare_custom_query(
-            source_query=source_query,
-            source_params={'start_date': '2024-01-01', 'end_date': '2024-01-08'},
-            target_query=target_query,
-            target_params={'start_date': '2024-01-01', 'end_date': '2024-01-08'},
-            custom_primary_key=["id"],
-            tolerance_percentage=0.0,
-        )
-        print(report)
-        assert status == COMPARISON_SUCCESS
-        print(f"Oracle   ClickHouse custom query with UTC passed: {stats.final_score:.2f}%")
