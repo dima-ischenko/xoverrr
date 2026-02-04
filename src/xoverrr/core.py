@@ -1,7 +1,4 @@
-
-import sys
-from enum import Enum, auto
-from typing import Optional, List, Dict, Callable, Union, Tuple, Any
+from typing import Optional, List, Dict, Union, Tuple
 import pandas as pd
 from sqlalchemy.engine import Engine
 from .models import (
@@ -31,6 +28,7 @@ from .utils import (
     generate_comparison_count_report,
     cross_fill_missing_dates,
     validate_dataframe_size,
+    normalize_column_names,
     ComparisonStats,
     ComparisonDiffDetails
 )
@@ -169,9 +167,9 @@ class DataQualityComparator:
         exclude_hours = exclude_recent_hours or self.default_exclude_recent_hours
 
         start_date, end_date = date_range or (None, None)
-        exclude_cols = exclude_columns or []
-        custom_keys = custom_primary_key
-        include_cols = include_columns or []
+        exclude_cols = normalize_column_names(exclude_columns or [])
+        custom_keys = normalize_column_names(custom_primary_key or []) if custom_primary_key else None
+        include_cols = normalize_column_names(include_columns or [])
 
         try:
             self.comparison_stats['compared'] += 1

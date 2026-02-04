@@ -91,3 +91,26 @@ class TestOraclePostgresHRData:
         assert status == COMPARISON_SUCCESS
         assert stats.final_diff_score == 0.0
         print(f"Oracle   PostgreSQL HR data comparison passed: {stats.final_score:.2f}%")
+    
+    def test_hr_data_comparison_uppercase(self, oracle_engine, postgres_engine):
+        # pytest.skip("issue #31")
+        comparator = DataQualityComparator(
+            source_engine=oracle_engine,
+            target_engine=postgres_engine,
+            timezone="Europe/Athens",
+        )
+        table_name = "test_ora_pg_hr"
+
+        status, report, stats, details = comparator.compare_sample(
+            source_table=DataReference(table_name, "test"),
+            target_table=DataReference(table_name, "test"),
+            date_column="HIRE_DATE",
+            update_column=None,
+            custom_primary_key=["EMPLOYEE_ID"],
+            date_range=("2018-01-01", "2022-01-01"),
+            exclude_recent_hours=1,
+            tolerance_percentage=0.0,
+        )
+
+        assert status == COMPARISON_SUCCESS
+        print(f"Custom query comparison passed: {stats.final_score:.2f}%")    

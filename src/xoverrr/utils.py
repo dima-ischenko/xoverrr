@@ -9,6 +9,19 @@ from .logger import app_logger
 
 from dataclasses import dataclass, field
 
+
+def normalize_column_names(columns: List[str]) -> List[str]:
+    """
+    Normalize column names to lowercase for consistent comparison.
+    
+    Parameters:
+        columns: List of column names to normalize
+        
+    Returns:
+        List of lowercased column names
+    """
+    return [col.lower() for col in columns] if columns else []
+
 @dataclass
 class ComparisonStats:
     """Class for storing comparison statistics"""
