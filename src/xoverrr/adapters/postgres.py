@@ -1,18 +1,20 @@
-import pandas as pd
-from typing import Optional, Dict, Callable, List, Tuple, Union
-from ..constants import DATETIME_FORMAT
-from .base import BaseDatabaseAdapter, Engine
-from ..models import DataReference, ObjectType
-from ..exceptions import QueryExecutionError
-from json import dumps
-
-from ..logger import app_logger
 import time
+from json import dumps
+from typing import Callable, Dict, List, Optional, Tuple, Union
+
+import pandas as pd
+
+from ..constants import DATETIME_FORMAT
+from ..exceptions import QueryExecutionError
+from ..logger import app_logger
+from ..models import DataReference, ObjectType
+from .base import BaseDatabaseAdapter, Engine
+
 
 class PostgresAdapter(BaseDatabaseAdapter):
-
-
-    def _execute_query(self, query: Union[str, Tuple[str, Dict]], engine: Engine, timezone: str) -> pd.DataFrame:
+    def _execute_query(
+        self, query: Union[str, Tuple[str, Dict]], engine: Engine, timezone: str
+    ) -> pd.DataFrame:
 
         df = None
         tz_set = None
@@ -36,14 +38,15 @@ class PostgresAdapter(BaseDatabaseAdapter):
                 app_logger.info(f'query\n {query}')
                 df = pd.read_sql(query, engine)
             execution_time = time.time() - start_time
-            app_logger.info(f"Query executed in {execution_time:.2f}s")
+            app_logger.info(f'Query executed in {execution_time:.2f}s')
             app_logger.info('complete')
             return df
         except Exception as e:
             execution_time = time.time() - start_time
-            app_logger.error(f"Query execution failed after {execution_time:.2f}s: {str(e)}")
-            raise QueryExecutionError(f"Query failed: {str(e)}")
-
+            app_logger.error(
+                f'Query execution failed after {execution_time:.2f}s: {str(e)}'
+            )
+            raise QueryExecutionError(f'Query failed: {str(e)}')
 
     def get_object_type(self, data_ref: DataReference, engine: Engine) -> ObjectType:
         """Determine if object is table, view, or materialized view"""
@@ -69,10 +72,12 @@ class PostgresAdapter(BaseDatabaseAdapter):
                 return {
                     'table': ObjectType.TABLE,
                     'view': ObjectType.VIEW,
-                    'materialized_view': ObjectType.MATERIALIZED_VIEW
+                    'materialized_view': ObjectType.MATERIALIZED_VIEW,
                 }.get(type_str, ObjectType.UNKNOWN)
         except Exception as e:
-            app_logger.warning(f"Could not determine object type for {data_ref.full_name}: {str(e)}")
+            app_logger.warning(
+                f'Could not determine object type for {data_ref.full_name}: {str(e)}'
+            )
 
         return ObjectType.UNKNOWN
 
@@ -110,9 +115,13 @@ class PostgresAdapter(BaseDatabaseAdapter):
         params = {'schema': data_ref.schema, 'table': data_ref.name}
         return query, params
 
-    def build_count_query(self, data_ref: DataReference, date_column: str,
-                          start_date: Optional[str], end_date: Optional[str]
-                         ) -> Tuple[str, Dict]:
+    def build_count_query(
+        self,
+        data_ref: DataReference,
+        date_column: str,
+        start_date: Optional[str],
+        end_date: Optional[str],
+    ) -> Tuple[str, Dict]:
         query = f"""
             SELECT
                 to_char(date_trunc('day', {date_column}),'YYYY-MM-DD') as dt,
@@ -131,14 +140,20 @@ class PostgresAdapter(BaseDatabaseAdapter):
         query += f" GROUP BY to_char(date_trunc('day', {date_column}),'YYYY-MM-DD') ORDER BY dt DESC"
         return query, params
 
-    def build_data_query(self, data_ref: DataReference, columns: List[str],
-                        date_column: Optional[str], update_column: str,
-                        start_date: Optional[str], end_date: Optional[str],
-                        exclude_recent_hours: Optional[int] = None) -> Tuple[str, Dict]:
+    def build_data_query(
+        self,
+        data_ref: DataReference,
+        columns: List[str],
+        date_column: Optional[str],
+        update_column: str,
+        start_date: Optional[str],
+        end_date: Optional[str],
+        exclude_recent_hours: Optional[int] = None,
+    ) -> Tuple[str, Dict]:
 
         params = {}
         # Add recent data exclusion flag
-        exclusion_condition,  exclusion_params = self._build_exclusion_condition(
+        exclusion_condition, exclusion_params = self._build_exclusion_condition(
             update_column, exclude_recent_hours
         )
 
@@ -160,26 +175,43 @@ class PostgresAdapter(BaseDatabaseAdapter):
 
         return query, params
 
-    def _build_exclusion_condition(self, update_column: str,
-                                    exclude_recent_hours: int) -> Tuple[str, Dict]:
+    def _build_exclusion_condition(
+        self, update_column: str, exclude_recent_hours: int
+    ) -> Tuple[str, Dict]:
         """PostgreSQL-specific implementation for recent data exclusion"""
-        if  update_column and exclude_recent_hours:
-
-
+        if update_column and exclude_recent_hours:
             exclude_recent_hours = exclude_recent_hours
 
             condition = f"""case when {update_column} > (now() - INTERVAL '%(exclude_recent_hours)s hours') then 'y' end as xrecently_changed"""
-            params = {'exclude_recent_hours':  exclude_recent_hours}
+            params = {'exclude_recent_hours': exclude_recent_hours}
             return condition, params
 
         return None, None
 
     def _get_type_conversion_rules(self, timezone) -> Dict[str, Callable]:
         return {
-            r'date': lambda x: pd.to_datetime(x, errors='coerce').dt.strftime(DATETIME_FORMAT).str.replace(r'\s00:00:00$', '', regex=True),
+            r'date': lambda x: (
+                pd.to_datetime(x, errors='coerce')
+                .dt.strftime(DATETIME_FORMAT)
+                .str.replace(r'\s00:00:00$', '', regex=True)
+            ),
             r'boolean': lambda x: x.map({True: '1', False: '0', None: ''}),
-            r'timestamptz|timestamp.*\bwith\b.*time\szone': lambda x: pd.to_datetime(x, utc=True, errors='coerce').dt.tz_convert(timezone).dt.tz_localize(None).dt.strftime(DATETIME_FORMAT).str.replace(r'\s00:00:00$', '', regex=True),
-            r'timestamp': lambda x: pd.to_datetime(x, errors='coerce').dt.strftime(DATETIME_FORMAT).str.replace(r'\s00:00:00$', '', regex=True),
-            r'integer|numeric|double|float|double precision|real': lambda x: x.astype(str).str.replace(r'\.0+$', '', regex=True),
-            r'json': lambda x: '"' + x.astype(str).str.replace(r'"', '\\"', regex=True) + '"',
+            r'timestamptz|timestamp.*\bwith\b.*time\szone': lambda x: (
+                pd.to_datetime(x, utc=True, errors='coerce')
+                .dt.tz_convert(timezone)
+                .dt.tz_localize(None)
+                .dt.strftime(DATETIME_FORMAT)
+                .str.replace(r'\s00:00:00$', '', regex=True)
+            ),
+            r'timestamp': lambda x: (
+                pd.to_datetime(x, errors='coerce')
+                .dt.strftime(DATETIME_FORMAT)
+                .str.replace(r'\s00:00:00$', '', regex=True)
+            ),
+            r'integer|numeric|double|float|double precision|real': lambda x: x.astype(
+                str
+            ).str.replace(r'\.0+$', '', regex=True),
+            r'json': lambda x: (
+                '"' + x.astype(str).str.replace(r'"', '\\"', regex=True) + '"'
+            ),
         }
