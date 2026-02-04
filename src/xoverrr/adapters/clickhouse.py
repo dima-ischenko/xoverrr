@@ -74,7 +74,7 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
     def build_metadata_columns_query(self, data_ref: DataReference) -> Tuple[str, Dict]:
         query = """
             SELECT
-                name as column_name,
+                lower(name) as column_name,
                 type as data_type,
                 position as column_id
             FROM system.columns
@@ -87,7 +87,7 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
 
     def build_primary_key_query(self, data_ref: DataReference) -> Tuple[str, Dict]:
         query = """
-            SELECT name as pk_column_name
+            SELECT lower(name) as pk_column_name
             FROM system.columns
             WHERE database = %(schema)s
             AND table = %(table)s

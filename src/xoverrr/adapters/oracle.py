@@ -6,6 +6,7 @@ from .base import BaseDatabaseAdapter, Engine
 from ..models import DataReference, ObjectType
 from ..exceptions import QueryExecutionError
 from ..logger import app_logger
+from ..utils import process_column_name
 import time
 
 class OracleAdapter(BaseDatabaseAdapter):
@@ -41,7 +42,7 @@ class OracleAdapter(BaseDatabaseAdapter):
                 cursor.execute(query)
 
 
-            columns = [col[0].lower() for col in cursor.description]
+            columns = [process_column_name(col[0]) for col in cursor.description]
             data = cursor.fetchall()
 
             execution_time = time.time() - start_time

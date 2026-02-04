@@ -91,15 +91,15 @@ class PostgresAdapter(BaseDatabaseAdapter):
         params = {'schema': data_ref.schema, 'table': data_ref.name}
         return query, params
 
-    def build_primary_key_query(self, data_ref: DataReference) -> pd.DataFrame:
-        """Build primary key query with GreenPlum compatibility"""
+    def build_primary_key_query(self, data_ref: DataReference) -> Tuple[str, Dict]:
+        """Build primary key query with GreenPlum compatibility and lowercase columns"""
         query = """
             select
-                pg_attribute.attname as pk_column_name
+                lower(pg_attribute.attname) as pk_column_name
             from pg_index
             join pg_class on pg_class.oid = pg_index.indrelid
             join pg_attribute on pg_attribute.attrelid = pg_class.oid
-                            and pg_attribute.attnum = any(pg_index.indkey)
+                                and pg_attribute.attnum = any(pg_index.indkey)
             join pg_namespace on pg_namespace.oid = pg_class.relnamespace
             where pg_namespace.nspname = %(schema)s
             and pg_class.relname = %(table)s

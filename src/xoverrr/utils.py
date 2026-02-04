@@ -10,17 +10,17 @@ from .logger import app_logger
 from dataclasses import dataclass, field
 
 
+def process_column_name(column_name: str) -> str:
+   
+    if '"' in column_name:
+        # User ne alias diya hai (e.g., "ID"), toh use case-sensitive rakho
+        return column_name.replace('"', '')
+    # Normal column hai (e.g., ID), toh use lowercase (id) kar do
+    return column_name.lower()
+
 def normalize_column_names(columns: List[str]) -> List[str]:
-    """
-    Normalize column names to lowercase for consistent comparison.
     
-    Parameters:
-        columns: List of column names to normalize
-        
-    Returns:
-        List of lowercased column names
-    """
-    return [col.lower() for col in columns] if columns else []
+    return [process_column_name(col) for col in columns] if columns else []
 
 @dataclass
 class ComparisonStats:
