@@ -11,15 +11,19 @@ from dataclasses import dataclass, field
 
 
 def process_column_name(column_name: str) -> str:
-   
+    """
+    Check if the column name is quoted (alias).
+    If quotes are present, remove them and preserve original case.
+    Otherwise, convert the column name to lowercase for consistency.
+    """
     if '"' in column_name:
-        # User ne alias diya hai (e.g., "ID"), toh use case-sensitive rakho
         return column_name.replace('"', '')
-    # Normal column hai (e.g., ID), toh use lowercase (id) kar do
     return column_name.lower()
 
 def normalize_column_names(columns: List[str]) -> List[str]:
-    
+    """
+    Normalizes a list of column names using the process_column_name logic.
+    """
     return [process_column_name(col) for col in columns] if columns else []
 
 @dataclass
