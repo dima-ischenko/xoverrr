@@ -1,16 +1,19 @@
+import time
+from typing import Callable, Dict, List, Optional, Tuple, Union
+
 import pandas as pd
-from typing import Optional, Dict, Callable, List, Tuple, Union
 
 from ..constants import DATETIME_FORMAT
-from .base import BaseDatabaseAdapter, Engine
-from ..models import DataReference, ObjectType
 from ..exceptions import QueryExecutionError
 from ..logger import app_logger
-import time
+from ..models import DataReference, ObjectType
+from .base import BaseDatabaseAdapter, Engine
+
 
 class OracleAdapter(BaseDatabaseAdapter):
-
-    def _execute_query(self, query: Union[str, Tuple[str, Dict]], engine: Engine, timezone: str) -> pd.DataFrame:
+    def _execute_query(
+        self, query: Union[str, Tuple[str, Dict]], engine: Engine, timezone: str
+    ) -> pd.DataFrame:
         tz_set = None
         raw_conn = None
         cursor = None
@@ -40,12 +43,11 @@ class OracleAdapter(BaseDatabaseAdapter):
                 app_logger.info(f'query\n {query}')
                 cursor.execute(query)
 
-
             columns = [col[0].lower() for col in cursor.description]
             data = cursor.fetchall()
 
             execution_time = time.time() - start_time
-            app_logger.info(f"Query executed in {execution_time:.2f}s")
+            app_logger.info(f'Query executed in {execution_time:.2f}s')
 
             app_logger.info('complete')
 
@@ -57,20 +59,22 @@ class OracleAdapter(BaseDatabaseAdapter):
 
         except Exception as e:
             execution_time = time.time() - start_time
-            app_logger.error(f"Query execution failed after {execution_time:.2f}s: {str(e)}")
+            app_logger.error(
+                f'Query execution failed after {execution_time:.2f}s: {str(e)}'
+            )
 
             if raw_conn:
                 try:
                     raw_conn.rollback()
                 except Exception as rollback_error:
-                    app_logger.warning(f"Rollback failed: {rollback_error}")
+                    app_logger.warning(f'Rollback failed: {rollback_error}')
                 try:
                     if cursor:
                         cursor.close()
                 except Exception as close_error:
-                    app_logger.warning(f"Cursor close failed: {close_error}")
+                    app_logger.warning(f'Cursor close failed: {close_error}')
 
-            raise QueryExecutionError(f"Query failed: {str(e)}")
+            raise QueryExecutionError(f'Query failed: {str(e)}')
 
     def get_object_type(self, data_ref: DataReference, engine: Engine) -> ObjectType:
         """Determine if object is table or view in Oracle"""
@@ -95,10 +99,12 @@ class OracleAdapter(BaseDatabaseAdapter):
                 return {
                     'table': ObjectType.TABLE,
                     'view': ObjectType.VIEW,
-                    'materialized_view': ObjectType.MATERIALIZED_VIEW
+                    'materialized_view': ObjectType.MATERIALIZED_VIEW,
                 }.get(type_str, ObjectType.UNKNOWN)
         except Exception as e:
-            app_logger.warning(f"Could not determine object type for {data_ref.full_name}: {str(e)}")
+            app_logger.warning(
+                f'Could not determine object type for {data_ref.full_name}: {str(e)}'
+            )
 
         return ObjectType.UNKNOWN
 
@@ -121,7 +127,7 @@ class OracleAdapter(BaseDatabaseAdapter):
 
     def build_primary_key_query(self, data_ref: DataReference) -> pd.DataFrame:
 
-        #todo add suport of unique indexes when no pk?
+        # todo add suport of unique indexes when no pk?
         query = """
             SELECT lower(cols.column_name) as pk_column_name
             FROM all_constraints cons
@@ -139,9 +145,13 @@ class OracleAdapter(BaseDatabaseAdapter):
         params['table_name'] = data_ref.name
         return query, params
 
-
-    def build_count_query(self, data_ref: DataReference, date_column: str,
-                            start_date: Optional[str], end_date: Optional[str]) -> Tuple[str, Dict]:
+    def build_count_query(
+        self,
+        data_ref: DataReference,
+        date_column: str,
+        start_date: Optional[str],
+        end_date: Optional[str],
+    ) -> Tuple[str, Dict]:
         query = f"""
             SELECT
                 to_char(trunc({date_column}, 'dd'),'YYYY-MM-DD') as dt,
@@ -149,7 +159,6 @@ class OracleAdapter(BaseDatabaseAdapter):
             FROM {data_ref.full_name}
             WHERE 1=1\n"""
         params = {}
-
 
         if start_date:
             query += f" AND {date_column} >= trunc(to_date(:start_date, 'YYYY-MM-DD'), 'dd')\n"
@@ -161,14 +170,20 @@ class OracleAdapter(BaseDatabaseAdapter):
         query += f" GROUP BY to_char(trunc({date_column}, 'dd'),'YYYY-MM-DD') ORDER BY dt DESC"
         return query, params
 
-    def build_data_query(self, data_ref: DataReference, columns: List[str],
-                        date_column: Optional[str], update_column: str,
-                        start_date: Optional[str], end_date: Optional[str],
-                        exclude_recent_hours: Optional[int] = None) -> Tuple[str, Dict]:
+    def build_data_query(
+        self,
+        data_ref: DataReference,
+        columns: List[str],
+        date_column: Optional[str],
+        update_column: str,
+        start_date: Optional[str],
+        end_date: Optional[str],
+        exclude_recent_hours: Optional[int] = None,
+    ) -> Tuple[str, Dict]:
 
         params = {}
         # Add recent data exclusion flag
-        exclusion_condition,  exclusion_params = self._build_exclusion_condition(
+        exclusion_condition, exclusion_params = self._build_exclusion_condition(
             update_column, exclude_recent_hours
         )
 
@@ -191,25 +206,39 @@ class OracleAdapter(BaseDatabaseAdapter):
 
         return query, params
 
-    def _build_exclusion_condition(self, update_column: str,
-                                    exclude_recent_hours: int) -> Tuple[str, Dict]:
+    def _build_exclusion_condition(
+        self, update_column: str, exclude_recent_hours: int
+    ) -> Tuple[str, Dict]:
         """Oracle-specific implementation for recent data exclusion"""
-        if  update_column and exclude_recent_hours:
-
-
-
+        if update_column and exclude_recent_hours:
             condition = f"""case when {update_column} > (sysdate - :exclude_recent_hours/24) then 'y' end as xrecently_changed"""
-            params = {'exclude_recent_hours':  exclude_recent_hours}
+            params = {'exclude_recent_hours': exclude_recent_hours}
             return condition, params
 
         return None, None
 
     def _get_type_conversion_rules(self, timezone: str) -> Dict[str, Callable]:
         return {
-            #errors='coerce' is needed as workaround for >= 2262 year: Out of bounds nanosecond timestamp (3023-04-04 00:00:00)
+            # errors='coerce' is needed as workaround for >= 2262 year: Out of bounds nanosecond timestamp (3023-04-04 00:00:00)
             #  todo need specify explicit dateformat (nls params) in sessions, for the correct string conversion to datetime
-            r'date': lambda x: pd.to_datetime(x, errors='coerce').dt.strftime(DATETIME_FORMAT).str.replace(r'\s00:00:00$', '', regex=True),
-            r'timestamp.*\bwith\b.*time\szone': lambda x: pd.to_datetime(x, utc=True, errors='coerce').dt.tz_convert(timezone).dt.tz_localize(None).dt.strftime(DATETIME_FORMAT).str.replace(r'\s00:00:00$', '', regex=True),
-            r'timestamp': lambda x: pd.to_datetime(x, errors='coerce').dt.strftime(DATETIME_FORMAT).str.replace(r'\s00:00:00$', '', regex=True),
-            r'number|float|double': lambda x: x.astype(str).str.replace(r'\.0+$', '', regex=True).str.lower(), #lower case for exponential form compare
+            r'date': lambda x: (
+                pd.to_datetime(x, errors='coerce')
+                .dt.strftime(DATETIME_FORMAT)
+                .str.replace(r'\s00:00:00$', '', regex=True)
+            ),
+            r'timestamp.*\bwith\b.*time\szone': lambda x: (
+                pd.to_datetime(x, utc=True, errors='coerce')
+                .dt.tz_convert(timezone)
+                .dt.tz_localize(None)
+                .dt.strftime(DATETIME_FORMAT)
+                .str.replace(r'\s00:00:00$', '', regex=True)
+            ),
+            r'timestamp': lambda x: (
+                pd.to_datetime(x, errors='coerce')
+                .dt.strftime(DATETIME_FORMAT)
+                .str.replace(r'\s00:00:00$', '', regex=True)
+            ),
+            r'number|float|double': lambda x: (
+                x.astype(str).str.replace(r'\.0+$', '', regex=True).str.lower()
+            ),  # lower case for exponential form compare
         }

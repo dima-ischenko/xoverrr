@@ -1,9 +1,9 @@
 # Date and time formats
-DATE_FORMAT = "%Y-%m-%d"
-DATETIME_FORMAT = f"{DATE_FORMAT} %H:%M:%S"
+DATE_FORMAT = '%Y-%m-%d'
+DATETIME_FORMAT = f'{DATE_FORMAT} %H:%M:%S'
 
 # Default values
-NULL_REPLACEMENT = "N/A"
+NULL_REPLACEMENT = 'N/A'
 DEFAULT_MAX_EXAMPLES = 3
 DEFAULT_MAX_SAMPLE_SIZE_GB = 3  # Max size of dataframe to compare
 

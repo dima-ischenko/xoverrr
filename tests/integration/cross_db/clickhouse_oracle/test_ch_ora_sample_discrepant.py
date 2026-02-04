@@ -4,17 +4,21 @@ Test sample comparison with intentional discrepancies between ClickHouse and Ora
 
 import pytest
 from sqlalchemy import text
-from xoverrr.core import DataQualityComparator, DataReference
+
 from xoverrr.constants import COMPARISON_SUCCESS
+from xoverrr.core import DataQualityComparator, DataReference
+
 
 class TestClickHouseOracleDataWithDiscrepancies:
     """Cross-database sample comparison with discrepancies"""
-    
+
     @pytest.fixture(autouse=True)
-    def setup_data_with_discrepancies(self, clickhouse_engine, oracle_engine, table_helper):
+    def setup_data_with_discrepancies(
+        self, clickhouse_engine, oracle_engine, table_helper
+    ):
         """Setup test data with intentional discrepancies"""
-        
-        table_name = "test_ch_ora_discrepancies"
+
+        table_name = 'test_ch_ora_discrepancies'
 
         table_helper.create_table(
             engine=clickhouse_engine,
@@ -36,9 +40,9 @@ class TestClickHouseOracleDataWithDiscrepancies:
                         (1, 'Transaction A', 1000.50, '2024-01-01', '2024-01-01 10:00:00', 1),
                         (2, 'Transaction B', 2500.75, '2024-01-02', '2024-01-02 11:30:00', 1),
                         (3, 'Transaction C', 500.00, '2024-01-03', '2024-01-03 14:45:00', 0)
-                    """
-        )        
-        
+                    """,
+        )
+
         table_helper.create_table(
             engine=oracle_engine,
             table_name=table_name,
@@ -57,35 +61,37 @@ class TestClickHouseOracleDataWithDiscrepancies:
                 INSERT INTO {table_name} (id, name, amount, transaction_date, updated_at, is_active) VALUES
                 (1, 'Transaction A', 1001.50, DATE '2024-01-01', TIMESTAMP '2024-01-01 12:00:00', 1),
                 (3, 'Transaction C', 500.00, DATE '2024-01-03', TIMESTAMP '2024-01-03 16:45:00', 0)
-            """
+            """,
         )
-        
-        
-        yield
-        
 
-    def test_sample_comparison_with_discrepancies(self, clickhouse_engine, oracle_engine):
+        yield
+
+    def test_sample_comparison_with_discrepancies(
+        self, clickhouse_engine, oracle_engine
+    ):
         """
         Test sample comparison with intentional discrepancies.
         """
-        table_name = "test_ch_ora_discrepancies"
-        
+        table_name = 'test_ch_ora_discrepancies'
+
         comparator = DataQualityComparator(
             source_engine=clickhouse_engine,
             target_engine=oracle_engine,
-            timezone="Europe/Athens",
+            timezone='Europe/Athens',
         )
 
         status, report, stats, details = comparator.compare_sample(
-            source_table=DataReference(table_name, "test"),
-            target_table=DataReference(table_name, "test"),
-            date_column="transaction_date",
-            update_column="updated_at",
-            date_range=("2024-01-01", "2024-01-05"),
+            source_table=DataReference(table_name, 'test'),
+            target_table=DataReference(table_name, 'test'),
+            date_column='transaction_date',
+            update_column='updated_at',
+            date_range=('2024-01-01', '2024-01-05'),
             exclude_recent_hours=24,
-            tolerance_percentage=35.0, 
+            tolerance_percentage=35.0,
         )
-        print (report)
+        print(report)
         assert status == COMPARISON_SUCCESS  # Should pass with tolerance
         assert stats.final_diff_score > 0.0
-        print(f"ClickHouse   Oracle with discrepancies comparison passed: {stats.final_score:.2f}%")
+        print(
+            f'ClickHouse   Oracle with discrepancies comparison passed: {stats.final_score:.2f}%'
+        )

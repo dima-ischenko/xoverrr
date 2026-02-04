@@ -1,15 +1,21 @@
-import pandas as pd
-from typing import Optional, Dict, Callable, List, Tuple, Union
-from ..constants import DATE_FORMAT, DATETIME_FORMAT
-from .base import BaseDatabaseAdapter, Engine
-from ..models import DataReference, ObjectType
-from ..exceptions import QueryExecutionError
 import time
+from typing import Callable, Dict, List, Optional, Tuple, Union
+
+import pandas as pd
+
+from ..constants import DATE_FORMAT, DATETIME_FORMAT
+from ..exceptions import QueryExecutionError
 from ..logger import app_logger
+from ..models import DataReference, ObjectType
+from .base import BaseDatabaseAdapter, Engine
+
 
 class ClickHouseAdapter(BaseDatabaseAdapter):
     """ClickHouse adapter with parameterized queries"""
-    def _execute_query(self, query: Union[str, Tuple[str, Dict]], engine: Engine, timezone: str) -> pd.DataFrame:
+
+    def _execute_query(
+        self, query: Union[str, Tuple[str, Dict]], engine: Engine, timezone: str
+    ) -> pd.DataFrame:
         df = None
         tz_set = None
         start_time = time.time()
@@ -32,14 +38,16 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
                 df = pd.read_sql(query, engine)
 
             execution_time = time.time() - start_time
-            app_logger.info(f"Query executed in {execution_time:.2f}s")
+            app_logger.info(f'Query executed in {execution_time:.2f}s')
             return df
 
         except Exception as e:
             execution_time = time.time() - start_time
-            app_logger.error(f"Query execution failed after {execution_time:.2f}s: {str(e)}")
+            app_logger.error(
+                f'Query execution failed after {execution_time:.2f}s: {str(e)}'
+            )
 
-            raise QueryExecutionError(f"Query failed: {str(e)}")
+            raise QueryExecutionError(f'Query failed: {str(e)}')
 
     def get_object_type(self, data_ref: DataReference, engine: Engine) -> ObjectType:
         """Determine if object is table or view in ClickHouse"""
@@ -67,7 +75,9 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
                 else:
                     return ObjectType.TABLE
         except Exception as e:
-            app_logger.warning(f"Could not determine object type for {data_ref.full_name}: {str(e)}")
+            app_logger.warning(
+                f'Could not determine object type for {data_ref.full_name}: {str(e)}'
+            )
 
         return ObjectType.UNKNOWN
 
@@ -97,8 +107,13 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
         params = {'schema': data_ref.schema, 'table': data_ref.name}
         return query, params
 
-    def build_count_query(self, data_ref: DataReference, date_column: str,
-                         start_date: Optional[str], end_date: Optional[str]) -> Tuple[str, Dict]:
+    def build_count_query(
+        self,
+        data_ref: DataReference,
+        date_column: str,
+        start_date: Optional[str],
+        end_date: Optional[str],
+    ) -> Tuple[str, Dict]:
         query = f"""
             SELECT
                 formatDateTime(toDate({date_column}), '%%Y-%%m-%%d') as dt,
@@ -108,24 +123,29 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
         """
         params = {}
 
-
         if start_date:
-            query += f" AND {date_column} >= toDate(%(start_date)s)"
+            query += f' AND {date_column} >= toDate(%(start_date)s)'
             params['start_date'] = start_date
         if end_date:
-            query += f" AND {date_column} < toDate(%(end_date)s) + INTERVAL 1 day"
+            query += f' AND {date_column} < toDate(%(end_date)s) + INTERVAL 1 day'
             params['end_date'] = end_date
 
-        query += " GROUP BY dt ORDER BY dt DESC"
+        query += ' GROUP BY dt ORDER BY dt DESC'
         return query, params
 
-    def build_data_query(self, data_ref: DataReference, columns: List[str],
-                        date_column: Optional[str], update_column: str,
-                        start_date: Optional[str], end_date: Optional[str],
-                        exclude_recent_hours: Optional[int] = None) -> Tuple[str, Dict]:
+    def build_data_query(
+        self,
+        data_ref: DataReference,
+        columns: List[str],
+        date_column: Optional[str],
+        update_column: str,
+        start_date: Optional[str],
+        end_date: Optional[str],
+        exclude_recent_hours: Optional[int] = None,
+    ) -> Tuple[str, Dict]:
         params = {}
         # Add recent data exclusion flag
-        exclusion_condition,  exclusion_params = self._build_exclusion_condition(
+        exclusion_condition, exclusion_params = self._build_exclusion_condition(
             update_column, exclude_recent_hours
         )
 
@@ -139,36 +159,41 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
         WHERE 1=1\n"""
 
         if start_date and date_column:
-            query += f"            AND {date_column} >= toDate(%(start_date)s)\n"
+            query += f'            AND {date_column} >= toDate(%(start_date)s)\n'
             params['start_date'] = start_date
         if end_date and date_column:
-            query += f"            AND {date_column} < toDate(%(end_date)s) + INTERVAL 1 day\n"
+            query += f'            AND {date_column} < toDate(%(end_date)s) + INTERVAL 1 day\n'
             params['end_date'] = end_date
 
         return query, params
 
-    def _build_exclusion_condition(self, update_column: str,
-                                    exclude_recent_hours: int) -> Tuple[str, Dict]:
+    def _build_exclusion_condition(
+        self, update_column: str, exclude_recent_hours: int
+    ) -> Tuple[str, Dict]:
         """ClickHouse-specific implementation for recent data exclusion"""
-        if  update_column and exclude_recent_hours:
-
-
+        if update_column and exclude_recent_hours:
             exclude_recent_hours = exclude_recent_hours
 
             condition = f"""case when {update_column} > (now() - INTERVAL %(exclude_recent_hours)s HOUR) then 'y' end as xrecently_changed"""
-            params = {'exclude_recent_hours':  exclude_recent_hours}
+            params = {'exclude_recent_hours': exclude_recent_hours}
             return condition, params
 
         return None, None
 
     def _get_type_conversion_rules(self, timezone: str) -> Dict[str, Callable]:
         return {
-                r'datetime64|datetime': lambda x: pd.to_datetime(x, utc=True, errors='coerce')
-                                                .dt.tz_convert(timezone)
-                                                .dt.strftime(DATETIME_FORMAT)
-                                                .str.replace(r'\s00:00:00$', '', regex=True),
-                r'date': lambda x: pd.to_datetime(x, errors='coerce')
-                                    .dt.strftime(DATE_FORMAT)
-                                    .str.replace(r'\s00:00:00$', '', regex=True),
-                r'uint64|uint8|float|decimal|int32': lambda x: x.astype(str).str.replace(r'\.0+$', '', regex=True),
-        } 
+            r'datetime64|datetime': lambda x: (
+                pd.to_datetime(x, utc=True, errors='coerce')
+                .dt.tz_convert(timezone)
+                .dt.strftime(DATETIME_FORMAT)
+                .str.replace(r'\s00:00:00$', '', regex=True)
+            ),
+            r'date': lambda x: (
+                pd.to_datetime(x, errors='coerce')
+                .dt.strftime(DATE_FORMAT)
+                .str.replace(r'\s00:00:00$', '', regex=True)
+            ),
+            r'uint64|uint8|float|decimal|int32': lambda x: x.astype(str).str.replace(
+                r'\.0+$', '', regex=True
+            ),
+        }
