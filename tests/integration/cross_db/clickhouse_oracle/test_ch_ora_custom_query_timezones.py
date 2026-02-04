@@ -5,19 +5,20 @@ Oracle ↔ ClickHouse comparisons must handle timezone conversions properly.
 
 import pytest
 from sqlalchemy import text
-from xoverrr.core import DataQualityComparator, DataReference
+
 from xoverrr.constants import COMPARISON_SUCCESS
+from xoverrr.core import DataQualityComparator, DataReference
 
 
 class TestClickHouseOracleQueryMixedTimezoneOffsets:
     """Test for mixed timezone offsets in timestamptz columns bug fix - Oracle ↔ ClickHouse"""
-    
+
     @pytest.fixture(autouse=True)
     def setup_mixed_timezone_data(self, oracle_engine, clickhouse_engine, table_helper):
         """Setup test data with mixed timezone offsets in timestamptz columns"""
-        
-        table_name = "test_mixed_timezones_query_ch_ora"
-        
+
+        table_name = 'test_mixed_timezones_query_ch_ora'
+
         table_helper.create_table(
             engine=clickhouse_engine,
             table_name=table_name,
@@ -41,7 +42,7 @@ class TestClickHouseOracleQueryMixedTimezoneOffsets:
                 (5, 'Event with NULL', Null, Null, '2024-01-05'),
                 (6, 'Event crossing midnight UTC', '2024-01-06 18:30:00.000000', '2024-01-06 19:30:00.000000', '2024-01-06'),
                 (7, 'Event with future date', '3023-04-04 00:00:00.000000', '3023-04-04 01:00:00.000000', '3023-04-04')
-            """
+            """,
         )
 
         table_helper.create_table(
@@ -71,20 +72,22 @@ class TestClickHouseOracleQueryMixedTimezoneOffsets:
                  TIMESTAMP '2024-01-07 00:30:00 +05:00', DATE '2024-01-06'),
                 (7, 'Event with future date', TIMESTAMP '3023-04-04 00:00:00 +00:00', 
                  TIMESTAMP '3023-04-04 01:00:00 +00:00', DATE '3023-04-04')
-            """
+            """,
         )
-        
+
         yield
 
-    def test_custom_query_with_timezone_handling(self, oracle_engine, clickhouse_engine):
+    def test_custom_query_with_timezone_handling(
+        self, oracle_engine, clickhouse_engine
+    ):
         """
         Test custom query comparison with proper timezone handling.
         """
-        pytest.skip("issue #33")
+        pytest.skip('issue #33')
         comparator = DataQualityComparator(
             source_engine=clickhouse_engine,
             target_engine=oracle_engine,
-            timezone="UTC",  # Must be UTC for tz-aware columns
+            timezone='UTC',  # Must be UTC for tz-aware columns
         )
         source_query = """
             SELECT id, event_name, created_on, record_date
@@ -99,17 +102,17 @@ class TestClickHouseOracleQueryMixedTimezoneOffsets:
             WHERE record_date >= trunc(to_date(:start_date, 'YYYY-MM-DD'), 'dd')
               AND record_date < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1
         """
-        
-
 
         status, report, stats, details = comparator.compare_custom_query(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-08'},
             target_query=target_query,
             target_params={'start_date': '2024-01-01', 'end_date': '2024-01-08'},
-            custom_primary_key=["id"],
+            custom_primary_key=['id'],
             tolerance_percentage=0.0,
         )
         print(report)
         assert status == COMPARISON_SUCCESS
-        print(f"Oracle   ClickHouse custom query with UTC passed: {stats.final_score:.2f}%")
+        print(
+            f'Oracle   ClickHouse custom query with UTC passed: {stats.final_score:.2f}%'
+        )

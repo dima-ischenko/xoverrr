@@ -1,18 +1,23 @@
-from abc import ABC, abstractmethod
-import pandas as pd
-from typing import Dict, Callable, List, Tuple, Optional, Union
 import re
+from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
-from ..models import DataReference, ObjectType
-from ..constants import RESERVED_WORDS
+from typing import Callable, Dict, List, Optional, Tuple, Union
+
+import pandas as pd
 from sqlalchemy.engine import Engine
+
+from ..constants import RESERVED_WORDS
 from ..logger import app_logger
-from ..logger import app_logger
+from ..models import DataReference, ObjectType
+
 
 class BaseDatabaseAdapter(ABC):
     """Abstract base class with updated method signatures for parameterized queries"""
+
     @abstractmethod
-    def _execute_query(self, query: Union[str, Tuple[str, Dict]], engine: Engine, timezone:str) -> pd.DataFrame:
+    def _execute_query(
+        self, query: Union[str, Tuple[str, Dict]], engine: Engine, timezone: str
+    ) -> pd.DataFrame:
         """Execute query with DBMS-specific optimizations"""
         pass
 
@@ -30,42 +35,66 @@ class BaseDatabaseAdapter(ABC):
         pass
 
     @abstractmethod
-    def build_count_query(self, data_ref: DataReference, date_column: str,
-                         start_date: Optional[str], end_date: Optional[str]
-                         ) -> Tuple[str, Dict]:
+    def build_count_query(
+        self,
+        data_ref: DataReference,
+        date_column: str,
+        start_date: Optional[str],
+        end_date: Optional[str],
+    ) -> Tuple[str, Dict]:
         """Returns tuple of (query, params) with recent data exclusion"""
         pass
 
-    def build_data_query_common(self, data_ref: DataReference, columns: List[str],
-                        date_column: Optional[str], update_column: Optional[str],
-                        start_date: Optional[str], end_date: Optional[str],
-                        exclude_recent_hours: Optional[int] = None) -> Tuple[str, Dict]:
+    def build_data_query_common(
+        self,
+        data_ref: DataReference,
+        columns: List[str],
+        date_column: Optional[str],
+        update_column: Optional[str],
+        start_date: Optional[str],
+        end_date: Optional[str],
+        exclude_recent_hours: Optional[int] = None,
+    ) -> Tuple[str, Dict]:
         """Build data query for the DBMS with recent data exclusion"""
         # Handle reserved words
         cols_select = [
-            f'"{col}"' if col.lower() in RESERVED_WORDS
-            else col
-            for col in columns
+            f'"{col}"' if col.lower() in RESERVED_WORDS else col for col in columns
         ]
 
-        result = self.build_data_query(data_ref, cols_select, date_column, update_column,
-                                     start_date, end_date, exclude_recent_hours)
+        result = self.build_data_query(
+            data_ref,
+            cols_select,
+            date_column,
+            update_column,
+            start_date,
+            end_date,
+            exclude_recent_hours,
+        )
         return result
 
     @abstractmethod
-    def build_data_query(self, data_ref: DataReference, columns: List[str],
-                        date_column: Optional[str], update_column: Optional[str],
-                        start_date: Optional[str], end_date: Optional[str],
-                        exclude_recent_hours: Optional[int] = None) -> Tuple[str, Dict]:
+    def build_data_query(
+        self,
+        data_ref: DataReference,
+        columns: List[str],
+        date_column: Optional[str],
+        update_column: Optional[str],
+        start_date: Optional[str],
+        end_date: Optional[str],
+        exclude_recent_hours: Optional[int] = None,
+    ) -> Tuple[str, Dict]:
         pass
 
     @abstractmethod
-    def _build_exclusion_condition(self, update_column: str,
-                                 exclude_recent_hours: int) -> Tuple[str, Dict]:
+    def _build_exclusion_condition(
+        self, update_column: str, exclude_recent_hours: int
+    ) -> Tuple[str, Dict]:
         """DBMS-specific implementation for recent data exclusion"""
         pass
 
-    def convert_types(self, df: pd.DataFrame, metadata: pd.DataFrame, timezone: str) -> pd.DataFrame:
+    def convert_types(
+        self, df: pd.DataFrame, metadata: pd.DataFrame, timezone: str
+    ) -> pd.DataFrame:
         """Convert DBMS-specific types to standardized formats"""
         # there is need to specify timezone for covnersion as
         #   pandas implicitly converts to UTC tz aware cols
@@ -78,8 +107,9 @@ class BaseDatabaseAdapter(ABC):
         """Get type conversion rules for specific DBMS"""
         pass
 
-    def _apply_type_conversion(self, df: pd.DataFrame, metadata: pd.DataFrame,
-                             type_rules: Dict[str, Callable]) -> pd.DataFrame:
+    def _apply_type_conversion(
+        self, df: pd.DataFrame, metadata: pd.DataFrame, type_rules: Dict[str, Callable]
+    ) -> pd.DataFrame:
         """Apply type conversion rules to DataFrame"""
         if df.empty:
             return df
@@ -94,7 +124,6 @@ class BaseDatabaseAdapter(ABC):
             if col_name not in df.columns:
                 continue
 
-
             col_type = col_info['data_type'].lower()
             # Find matching conversion rule
             converter = None
@@ -105,12 +134,12 @@ class BaseDatabaseAdapter(ABC):
                     break
 
             if converter is None:
-                continue # Skip columns without converters
+                continue  # Skip columns without converters
 
             try:
                 df[col_name] = converter(df[col_name])
             except Exception as e:
-                app_logger.warning(f"Type conversion failed for {col_name}: {str(e)}")
+                app_logger.warning(f'Type conversion failed for {col_name}: {str(e)}')
                 df[col_name] = df[col_name].astype(str)
 
             new_type = df[col_name].dtype

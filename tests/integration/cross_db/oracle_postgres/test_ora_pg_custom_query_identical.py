@@ -4,18 +4,19 @@ Test custom query comparison between Oracle and PostgreSQL.
 
 import pytest
 from sqlalchemy import text
-from xoverrr.core import DataQualityComparator, DataReference
+
 from xoverrr.constants import COMPARISON_SUCCESS
+from xoverrr.core import DataQualityComparator, DataReference
 
 
 class TestCustomQueryComparison:
     """Tests for custom query comparison"""
-    
+
     @pytest.fixture(autouse=True)
     def setup_custom_data(self, oracle_engine, postgres_engine, table_helper):
-        
-        table_name = "test_custom_data"
-        
+
+        table_name = 'test_custom_data'
+
         table_helper.create_table(
             engine=oracle_engine,
             table_name=table_name,
@@ -36,9 +37,9 @@ class TestCustomQueryComparison:
                 (3, 'Charlie', 300000, date'2024-01-03', timestamp'2024-01-03 12:00:00', null),
                 (4, 'John', null, date'2024-01-04', timestamp'2024-01-04 12:00:00', 1),
                 (5, 'Kate', 50000.01, date'2024-01-04', timestamp'2024-01-05 12:00:00', 1)
-            """
+            """,
         )
-        
+
         table_helper.create_table(
             engine=postgres_engine,
             table_name=table_name,
@@ -59,9 +60,9 @@ class TestCustomQueryComparison:
                 (3, 'Charlie', 300000, '2024-01-03', '2024-01-03 12:00:00', null),
                 (4, 'John', null, date'2024-01-04', timestamp'2024-01-04 12:00:00', true),
                 (5, 'Kate', 50000.01, date'2024-01-04', timestamp'2024-01-05 12:00:00', true)
-            """
+            """,
         )
-        
+
         yield
 
     def test_custom_query_comparison_char_ts(self, oracle_engine, postgres_engine):
@@ -69,7 +70,7 @@ class TestCustomQueryComparison:
         comparator = DataQualityComparator(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
-            timezone="Europe/Athens",
+            timezone='Europe/Athens',
         )
 
         source_query = """
@@ -78,7 +79,7 @@ class TestCustomQueryComparison:
             WHERE created_at >= trunc(to_date(:start_date, 'YYYY-MM-DD'), 'dd')
               AND created_at < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1
         """
-        
+
         target_query = """
             SELECT id, name, created_at
             FROM test.test_custom_data
@@ -91,19 +92,21 @@ class TestCustomQueryComparison:
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-05'},
             target_query=target_query,
             target_params={'start_date': '2024-01-01', 'end_date': '2024-01-05'},
-            custom_primary_key=["id"],
+            custom_primary_key=['id'],
             tolerance_percentage=0.0,
         )
         print(report)
         assert status == COMPARISON_SUCCESS
-        print(f"Custom query comparison passed: {stats.final_score:.2f}%")      
+        print(f'Custom query comparison passed: {stats.final_score:.2f}%')
 
-    def test_custom_query_comparison_char_uppercase_pk(self, oracle_engine, postgres_engine):
-        pytest.skip("issue #37")
+    def test_custom_query_comparison_char_uppercase_pk(
+        self, oracle_engine, postgres_engine
+    ):
+        pytest.skip('issue #37')
         comparator = DataQualityComparator(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
-            timezone="Europe/Athens",
+            timezone='Europe/Athens',
         )
 
         source_query = """
@@ -112,7 +115,7 @@ class TestCustomQueryComparison:
             WHERE created_at >= trunc(to_date(:start_date, 'YYYY-MM-DD'), 'dd')
               AND created_at < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1
         """
-        
+
         target_query = """
             SELECT id, name
             FROM test.test_custom_data
@@ -125,20 +128,20 @@ class TestCustomQueryComparison:
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-05'},
             target_query=target_query,
             target_params={'start_date': '2024-01-01', 'end_date': '2024-01-05'},
-            custom_primary_key=["ID"],
+            custom_primary_key=['ID'],
             tolerance_percentage=0.0,
         )
         print(report)
         assert status == COMPARISON_SUCCESS
-        print(f"Custom query comparison passed: {stats.final_score:.2f}%")         
+        print(f'Custom query comparison passed: {stats.final_score:.2f}%')
 
     def test_custom_query_comparison_numeric(self, oracle_engine, postgres_engine):
-        pytest.skip("issue #29")
+        pytest.skip('issue #29')
 
         comparator = DataQualityComparator(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
-            timezone="Europe/Athens",
+            timezone='Europe/Athens',
         )
 
         source_query = """
@@ -147,7 +150,7 @@ class TestCustomQueryComparison:
             WHERE created_at >= trunc(to_date(:start_date, 'YYYY-MM-DD'), 'dd')
               AND created_at < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1
         """
-        
+
         target_query = """
             SELECT id, amount
             FROM test.test_custom_data
@@ -160,19 +163,19 @@ class TestCustomQueryComparison:
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-05'},
             target_query=target_query,
             target_params={'start_date': '2024-01-01', 'end_date': '2024-01-05'},
-            custom_primary_key=["id"],
+            custom_primary_key=['id'],
             tolerance_percentage=0.0,
         )
         print(report)
         assert status == COMPARISON_SUCCESS
-        print(f"Custom query comparison passed: {stats.final_score:.2f}%")
+        print(f'Custom query comparison passed: {stats.final_score:.2f}%')
 
     def test_custom_query_comparison_bool(self, oracle_engine, postgres_engine):
-        pytest.skip("issue #29")
+        pytest.skip('issue #29')
         comparator = DataQualityComparator(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
-            timezone="Europe/Athens",
+            timezone='Europe/Athens',
         )
 
         source_query = """
@@ -181,7 +184,7 @@ class TestCustomQueryComparison:
             WHERE created_at >= trunc(to_date(:start_date, 'YYYY-MM-DD'), 'dd')
               AND created_at < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1
         """
-        
+
         target_query = """
             SELECT id, is_active
             FROM test.test_custom_data
@@ -194,19 +197,19 @@ class TestCustomQueryComparison:
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-04'},
             target_query=target_query,
             target_params={'start_date': '2024-01-01', 'end_date': '2024-01-04'},
-            custom_primary_key=["id"],
+            custom_primary_key=['id'],
             tolerance_percentage=0.0,
         )
         print(report)
         assert status == COMPARISON_SUCCESS
-        print(f"Custom query comparison passed: {stats.final_score:.2f}%")       
+        print(f'Custom query comparison passed: {stats.final_score:.2f}%')
 
     def test_custom_query_comparison_asterisk(self, oracle_engine, postgres_engine):
-        pytest.skip("issue #29")
+        pytest.skip('issue #29')
         comparator = DataQualityComparator(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
-            timezone="Europe/Athens",
+            timezone='Europe/Athens',
         )
 
         source_query = """
@@ -215,7 +218,7 @@ class TestCustomQueryComparison:
             WHERE created_at >= trunc(to_date(:start_date, 'YYYY-MM-DD'), 'dd')
               AND created_at < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1
         """
-        
+
         target_query = """
             SELECT *
             FROM test.test_custom_data
@@ -228,19 +231,19 @@ class TestCustomQueryComparison:
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-04'},
             target_query=target_query,
             target_params={'start_date': '2024-01-01', 'end_date': '2024-01-04'},
-            custom_primary_key=["id"],
+            custom_primary_key=['id'],
             tolerance_percentage=0.0,
         )
         print(report)
         assert status == COMPARISON_SUCCESS
-        print(f"Custom query comparison passed: {stats.final_score:.2f}%")         
+        print(f'Custom query comparison passed: {stats.final_score:.2f}%')
 
     def test_custom_query_comparison_like_filter(self, oracle_engine, postgres_engine):
-        pytest.skip("issue #30")
+        pytest.skip('issue #30')
         comparator = DataQualityComparator(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
-            timezone="Europe/Athens",
+            timezone='Europe/Athens',
         )
 
         source_query = """
@@ -250,7 +253,7 @@ class TestCustomQueryComparison:
               AND created_at < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1
               and name like '%lice%'
         """
-        
+
         target_query = """
               SELECT *
             FROM test.test_custom_data
@@ -264,9 +267,9 @@ class TestCustomQueryComparison:
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-04'},
             target_query=target_query,
             target_params={'start_date': '2024-01-01', 'end_date': '2024-01-04'},
-            custom_primary_key=["id"],
+            custom_primary_key=['id'],
             tolerance_percentage=0.0,
         )
         print(report)
         assert status == COMPARISON_SUCCESS
-        print(f"Custom query comparison passed: {stats.final_score:.2f}%")
+        print(f'Custom query comparison passed: {stats.final_score:.2f}%')

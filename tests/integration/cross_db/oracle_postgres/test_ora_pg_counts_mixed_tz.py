@@ -4,18 +4,19 @@ All cross-database comparisons with tz-aware columns must use UTC.
 """
 
 import pytest
-from xoverrr.core import DataQualityComparator, DataReference
+
 from xoverrr.constants import COMPARISON_SUCCESS
+from xoverrr.core import DataQualityComparator, DataReference
 
 
 class TestPostgresOracleMixedTimezoneOffsets:
     """Test for mixed timezone offsets in timestamptz columns bug fix - PostgreSQL ↔ Oracle"""
-    
+
     @pytest.fixture(autouse=True)
     def setup_mixed_timezone_data(self, postgres_engine, oracle_engine, table_helper):
         """Setup test data with mixed timezone offsets in timestamptz columns"""
-        
-        table_name = "test_mixed_timezones_counts_ora_pg"
+
+        table_name = 'test_mixed_timezones_counts_ora_pg'
 
         # Oracle setup - TIMESTAMP WITH TIME ZONE
         table_helper.create_table(
@@ -45,9 +46,9 @@ class TestPostgresOracleMixedTimezoneOffsets:
                  TIMESTAMP '2024-01-07 00:30:00 +05:00', DATE '2024-01-06'),
                 (7, 'Event with future date', TIMESTAMP '3023-04-04 00:00:00 +00:00', 
                  TIMESTAMP '3023-04-04 01:00:00 +00:00', DATE '3023-04-04')
-            """
-        )        
-        
+            """,
+        )
+
         # PostgreSQL setup - contains mixed timezone offsets
         table_helper.create_table(
             engine=postgres_engine,
@@ -70,33 +71,31 @@ class TestPostgresOracleMixedTimezoneOffsets:
                 (5, 'Event with NULL', NULL, NULL, '2024-01-05'),
                 (6, 'Event crossing midnight UTC', '2024-01-06 23:30:00+05', '2024-01-07 00:30:00+05', '2024-01-06'),
                 (7, 'Event with future date', '3023-04-04 00:00:00+00', '3023-04-04 01:00:00+00', '3023-04-04')
-            """
+            """,
         )
-        
 
-        
         yield
 
     def test_date_only_comparison_with_utc(self, postgres_engine, oracle_engine):
         """
         Test that date-only comparisons work with UTC timezone.
         """
-        table_name = "test_mixed_timezones_counts_ora_pg"
-        
+        table_name = 'test_mixed_timezones_counts_ora_pg'
+
         comparator = DataQualityComparator(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
-            timezone="UTC",  # Use UTC even for date-only when table has tz-aware columns
+            timezone='UTC',  # Use UTC even for date-only when table has tz-aware columns
         )
 
         status, report, stats, details = comparator.compare_counts(
-            source_table=DataReference(table_name, "test"),
-            target_table=DataReference(table_name, "test"),
-            date_column="record_date",
-            date_range=("2024-01-01", "2024-01-08"),
+            source_table=DataReference(table_name, 'test'),
+            target_table=DataReference(table_name, 'test'),
+            date_column='record_date',
+            date_range=('2024-01-01', '2024-01-08'),
             tolerance_percentage=0.0,
         )
-        
+
         assert status == COMPARISON_SUCCESS
         assert stats.final_score == 100.0
-        print(f"date-only count comparison with UTC passed: {stats.final_score:.2f}%")
+        print(f'date-only count comparison with UTC passed: {stats.final_score:.2f}%')
