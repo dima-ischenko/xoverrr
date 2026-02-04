@@ -99,7 +99,7 @@ class TestCustomQueryComparison:
         print(f"Custom query comparison passed: {stats.final_score:.2f}%")      
 
     def test_custom_query_comparison_char_uppercase_pk(self, oracle_engine, postgres_engine):
-        pytest.skip("issue #31")
+        pytest.skip("issue #37")
         comparator = DataQualityComparator(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
