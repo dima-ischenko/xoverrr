@@ -31,7 +31,7 @@ Follow the precise instructions in `tests/README.md` to create a virtual environ
 Before submitting, run the following checks from the project root:
 ```bash
 # Format code
-ruff src/ tests/
+ruff format src/ tests/
 isort src/ tests/
 
 # Run static type checking (optional but recommended)
