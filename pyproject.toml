@@ -36,7 +36,7 @@ Homepage = "https://github.com/dima-ischenko/xoverrr"
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
-    "black>=23.0.0",
+    "ruff>=0.15.0",
     "isort>=5.12.0",
     "mypy>=1.0.0",
     "pre-commit>=3.0.0",
@@ -48,7 +48,7 @@ test = [
     "tenacity>=8.2.0"
 ]
 lint = [
-    "black>=23.0.0",
+    "ruff>=0.15.0",
     "isort>=5.12.0",
     "flake8>=6.0.0",
 ]
@@ -60,3 +60,9 @@ where = ["src"]
 pythonpath = ["src"]
 testpaths = ["tests"]
 addopts = "-v"
+
+[tool.ruff]
+target-version = "py39"
+
+[tool.ruff.format]
+quote-style = "single"
