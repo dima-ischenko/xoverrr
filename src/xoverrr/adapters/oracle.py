@@ -6,6 +6,8 @@ import pandas as pd
 from ..constants import DATETIME_FORMAT
 from ..exceptions import QueryExecutionError
 from ..logger import app_logger
+from ..utils import process_column_name
+import time
 from ..models import DataReference, ObjectType
 from .base import BaseDatabaseAdapter, Engine
 
@@ -43,6 +45,8 @@ class OracleAdapter(BaseDatabaseAdapter):
                 app_logger.info(f'query\n {query}')
                 cursor.execute(query)
 
+
+            columns = [process_column_name(col[0]) for col in cursor.description]
             columns = [col[0].lower() for col in cursor.description]
             data = cursor.fetchall()
 

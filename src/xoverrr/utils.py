@@ -9,8 +9,19 @@ from .constants import DATETIME_FORMAT, DEFAULT_MAX_EXAMPLES, NULL_REPLACEMENT
 from .logger import app_logger
 
 
+def process_column_name(column_name: str) -> str:
+    """
+    Check if the column name is quoted (alias).
+    If quotes are present, remove them and preserve original case.
+    Otherwise, convert the column name to lowercase for consistency.
+    """
+    if '"' in column_name:
+        return column_name.replace('"', '')
+    return column_name.lower()
+
 def normalize_column_names(columns: List[str]) -> List[str]:
     """
+    Normalizes a list of column names using the process_column_name logic.
     Normalize column names to lowercase for consistent comparison.
 
     Parameters:
@@ -19,7 +30,7 @@ def normalize_column_names(columns: List[str]) -> List[str]:
     Returns:
         List of lowercased column names
     """
-    return [col.lower() for col in columns] if columns else []
+    return [process_column_name(col) for col in columns] if columns else []
 
 
 @dataclass
