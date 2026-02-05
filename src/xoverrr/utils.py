@@ -21,9 +21,7 @@ def process_column_name(column_name: str) -> str:
 
 def normalize_column_names(columns: List[str]) -> List[str]:
     """
-<<<<<<< HEAD
     Normalizes a list of column names using the process_column_name logic.
-=======
     Normalize column names to lowercase for consistent comparison.
 
     Parameters:
@@ -31,7 +29,6 @@ def normalize_column_names(columns: List[str]) -> List[str]:
 
     Returns:
         List of lowercased column names
->>>>>>> upstream/main
     """
     return [process_column_name(col) for col in columns] if columns else []
 

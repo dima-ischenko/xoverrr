@@ -6,14 +6,11 @@ import pandas as pd
 from ..constants import DATETIME_FORMAT
 from ..exceptions import QueryExecutionError
 from ..logger import app_logger
-<<<<<<< HEAD
 from ..utils import process_column_name
 import time
-=======
 from ..models import DataReference, ObjectType
 from .base import BaseDatabaseAdapter, Engine
 
->>>>>>> upstream/main
 
 class OracleAdapter(BaseDatabaseAdapter):
     def _execute_query(
@@ -48,12 +45,9 @@ class OracleAdapter(BaseDatabaseAdapter):
                 app_logger.info(f'query\n {query}')
                 cursor.execute(query)
 
-<<<<<<< HEAD
 
             columns = [process_column_name(col[0]) for col in cursor.description]
-=======
             columns = [col[0].lower() for col in cursor.description]
->>>>>>> upstream/main
             data = cursor.fetchall()
 
             execution_time = time.time() - start_time
