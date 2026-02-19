@@ -255,7 +255,7 @@ class TestCustomQueryComparison:
         """
 
         target_query = """
-              SELECT id, name, created_at
+              SELECT id::int, name, created_at
             FROM test.test_custom_data
             WHERE created_at >= date_trunc('day', cast(:start_date as date))
               AND created_at < date_trunc('day', cast(:end_date as date)) + interval '1 days'
