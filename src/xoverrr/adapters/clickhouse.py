@@ -2,6 +2,7 @@ import time
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
+from sqlalchemy import text
 
 from ..constants import DATE_FORMAT, DATETIME_FORMAT
 from ..exceptions import QueryExecutionError
@@ -30,12 +31,12 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
                     query = f'{query} {tz_set}'
                 app_logger.info(f'query\n {query}')
                 app_logger.info(f'{params=}')
-                df = pd.read_sql(query, engine, params=params)
+                df = pd.read_sql(text(query), engine, params=params)
             else:
                 if tz_set:
                     query = f'{query} {tz_set}'
                 app_logger.info(f'query\n {query}')
-                df = pd.read_sql(query, engine)
+                df = pd.read_sql(text(query), engine)
 
             execution_time = time.time() - start_time
             app_logger.info(f'Query executed in {execution_time:.2f}s')
@@ -56,8 +57,8 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
                 engine as table_engine,
                 if(engine = 'View', 'view', 'table') as object_type
             FROM system.tables
-            WHERE database = %(schema)s
-            AND name = %(table)s
+            WHERE database = :schema
+            AND name = :table
         """
         params = {'schema': data_ref.schema, 'table': data_ref.name}
 
@@ -84,12 +85,12 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
     def build_metadata_columns_query(self, data_ref: DataReference) -> Tuple[str, Dict]:
         query = """
             SELECT
-                name as column_name,
+                lower(name) as column_name,
                 type as data_type,
                 position as column_id
             FROM system.columns
-            WHERE database = %(schema)s
-            AND table = %(table)s
+            WHERE database = :schema
+            AND table = :table  
             ORDER BY position
         """
         params = {'schema': data_ref.schema, 'table': data_ref.name}
@@ -97,10 +98,10 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
 
     def build_primary_key_query(self, data_ref: DataReference) -> Tuple[str, Dict]:
         query = """
-            SELECT name as pk_column_name
+            SELECT lower(name) as pk_column_name
             FROM system.columns
-            WHERE database = %(schema)s
-            AND table = %(table)s
+            WHERE database = :schema
+            AND table = :table
             AND is_in_primary_key = 1
             ORDER BY position
         """
@@ -116,7 +117,7 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
     ) -> Tuple[str, Dict]:
         query = f"""
             SELECT
-                formatDateTime(toDate({date_column}), '%%Y-%%m-%%d') as dt,
+                formatDateTime(toDate({date_column}), '%Y-%m-%d') as dt,
                 count(*) as cnt
             FROM {data_ref.full_name}
             WHERE 1=1
@@ -124,10 +125,10 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
         params = {}
 
         if start_date:
-            query += f' AND {date_column} >= toDate(%(start_date)s)'
+            query += f' AND {date_column} >= toDate(:start_date)\n'
             params['start_date'] = start_date
         if end_date:
-            query += f' AND {date_column} < toDate(%(end_date)s) + INTERVAL 1 day'
+            query += f' AND {date_column} < toDate(:end_date) + INTERVAL 1 day\n'
             params['end_date'] = end_date
 
         query += ' GROUP BY dt ORDER BY dt DESC'
@@ -159,10 +160,10 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
         WHERE 1=1\n"""
 
         if start_date and date_column:
-            query += f'            AND {date_column} >= toDate(%(start_date)s)\n'
+            query += f'            AND {date_column} >= toDate(:start_date)\n'
             params['start_date'] = start_date
         if end_date and date_column:
-            query += f'            AND {date_column} < toDate(%(end_date)s) + INTERVAL 1 day\n'
+            query += f'            AND {date_column} < toDate(:end_date) + INTERVAL 1 day\n'
             params['end_date'] = end_date
 
         return query, params
@@ -174,7 +175,7 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
         if update_column and exclude_recent_hours:
             exclude_recent_hours = exclude_recent_hours
 
-            condition = f"""case when {update_column} > (now() - INTERVAL %(exclude_recent_hours)s HOUR) then 'y' end as xrecently_changed"""
+            condition = f"""case when {update_column} > (now() - INTERVAL :exclude_recent_hours HOUR) then 'y' end as xrecently_changed"""
             params = {'exclude_recent_hours': exclude_recent_hours}
             return condition, params
 
