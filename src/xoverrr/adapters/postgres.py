@@ -3,6 +3,7 @@ from json import dumps
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
+from sqlalchemy import text
 
 from ..constants import DATETIME_FORMAT
 from ..exceptions import QueryExecutionError
@@ -31,12 +32,12 @@ class PostgresAdapter(BaseDatabaseAdapter):
                     query = f'{tz_set}\n{query}'
                 app_logger.info(f'query\n {query}')
                 app_logger.info(f'{params=}')
-                df = pd.read_sql(query, engine, params=params)
+                df = pd.read_sql(text(query), engine, params=params)
             else:
                 if tz_set:
                     query = f'{tz_set}\n{query}'
                 app_logger.info(f'query\n {query}')
-                df = pd.read_sql(query, engine)
+                df = pd.read_sql(text(query), engine)
             execution_time = time.time() - start_time
             app_logger.info(f'Query executed in {execution_time:.2f}s')
             app_logger.info('complete')
@@ -60,8 +61,8 @@ class PostgresAdapter(BaseDatabaseAdapter):
                 END as object_type
             FROM pg_class c
             JOIN pg_namespace n ON n.oid = c.relnamespace
-            WHERE n.nspname = %(schema)s
-            AND c.relname = %(table)s
+            WHERE n.nspname = :schema
+            AND c.relname = :table
         """
         params = {'schema': data_ref.schema, 'table': data_ref.name}
 
@@ -89,8 +90,8 @@ class PostgresAdapter(BaseDatabaseAdapter):
                 lower(data_type) as data_type,
                 ordinal_position as column_id
             FROM information_schema.columns
-            WHERE table_schema = %(schema)s
-            AND table_name = %(table)s
+            WHERE table_schema = :schema
+            AND table_name = :table
             ORDER BY ordinal_position
         """
         params = {'schema': data_ref.schema, 'table': data_ref.name}
@@ -100,14 +101,14 @@ class PostgresAdapter(BaseDatabaseAdapter):
         """Build primary key query with GreenPlum compatibility"""
         query = """
             select
-                pg_attribute.attname as pk_column_name
+                lower(pg_attribute.attname) as pk_column_name
             from pg_index
             join pg_class on pg_class.oid = pg_index.indrelid
             join pg_attribute on pg_attribute.attrelid = pg_class.oid
                             and pg_attribute.attnum = any(pg_index.indkey)
             join pg_namespace on pg_namespace.oid = pg_class.relnamespace
-            where pg_namespace.nspname = %(schema)s
-            and pg_class.relname = %(table)s
+            where pg_namespace.nspname = :schema
+            and pg_class.relname = :table
             and pg_index.indisprimary
             order by pg_attribute.attnum
         """
@@ -131,10 +132,10 @@ class PostgresAdapter(BaseDatabaseAdapter):
         params = {}
 
         if start_date:
-            query += f" AND {date_column} >= date_trunc('day', %(start_date)s::date)\n"
+            query += f" AND {date_column} >= date_trunc('day', cast(:start_date as date))\n"
             params['start_date'] = start_date
         if end_date:
-            query += f" AND {date_column} < date_trunc('day', %(end_date)s::date)  + interval '1 days'\n"
+            query += f" AND {date_column} < date_trunc('day', cast(:end_date as date))  + interval '1 days'\n"
             params['end_date'] = end_date
 
         query += f" GROUP BY to_char(date_trunc('day', {date_column}),'YYYY-MM-DD') ORDER BY dt DESC"
@@ -167,10 +168,10 @@ class PostgresAdapter(BaseDatabaseAdapter):
         WHERE 1=1\n"""
 
         if start_date and date_column:
-            query += f"            AND {date_column} >= date_trunc('day', %(start_date)s::date)\n"
+            query += f"            AND {date_column} >= date_trunc('day', cast(:start_date as date))\n"
             params['start_date'] = start_date
         if end_date and date_column:
-            query += f"            AND {date_column} < date_trunc('day', %(end_date)s::date)  + interval '1 days'\n"
+            query += f"            AND {date_column} < date_trunc('day', cast(:end_date as date))  + interval '1 days'\n"
             params['end_date'] = end_date
 
         return query, params
@@ -182,7 +183,7 @@ class PostgresAdapter(BaseDatabaseAdapter):
         if update_column and exclude_recent_hours:
             exclude_recent_hours = exclude_recent_hours
 
-            condition = f"""case when {update_column} > (now() - INTERVAL '%(exclude_recent_hours)s hours') then 'y' end as xrecently_changed"""
+            condition = f"""case when {update_column} > (now() - INTERVAL ':exclude_recent_hours hours') then 'y' end as xrecently_changed"""
             params = {'exclude_recent_hours': exclude_recent_hours}
             return condition, params
 
