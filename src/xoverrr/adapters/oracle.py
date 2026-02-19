@@ -2,6 +2,7 @@ import time
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
+from sqlalchemy import text
 
 from ..constants import DATETIME_FORMAT
 from ..exceptions import QueryExecutionError
@@ -16,7 +17,8 @@ class OracleAdapter(BaseDatabaseAdapter):
     ) -> pd.DataFrame:
         tz_set = None
         raw_conn = None
-        cursor = None
+        result = None
+
 
         start_time = time.time()
         app_logger.info('start')
@@ -25,26 +27,27 @@ class OracleAdapter(BaseDatabaseAdapter):
             tz_set = f"alter session set time_zone = '{timezone}'"
 
         try:
-            raw_conn = engine.raw_connection()
-            cursor = raw_conn.cursor()
+            raw_conn = engine.connect()
+            # cursor = raw_conn.cursor()
 
             if tz_set:
                 app_logger.info(f'{tz_set}')
-                cursor.execute(tz_set)
+                raw_conn.execute(text(tz_set))
 
-            cursor.arraysize = 100000
+            # raw_conn.arraysize = 100000
 
             if isinstance(query, tuple):
                 query_text, params = query
+                query_text = text(query_text).execution_options(yield_per=100000)
                 app_logger.info(f'query\n {query_text}')
                 app_logger.info(f'{params=}')
-                cursor.execute(query_text, params or {})
+                result = raw_conn.execute(query_text, params or {})
             else:
                 app_logger.info(f'query\n {query}')
-                cursor.execute(query)
+                result = raw_conn.execute(text(query))
 
-            columns = [col[0].lower() for col in cursor.description]
-            data = cursor.fetchall()
+            columns = [col.lower() for col in result.keys()]
+            data = result.fetchall()
 
             execution_time = time.time() - start_time
             app_logger.info(f'Query executed in {execution_time:.2f}s')
@@ -52,8 +55,8 @@ class OracleAdapter(BaseDatabaseAdapter):
             app_logger.info('complete')
 
             # excplicitly close cursor before closing the connection
-            if cursor:
-                cursor.close()
+            if raw_conn:
+                raw_conn.close()
 
             return pd.DataFrame(data, columns=columns)
 
@@ -69,10 +72,10 @@ class OracleAdapter(BaseDatabaseAdapter):
                 except Exception as rollback_error:
                     app_logger.warning(f'Rollback failed: {rollback_error}')
                 try:
-                    if cursor:
-                        cursor.close()
+                    if raw_conn:
+                        raw_conn.close()
                 except Exception as close_error:
-                    app_logger.warning(f'Cursor close failed: {close_error}')
+                    app_logger.warning(f'Connection close failed: {close_error}')
 
             raise QueryExecutionError(f'Query failed: {str(e)}')
 

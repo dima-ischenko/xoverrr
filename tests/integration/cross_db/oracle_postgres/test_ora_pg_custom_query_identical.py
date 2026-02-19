@@ -83,8 +83,8 @@ class TestCustomQueryComparison:
         target_query = """
             SELECT id, name, created_at
             FROM test.test_custom_data
-            WHERE created_at >= date_trunc('day', %(start_date)s::date)
-              AND created_at < date_trunc('day', %(end_date)s::date) + interval '1 days'
+            WHERE created_at >= date_trunc('day', cast(:start_date as date))
+              AND created_at < date_trunc('day', cast(:end_date as date)) + interval '1 days'
         """
 
         status, report, stats, details = comparator.compare_custom_query(
@@ -110,17 +110,17 @@ class TestCustomQueryComparison:
         )
 
         source_query = """
-            SELECT id, name
+            SELECT id as "ID", name
             FROM test.test_custom_data
             WHERE created_at >= trunc(to_date(:start_date, 'YYYY-MM-DD'), 'dd')
               AND created_at < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1
         """
 
         target_query = """
-            SELECT id, name
+            SELECT id as "ID", name
             FROM test.test_custom_data
-            WHERE created_at >= date_trunc('day', %(start_date)s::date)
-              AND created_at < date_trunc('day', %(end_date)s::date) + interval '1 days'
+            WHERE created_at >= date_trunc('day', cast(:start_date as date))
+              AND created_at < date_trunc('day', cast(:end_date as date)) + interval '1 days'
         """
 
         status, report, stats, details = comparator.compare_custom_query(
@@ -154,8 +154,8 @@ class TestCustomQueryComparison:
         target_query = """
             SELECT id, amount
             FROM test.test_custom_data
-            WHERE created_at >= date_trunc('day', %(start_date)s::date)
-              AND created_at < date_trunc('day', %(end_date)s::date) + interval '1 days'
+            WHERE created_at >= date_trunc('day', cast(:start_date as date))
+              AND created_at < date_trunc('day', cast(:end_date as date)) + interval '1 days'
         """
 
         status, report, stats, details = comparator.compare_custom_query(
@@ -188,8 +188,8 @@ class TestCustomQueryComparison:
         target_query = """
             SELECT id, is_active
             FROM test.test_custom_data
-            WHERE created_at >= date_trunc('day', %(start_date)s::date)
-              AND created_at < date_trunc('day', %(end_date)s::date) + interval '1 days'
+            WHERE created_at >= date_trunc('day', cast(:start_date as date))    
+              AND created_at < date_trunc('day', cast(:end_date as date)) + interval '1 days'
         """
 
         status, report, stats, details = comparator.compare_custom_query(
@@ -222,8 +222,8 @@ class TestCustomQueryComparison:
         target_query = """
             SELECT *
             FROM test.test_custom_data
-            WHERE created_at >= date_trunc('day', %(start_date)s::date)
-              AND created_at < date_trunc('day', %(end_date)s::date) + interval '1 days'
+            WHERE created_at >= date_trunc('day', cast(:start_date as date))
+              AND created_at < date_trunc('day', cast(:end_date as date)) + interval '1 days'
         """
 
         status, report, stats, details = comparator.compare_custom_query(
@@ -239,7 +239,7 @@ class TestCustomQueryComparison:
         print(f'Custom query comparison passed: {stats.final_score:.2f}%')
 
     def test_custom_query_comparison_like_filter(self, oracle_engine, postgres_engine):
-        pytest.skip('issue #30')
+        # pytest.skip('issue #30')
         comparator = DataQualityComparator(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
@@ -255,10 +255,10 @@ class TestCustomQueryComparison:
         """
 
         target_query = """
-              SELECT *
+              SELECT id::int, name, created_at
             FROM test.test_custom_data
-            WHERE created_at >= date_trunc('day', %(start_date)s::date)
-              AND created_at < date_trunc('day', %(end_date)s::date) + interval '1 days'
+            WHERE created_at >= date_trunc('day', cast(:start_date as date))
+              AND created_at < date_trunc('day', cast(:end_date as date)) + interval '1 days'
               and name like '%lice%'
         """
 
@@ -267,6 +267,44 @@ class TestCustomQueryComparison:
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-04'},
             target_query=target_query,
             target_params={'start_date': '2024-01-01', 'end_date': '2024-01-04'},
+            custom_primary_key=['id'],
+            tolerance_percentage=0.0,
+        )
+        print(report)
+        assert status == COMPARISON_SUCCESS
+        print(f'Custom query comparison passed: {stats.final_score:.2f}%')
+
+    def test_custom_query_comparison_like_second_filter(self, oracle_engine, postgres_engine):
+        # pytest.skip('issue #30')
+        comparator = DataQualityComparator(
+            source_engine=oracle_engine,
+            target_engine=postgres_engine,
+            timezone='Europe/Athens',
+        )
+
+        source_query = """
+            SELECT :start_date as start_date,id, count(*) as cnt
+            FROM test.test_custom_data
+            WHERE created_at >= trunc(to_date(:start_date, 'YYYY-MM-DD'), 'dd')
+              AND created_at < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1
+              and name like :name_filter
+            group by id
+        """
+
+        target_query = """
+              SELECT :start_date as start_date,id, count(*) as cnt
+            FROM test.test_custom_data
+            WHERE created_at >= date_trunc('day', cast(:start_date as date))
+              AND created_at < date_trunc('day', cast(:end_date as date)) + interval '1 days'
+              and name like :name_filter
+            group by id
+        """
+
+        status, report, stats, details = comparator.compare_custom_query(
+            source_query=source_query,
+            source_params={'start_date': '2024-01-01', 'end_date': '2024-01-04', 'name_filter': '%lice%'},
+            target_query=target_query,
+            target_params={'start_date': '2024-01-01', 'end_date': '2024-01-04', 'name_filter': '%lice%'},
             custom_primary_key=['id'],
             tolerance_percentage=0.0,
         )
