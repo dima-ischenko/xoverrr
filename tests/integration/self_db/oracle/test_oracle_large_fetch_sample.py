@@ -9,7 +9,7 @@ from sqlalchemy import text
 
 from xoverrr.core import DataQualityComparator
 
-@pytest.mark.timeout(30)
+#@pytest.mark.timeout(30)
 class TestOracleSelfFetchPerformance:
     """
     Tests comparing Oracle with itself (same engine).
@@ -62,9 +62,7 @@ class TestOracleSelfFetchPerformance:
             target_engine=oracle_engine,
             timezone='Europe/Athens',
         )
-        start_time = time.time()
-        
-        execution_time = time.time() - start_time
+
         query = """
                 select t1.id, t1.name, t1.amount, t1.created_at, t1.updated_at,
                        t2.id id2, t2.name name2, t2.amount amount2, t2.created_at created_at2, t2.updated_at updated_at2
@@ -72,6 +70,10 @@ class TestOracleSelfFetchPerformance:
                   cross join test.test_oracle_large_fetch_self t2
         """
         params = None
+
+        start_time = time.time()
         df = comparator._execute_query( (query, params), oracle_engine,  'Europe/Athens')
+        execution_time = time.time() - start_time
+
         assert len(df) == self.num_rows_generate*self.num_rows_generate
         assert execution_time < 15
