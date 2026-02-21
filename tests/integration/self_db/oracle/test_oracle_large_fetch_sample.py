@@ -72,7 +72,7 @@ class TestOracleSelfFetchPerformance:
         params = None
 
         start_time = time.time()
-        df = comparator._execute_query( (query, params), oracle_engine,  'Europe/Athens')
+        df = comparator._execute_query( (query, params), comparator.source_engine,  comparator.timezone)
         execution_time = time.time() - start_time
 
         assert len(df) == self.num_rows_generate*self.num_rows_generate
