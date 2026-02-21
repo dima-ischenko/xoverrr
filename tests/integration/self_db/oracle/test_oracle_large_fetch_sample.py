@@ -9,7 +9,7 @@ from sqlalchemy import text
 
 from xoverrr.core import DataQualityComparator
 
-#@pytest.mark.timeout(30)
+@pytest.mark.timeout(30)
 class TestOracleSelfFetchPerformance:
     """
     Tests comparing Oracle with itself (same engine).
