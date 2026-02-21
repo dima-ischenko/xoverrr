@@ -35,6 +35,7 @@ Homepage = "https://github.com/dima-ischenko/xoverrr"
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",
+    "pytest-timeout>=2.4.0",
     "pytest-cov>=4.0.0",
     "ruff>=0.15.0",
     "isort>=5.12.0",
