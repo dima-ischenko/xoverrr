@@ -2,7 +2,6 @@ import time
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
-from sqlalchemy import text
 
 from ..constants import DATETIME_FORMAT
 from ..exceptions import QueryExecutionError
@@ -18,7 +17,6 @@ class OracleAdapter(BaseDatabaseAdapter):
         tz_set = None
         raw_conn = None
         cursor = None
-
 
         start_time = time.time()
         app_logger.info('start')
