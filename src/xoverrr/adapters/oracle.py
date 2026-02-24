@@ -74,7 +74,7 @@ class OracleAdapter(BaseDatabaseAdapter):
                     if cursor:
                         cursor.close()
                 except Exception as close_error:
-                    app_logger.warning(f'Connection close failed: {close_error}')
+                    app_logger.warning(f'Cursor close failed: {close_error}')
 
             raise QueryExecutionError(f'Query failed: {str(e)}')
 
