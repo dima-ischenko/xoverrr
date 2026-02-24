@@ -38,7 +38,6 @@ class OracleAdapter(BaseDatabaseAdapter):
 
             if isinstance(query, tuple):
                 query_text, params = query
-                query_text = query_text#.execution_options(yield_per=100000)
                 app_logger.info(f'query\n {query_text}')
                 app_logger.info(f'{params=}')
                 cursor.execute(query_text, params or {})
