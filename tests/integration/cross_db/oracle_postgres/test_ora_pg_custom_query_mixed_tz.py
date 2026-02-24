@@ -97,8 +97,8 @@ class TestPostgresOracleMixedTimezoneOffsets:
         target_query = """
             SELECT id, event_name, created_on, record_date
             FROM test.test_mixed_timezones_query_ora_pg
-            WHERE record_date >= date_trunc('day', %(start_date)s::date)
-              AND record_date < date_trunc('day', %(end_date)s::date) + interval '1 days'
+            WHERE record_date >= date_trunc('day', cast(:start_date as date))
+              AND record_date < date_trunc('day', cast(:end_date as date)) + interval '1 day'
         """
 
         status, report, stats, details = comparator.compare_custom_query(

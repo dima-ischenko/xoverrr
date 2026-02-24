@@ -98,8 +98,8 @@ timezone: Europe/Athens
         SELECT created_at, updated_at, id, code, bank_code, account_type, counterparty_id, special_code, case when updated_at > (now() - INTERVAL '%(exclude_recent_hours)s hours') then 'y' end as xrecently_changed
         FROM public.account
         WHERE 1=1
-            AND created_at >= date_trunc('day', %(start_date)s::date)
-            AND created_at < date_trunc('day', %(end_date)s::date)  + interval '1 days'
+            AND created_at >= date_trunc('day', cast(:start_date as date))
+            AND created_at < date_trunc('day', cast(:end_date as date)  + interval '1 days'
 
     params: {'exclude_recent_hours': 1, 'start_date': '2025-11-17', 'end_date': '2025-11-24'}
 ----------------------------------------
@@ -241,7 +241,7 @@ Compares data from arbitrary SQL queries. Suitable for complex scenarios.
 
 ```python
 status, report, stats, details = comparator.compare_custom_query(
-    source_query="""SELECT id as user_id, name as user_name, created_at as created_date FROM scott.source_table WHERE status = %(status)s""",
+    source_query="""SELECT id as user_id, name as user_name, created_at as created_date FROM scott.source_table WHERE status = :status""",
     source_params={'status': 'active'},
     target_query="""SELECT user_id, user_name, created_date FROM scott.target_table WHERE status = :status""",
     target_params={'status': 'active'},
