@@ -27,27 +27,27 @@ class OracleAdapter(BaseDatabaseAdapter):
             tz_set = f"alter session set time_zone = '{timezone}'"
 
         try:
-            raw_conn = engine.connect()
-            # cursor = raw_conn.cursor()
+            raw_conn = engine.raw_connection()
+            cursor = raw_conn.cursor()
 
             if tz_set:
                 app_logger.info(f'{tz_set}')
-                raw_conn.execute(text(tz_set))
+                cursor.execute(tz_set)
 
-            # raw_conn.arraysize = 100000
+            cursor.arraysize = 100000
 
             if isinstance(query, tuple):
                 query_text, params = query
-                query_text = text(query_text).execution_options(yield_per=100000)
+                query_text = query_text#.execution_options(yield_per=100000)
                 app_logger.info(f'query\n {query_text}')
                 app_logger.info(f'{params=}')
-                result = raw_conn.execute(query_text, params or {})
+                cursor.execute(query_text, params or {})
             else:
                 app_logger.info(f'query\n {query}')
-                result = raw_conn.execute(text(query))
+                cursor.execute(query)
 
-            columns = [col.lower() for col in result.keys()]
-            data = result.fetchall()
+            columns = [col[0].lower() for col in cursor.description]
+            data = cursor.fetchall()
 
             execution_time = time.time() - start_time
             app_logger.info(f'Query executed in {execution_time:.2f}s')
@@ -55,8 +55,8 @@ class OracleAdapter(BaseDatabaseAdapter):
             app_logger.info('complete')
 
             # excplicitly close cursor before closing the connection
-            if raw_conn:
-                raw_conn.close()
+            if cursor:
+                cursor.close()
 
             return pd.DataFrame(data, columns=columns)
 
@@ -72,8 +72,8 @@ class OracleAdapter(BaseDatabaseAdapter):
                 except Exception as rollback_error:
                     app_logger.warning(f'Rollback failed: {rollback_error}')
                 try:
-                    if raw_conn:
-                        raw_conn.close()
+                    if cursor:
+                        cursor.close()
                 except Exception as close_error:
                     app_logger.warning(f'Connection close failed: {close_error}')
 
