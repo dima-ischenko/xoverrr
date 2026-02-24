@@ -92,8 +92,8 @@ class TestClickHouseOracleQueryMixedTimezoneOffsets:
         source_query = """
             SELECT id, event_name, created_on, record_date
             FROM test.test_mixed_timezones_query_ch_ora
-            WHERE record_date >= toDate(%(start_date)s)
-              AND record_date < toDate(%(end_date)s) + INTERVAL 1 day
+            WHERE record_date >= toDate(:start_date)
+              AND record_date < toDate(:end_date) + INTERVAL 1 day
         """
 
         target_query = """
