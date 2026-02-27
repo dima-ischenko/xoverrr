@@ -522,13 +522,38 @@ class DataQualityComparator:
         try:
             self.comparison_stats['compared'] += 1
 
-            # Execute queries
+            # Get metadata for both queries
+            app_logger.info('Getting metadata for source query')
+            source_metadata = self._get_metadata_cols_for_custom_query(
+                (source_query, source_params), source_engine
+            )
+
+            app_logger.info('Getting metadata for target query')
+            target_metadata = self._get_metadata_cols_for_custom_query(
+                (target_query, target_params), target_engine
+            )
+
+            # Execute queries to get data
             source_data = self._execute_query(
                 (source_query, source_params), source_engine, timezone
             )
             target_data = self._execute_query(
                 (target_query, target_params), target_engine, timezone
             )
+
+            # Apply type conversions using metadata
+            app_logger.info('applying type conversions to source dataframe')
+            source_adapter = self._get_adapter(self.source_db_type)
+            source_data = source_adapter.convert_types(
+                source_data, source_metadata, timezone
+            )
+
+            app_logger.info('applying type conversions to target dataframe')
+            target_adapter = self._get_adapter(self.target_db_type)
+            target_data = target_adapter.convert_types(
+                target_data, target_metadata, timezone
+            )
+
             app_logger.info('preparing source dataframe')
             source_data_prepared = prepare_dataframe(source_data)
             app_logger.info('preparing target dataframe')
@@ -586,6 +611,19 @@ class DataQualityComparator:
             status = ct.COMPARISON_FAILED
             self._update_stats(status, None)
             return status, None, None, None
+
+    def _get_metadata_cols_for_custom_query(
+        self, query, engine: Engine
+    ) -> pd.DataFrame:
+        """Get metadata with proper source handling"""
+        adapter = self._get_adapter(DBMSType.from_engine(engine))
+
+        columns_meta = adapter.get_metadata_for_custom_query(query, engine)
+
+        if columns_meta.empty:
+            raise ValueError(f'Failed to get metadata for custom query: {query}')
+
+        return columns_meta
 
     def _get_metadata_cols(
         self, data_ref: DataReference, engine: Engine

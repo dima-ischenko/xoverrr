@@ -6,7 +6,7 @@ import pandas as pd
 from sqlalchemy import text
 
 from ..constants import DATETIME_FORMAT
-from ..exceptions import QueryExecutionError
+from ..exceptions import MetadataError, QueryExecutionError
 from ..logger import app_logger
 from ..models import DataReference, ObjectType
 from .base import BaseDatabaseAdapter, Engine
@@ -82,6 +82,104 @@ class PostgresAdapter(BaseDatabaseAdapter):
 
         return ObjectType.UNKNOWN
 
+    def get_metadata_for_custom_query(
+        self,
+        query: Union[str, Tuple[str, Dict]],
+        engine: Engine,
+    ) -> pd.DataFrame:
+        """
+        Extract column metadata from arbitrary SQL query without executing it.
+
+        Implementation details (PostgreSQL):
+        - wraps query into subquery
+        - applies LIMIT 0
+        - uses cursor.description (psycopg2)
+
+        Returns:
+            DataFrame with columns: column_id, column_name, data_type
+        """
+        start_time = time.time()
+        app_logger.info('Getting metadata for custom query')
+
+        # Extract query text and params
+        if isinstance(query, tuple):
+            query_text, params = query
+        else:
+            query_text = query
+            params = {}
+
+        # PostgreSQL OID to type mapping
+        PG_OID_TYPE_MAP = {
+            16: 'boolean',  # bool
+            20: 'integer',  # int8
+            21: 'integer',  # int2
+            23: 'integer',  # int4
+            700: 'double',  # float4
+            701: 'double',  # float8
+            1700: 'numeric',  # numeric / decimal
+            1082: 'date',  # date
+            1114: 'timestamp',  # timestamp without tz
+            1184: 'timestamptz',  # timestamp with tz
+            25: 'text',  # text
+            1043: 'text',  # varchar
+            2950: 'text',  # uuid
+            114: 'json',  # json
+            3802: 'json',  # jsonb
+            1009: 'text[]',  # array of text
+            1016: 'integer[]',  # array of integer
+            1007: 'integer[]',  # array of int4
+        }
+
+        wrapped_query = f"""
+        SELECT *
+        FROM (
+            {query_text}
+        ) xoverrr_subq
+        LIMIT 0
+        """
+
+        with engine.connect() as conn:
+            # SQLAlchemy 2.x execution
+            result = conn.execute(text(wrapped_query), params or {})
+
+            # Get cursor description
+            cursor = result.cursor
+            if cursor is None or cursor.description is None:
+                raise MetadataError(
+                    'Unable to extract cursor description for custom query'
+                )
+
+            metadata = []
+
+            for i, col in enumerate(cursor.description, 1):
+                # psycopg2 description fields:
+                # (name, type_code, display_size, internal_size, precision, scale, null_ok)
+                col_name = col.name
+                type_code = col.type_code
+
+                # Map OID to type name
+                db_type = PG_OID_TYPE_MAP.get(type_code, 'text')
+
+                metadata.append(
+                    {
+                        'column_id': i,
+                        'column_name': col_name.lower(),
+                        'data_type': db_type,
+                    }
+                )
+
+            # Convert to DataFrame
+            metadata_df = pd.DataFrame(metadata)
+
+            execution_time = time.time() - start_time
+            app_logger.info(f'Metadata retrieved in {execution_time:.2f}s')
+            app_logger.info(f'Found {len(metadata_df)} columns')
+            app_logger.debug(
+                'Discovered columns:\n' + metadata_df.to_string(index=False)
+            )
+
+            return metadata_df
+
     def build_metadata_columns_query(self, data_ref: DataReference) -> pd.DataFrame:
 
         query = """
@@ -132,7 +230,9 @@ class PostgresAdapter(BaseDatabaseAdapter):
         params = {}
 
         if start_date:
-            query += f" AND {date_column} >= date_trunc('day', cast(:start_date as date))\n"
+            query += (
+                f" AND {date_column} >= date_trunc('day', cast(:start_date as date))\n"
+            )
             params['start_date'] = start_date
         if end_date:
             query += f" AND {date_column} < date_trunc('day', cast(:end_date as date))  + interval '1 days'\n"

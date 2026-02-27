@@ -2,20 +2,23 @@
 Test Oracle self-comparison with identical data.
 """
 
-import pytest
 import time
+
 import pandas as pd
+import pytest
 from sqlalchemy import text
 
 from xoverrr.core import DataQualityComparator
+
 
 @pytest.mark.timeout(30)
 class TestOracleSelfFetchPerformance:
     """
     Tests comparing Oracle with itself (same engine).
     """
-    num_rows_generate =  1000
-    
+
+    num_rows_generate = 1000
+
     @pytest.fixture(autouse=True)
     def setup_oracle_data(self, oracle_engine, table_helper):
         """Setup Oracle test data for fetching 1000*1000 records"""
@@ -72,8 +75,10 @@ class TestOracleSelfFetchPerformance:
         params = None
 
         start_time = time.time()
-        df = comparator._execute_query( (query, params), comparator.source_engine,  comparator.timezone)
+        df = comparator._execute_query(
+            (query, params), comparator.source_engine, comparator.timezone
+        )
         execution_time = time.time() - start_time
 
-        assert len(df) == self.num_rows_generate*self.num_rows_generate
+        assert len(df) == self.num_rows_generate * self.num_rows_generate
         assert execution_time < 15
