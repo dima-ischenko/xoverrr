@@ -12,7 +12,7 @@ from .base import BaseDatabaseAdapter, Engine
 
 class OracleAdapter(BaseDatabaseAdapter):
     def _execute_query(
-        self, query: Union[str, Tuple[str, Dict]], engine: Engine, timezone: str
+        self, query: Union[str, Tuple[str, Dict]], engine: Engine, timezone: str, sqltype:str = 'sql'
     ) -> pd.DataFrame:
         tz_set = None
         raw_conn = None
@@ -36,45 +36,80 @@ class OracleAdapter(BaseDatabaseAdapter):
 
             if isinstance(query, tuple):
                 query_text, params = query
-                app_logger.info(f'query\n {query_text}')
-                app_logger.info(f'{params=}')
-                cursor.execute(query_text, params or {})
+                
+                # Check if this is a PL/SQL block with OUT parameter
+                if sqltype == 'plsql':
+                    app_logger.info('executing PL/SQL block with OUT parameter')
+                    
+                    # Create output variable
+                    result_var = cursor.var(str)
+                    
+                    # Add the output variable to params if it's not already there
+                    if params is None:
+                        params = {}
+                    
+                    # Make sure :result is not in params as it's an OUT parameter
+                    if 'result' in params:
+                        del params['result']
+                    
+                    # Execute with output variable
+                    cursor.execute(query_text, {**params, 'result': result_var})
+                    
+                    # Get the result and convert to DataFrame
+                    result_value = result_var.getvalue()
+                    
+                    # Create a simple DataFrame with the result
+                    df = pd.DataFrame([[result_value]], columns=['result'])
+                    
+                else:
+                    # Regular query execution
+                    app_logger.info(f'query\n {query_text}')
+                    app_logger.info(f'{params=}')
+                    cursor.execute(query_text, params or {})
+                    
+                    if cursor.description:
+                        columns = [col[0].lower() for col in cursor.description]
+                        data = cursor.fetchall()
+                        df = pd.DataFrame(data, columns=columns)
+                    else:
+                        # For DML operations that don't return rows
+                        df = pd.DataFrame()
             else:
                 app_logger.info(f'query\n {query}')
                 cursor.execute(query)
-
-            columns = [col[0].lower() for col in cursor.description]
-            data = cursor.fetchall()
+                
+                if cursor.description:
+                    columns = [col[0].lower() for col in cursor.description]
+                    data = cursor.fetchall()
+                    df = pd.DataFrame(data, columns=columns)
+                else:
+                    df = pd.DataFrame()
 
             execution_time = time.time() - start_time
             app_logger.info(f'Query executed in {execution_time:.2f}s')
-
             app_logger.info('complete')
 
-            # excplicitly close cursor before closing the connection
-            if cursor:
-                cursor.close()
-
-            return pd.DataFrame(data, columns=columns)
+            return df
 
         except Exception as e:
             execution_time = time.time() - start_time
             app_logger.error(
                 f'Query execution failed after {execution_time:.2f}s: {str(e)}'
             )
-
+            raise QueryExecutionError(f'Query failed: {str(e)}')
+        
+        finally:
+            # Clean up resources
+            if cursor:
+                try:
+                    cursor.close()
+                except:
+                    pass
             if raw_conn:
                 try:
-                    raw_conn.rollback()
-                except Exception as rollback_error:
-                    app_logger.warning(f'Rollback failed: {rollback_error}')
-                try:
-                    if cursor:
-                        cursor.close()
-                except Exception as close_error:
-                    app_logger.warning(f'Cursor close failed: {close_error}')
-
-            raise QueryExecutionError(f'Query failed: {str(e)}')
+                    raw_conn.close()
+                except:
+                    pass
 
     def get_object_type(self, data_ref: DataReference, engine: Engine) -> ObjectType:
         """Determine if object is table or view in Oracle"""
@@ -107,6 +142,126 @@ class OracleAdapter(BaseDatabaseAdapter):
             )
 
         return ObjectType.UNKNOWN
+    
+    def get_metadata_for_custom_query(self, query: Union[str, Tuple[str, Dict]], engine: Engine) -> pd.DataFrame:
+        """
+        Determine columns metadata based on arbitrary query without executing it.
+        Uses DBMS_SQL to parse and describe the query.
+        
+        Returns:
+            DataFrame with columns: column_name, data_type, column_id
+        """
+        start_time = time.time()
+        app_logger.info('Getting metadata for custom query')
+        
+        # Extract query text if tuple is passed
+        if isinstance(query, tuple):
+            query_text, _ = query
+        else:
+            query_text = query
+        
+        # PL/SQL block to describe query and return metadata as pipe-separated string
+        describe_plsql = """
+        declare
+            l_cursor      integer;
+            l_columns     number;
+            l_desc_tbl    dbms_sql.desc_tab;
+            l_query       varchar2(32767) := :sql_query;
+            l_output      varchar2(32767) := '';
+        begin
+            -- open cursor and parse query
+            l_cursor := dbms_sql.open_cursor;
+            dbms_sql.parse(l_cursor, l_query, dbms_sql.native);
+            
+            -- describe columns
+            dbms_sql.describe_columns(l_cursor, l_columns, l_desc_tbl);
+            
+            -- build output string with delimiter
+            for i in 1..l_columns loop
+                if i > 1 then
+                    l_output := l_output || '||';
+                end if;
+                l_output := l_output || 
+                    i || '|' || 
+                    lower(l_desc_tbl(i).col_name) || '|' ||
+                    case l_desc_tbl(i).col_type
+                        when 1 then 'varchar2'
+                        when 2 then 'number'
+                        when 8 then 'long'
+                        when 12 then 'date'
+                        when 23 then 'raw'
+                        when 96 then 'char'
+                        when 112 then 'clob'
+                        when 180 then 'timestamp'
+                        when 181 then 'timestamp with time zone'
+                        when 182 then 'interval year to month'
+                        when 183 then 'interval day to second'
+                        when 208 then 'urowid'
+                        when 231 then 'timestamp with local time zone'
+                        else 'unknown_' || l_desc_tbl(i).col_type
+                    end;
+            end loop;
+            
+            -- return as single string
+            :result := l_output;
+            
+            dbms_sql.close_cursor(l_cursor);
+        exception
+            when others then
+                dbms_sql.close_cursor(l_cursor);
+                raise;
+        end;
+        """
+        
+        try:
+            # Execute the describe block using enhanced _execute_query
+            result_df = self._execute_query(
+                (describe_plsql, {'sql_query': query_text}), 
+                engine, 
+                None,  # timezone not needed for metadata
+                sqltype='plsql'
+            )
+            
+            if result_df.empty:
+                raise QueryExecutionError('No metadata returned from describe')
+            
+            # Get the result string from the first row, first column
+            result_str = result_df.iloc[0, 0]
+            
+            if not result_str:
+                raise QueryExecutionError('Empty metadata returned from describe')
+            
+            # Parse pipe-separated values
+            rows = result_str.split('||')
+            metadata = []
+            
+            for row in rows:
+                if row:
+                    parts = row.split('|')
+                    if len(parts) == 3:
+                        col_id, col_name, col_type = parts
+                        metadata.append({
+                            'column_id': int(col_id),
+                            'column_name': col_name,
+                            'data_type': col_type
+                        })
+            
+            execution_time = time.time() - start_time
+            app_logger.info(f'Metadata retrieved in {execution_time:.2f}s')
+            app_logger.info(f'Found {len(metadata)} columns')
+            
+            df = pd.DataFrame(metadata)
+            
+            # Log the discovered columns
+            if not df.empty:
+                app_logger.debug('Discovered columns:\n' + df.to_string(index=False))
+            
+            return df
+            
+        except Exception as e:
+            execution_time = time.time() - start_time
+            app_logger.error(f'Failed to get metadata after {execution_time:.2f}s: {str(e)}')
+            raise QueryExecutionError(f'Failed to describe query: {str(e)}')
 
     def build_metadata_columns_query(self, data_ref: DataReference) -> pd.DataFrame:
         query = """

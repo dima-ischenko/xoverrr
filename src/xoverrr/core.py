@@ -587,6 +587,19 @@ class DataQualityComparator:
             self._update_stats(status, None)
             return status, None, None, None
 
+    def _get_metadata_cols_for_custom_query(
+        self, query , engine: Engine
+    ) -> pd.DataFrame:
+        """Get metadata with proper source handling"""
+        adapter = self._get_adapter(DBMSType.from_engine(engine))
+
+        columns_meta = adapter.get_metadata_for_custom_query(query, engine)
+
+        if columns_meta.empty:
+            raise ValueError(f'Failed to get metadata for custom query: {query}')
+
+        return columns_meta
+    
     def _get_metadata_cols(
         self, data_ref: DataReference, engine: Engine
     ) -> pd.DataFrame:
@@ -599,7 +612,7 @@ class DataQualityComparator:
         if columns_meta.empty:
             raise ValueError(f'Failed to get metadata for: {data_ref.full_name}')
 
-        return columns_meta
+        return columns_meta    
 
     def _get_metadata_pk(self, data_ref: DataReference, engine: Engine) -> pd.DataFrame:
         """Get metadata with proper source handling"""

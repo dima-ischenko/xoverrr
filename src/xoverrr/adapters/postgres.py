@@ -81,6 +81,9 @@ class PostgresAdapter(BaseDatabaseAdapter):
             )
 
         return ObjectType.UNKNOWN
+    
+    def get_metadata_for_custom_query(self, query: Union[str, Tuple[str, Dict]], engine: Engine) -> pd.DataFrame:
+        pass
 
     def build_metadata_columns_query(self, data_ref: DataReference) -> pd.DataFrame:
 
