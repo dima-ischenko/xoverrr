@@ -64,7 +64,6 @@ class TestCustomQueryComparisonPGClickHouse:
             (6, 'Mike',   1500.50,  '2024-01-05', '2024-01-05 15:30:00', 0)
         """
 
-        
         table_helper.create_table(
             engine=clickhouse_engine,
             table_name=table_name,
@@ -73,8 +72,6 @@ class TestCustomQueryComparisonPGClickHouse:
         )
 
         yield
-
-
 
     def test_custom_query_comparison_basic(self, postgres_engine, clickhouse_engine):
         """Test basic comparison with id and name columns"""
