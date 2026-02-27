@@ -27,9 +27,11 @@ class BaseDatabaseAdapter(ABC):
         pass
 
     @abstractmethod
-    def get_metadata_for_custom_query(self, query: Union[str, Tuple[str, Dict]], engine: Engine) -> pd.DataFrame: #col_name, col_type, id
+    def get_metadata_for_custom_query(
+        self, query: Union[str, Tuple[str, Dict]], engine: Engine
+    ) -> pd.DataFrame:  # col_name, col_type, id
         """Determine columns metadata based on arbitrary query"""
-        pass    
+        pass
 
     @abstractmethod
     def build_metadata_columns_query(self, data_ref: DataReference) -> Tuple[str, Dict]:

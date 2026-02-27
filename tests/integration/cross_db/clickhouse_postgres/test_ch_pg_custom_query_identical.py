@@ -53,7 +53,7 @@ class TestCustomQueryComparisonPGClickHouse:
                 is_active   Nullable(UInt8)
             ) ENGINE = Memory()
         """
-        
+
         clickhouse_insert_sql = f"""
             INSERT INTO {table_name} (id, name, amount, created_at, updated_at, is_active) VALUES
             (1, 'Alice',  1000,     '2024-01-01', '2024-01-01 10:00:00', NULL),
@@ -66,7 +66,7 @@ class TestCustomQueryComparisonPGClickHouse:
 
         # Create and populate ClickHouse table
         with clickhouse_engine.connect() as conn:
-            conn.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
+            conn.execute(text(f'DROP TABLE IF EXISTS {table_name}'))
             conn.execute(text(clickhouse_create_sql))
             conn.execute(text(clickhouse_insert_sql))
             conn.commit()
@@ -75,7 +75,7 @@ class TestCustomQueryComparisonPGClickHouse:
 
         # Cleanup
         with clickhouse_engine.connect() as conn:
-            conn.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
+            conn.execute(text(f'DROP TABLE IF EXISTS {table_name}'))
             conn.commit()
 
     def test_custom_query_comparison_basic(self, postgres_engine, clickhouse_engine):
@@ -250,7 +250,9 @@ class TestCustomQueryComparisonPGClickHouse:
         assert stats.total_matched_rows == 6
         print(f'Custom query comparison passed: {stats.final_score:.2f}%')
 
-    def test_custom_query_comparison_with_filter(self, postgres_engine, clickhouse_engine):
+    def test_custom_query_comparison_with_filter(
+        self, postgres_engine, clickhouse_engine
+    ):
         """Test comparison with LIKE filter"""
         comparator = DataQualityComparator(
             source_engine=postgres_engine,
@@ -276,9 +278,17 @@ class TestCustomQueryComparisonPGClickHouse:
 
         status, report, stats, details = comparator.compare_custom_query(
             source_query=source_query,
-            source_params={'start_date': '2024-01-01', 'end_date': '2024-01-06', 'name_filter': '%lice%'},
+            source_params={
+                'start_date': '2024-01-01',
+                'end_date': '2024-01-06',
+                'name_filter': '%lice%',
+            },
             target_query=target_query,
-            target_params={'start_date': '2024-01-01', 'end_date': '2024-01-06', 'name_filter': '%lice%'},
+            target_params={
+                'start_date': '2024-01-01',
+                'end_date': '2024-01-06',
+                'name_filter': '%lice%',
+            },
             custom_primary_key=['id'],
             tolerance_percentage=0.0,
         )
@@ -287,7 +297,9 @@ class TestCustomQueryComparisonPGClickHouse:
         assert stats.total_matched_rows == 1  # Only Alice matches
         print(f'Custom query comparison passed: {stats.final_score:.2f}%')
 
-    def test_custom_query_comparison_date_range(self, postgres_engine, clickhouse_engine):
+    def test_custom_query_comparison_date_range(
+        self, postgres_engine, clickhouse_engine
+    ):
         """Test comparison with specific date range"""
         comparator = DataQualityComparator(
             source_engine=postgres_engine,

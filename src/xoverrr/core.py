@@ -527,7 +527,7 @@ class DataQualityComparator:
             source_metadata = self._get_metadata_cols_for_custom_query(
                 (source_query, source_params), source_engine
             )
-            
+
             app_logger.info('Getting metadata for target query')
             target_metadata = self._get_metadata_cols_for_custom_query(
                 (target_query, target_params), target_engine
@@ -544,11 +544,15 @@ class DataQualityComparator:
             # Apply type conversions using metadata
             app_logger.info('applying type conversions to source dataframe')
             source_adapter = self._get_adapter(self.source_db_type)
-            source_data = source_adapter.convert_types(source_data, source_metadata, timezone)
-            
+            source_data = source_adapter.convert_types(
+                source_data, source_metadata, timezone
+            )
+
             app_logger.info('applying type conversions to target dataframe')
             target_adapter = self._get_adapter(self.target_db_type)
-            target_data = target_adapter.convert_types(target_data, target_metadata, timezone)
+            target_data = target_adapter.convert_types(
+                target_data, target_metadata, timezone
+            )
 
             app_logger.info('preparing source dataframe')
             source_data_prepared = prepare_dataframe(source_data)
@@ -609,7 +613,7 @@ class DataQualityComparator:
             return status, None, None, None
 
     def _get_metadata_cols_for_custom_query(
-        self, query , engine: Engine
+        self, query, engine: Engine
     ) -> pd.DataFrame:
         """Get metadata with proper source handling"""
         adapter = self._get_adapter(DBMSType.from_engine(engine))
@@ -620,7 +624,7 @@ class DataQualityComparator:
             raise ValueError(f'Failed to get metadata for custom query: {query}')
 
         return columns_meta
-    
+
     def _get_metadata_cols(
         self, data_ref: DataReference, engine: Engine
     ) -> pd.DataFrame:
@@ -633,7 +637,7 @@ class DataQualityComparator:
         if columns_meta.empty:
             raise ValueError(f'Failed to get metadata for: {data_ref.full_name}')
 
-        return columns_meta    
+        return columns_meta
 
     def _get_metadata_pk(self, data_ref: DataReference, engine: Engine) -> pd.DataFrame:
         """Get metadata with proper source handling"""
