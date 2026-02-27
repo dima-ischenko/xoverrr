@@ -131,8 +131,6 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
         
         return metadata_df
             
-     
-
     def build_metadata_columns_query(self, data_ref: DataReference) -> Tuple[str, Dict]:
         query = """
             SELECT
