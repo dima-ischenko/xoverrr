@@ -42,7 +42,7 @@ class TestCustomQueryComparisonPGClickHouse:
             """,
         )
 
-        # ClickHouse setup - using appropriate data types
+        # ClickHouse setup
         clickhouse_create_sql = f"""
             CREATE TABLE {table_name} (
                 id          Int32,
@@ -64,19 +64,17 @@ class TestCustomQueryComparisonPGClickHouse:
             (6, 'Mike',   1500.50,  '2024-01-05', '2024-01-05 15:30:00', 0)
         """
 
-        # Create and populate ClickHouse table
-        with clickhouse_engine.connect() as conn:
-            conn.execute(text(f'DROP TABLE IF EXISTS {table_name}'))
-            conn.execute(text(clickhouse_create_sql))
-            conn.execute(text(clickhouse_insert_sql))
-            conn.commit()
+        
+        table_helper.create_table(
+            engine=clickhouse_engine,
+            table_name=table_name,
+            create_sql=clickhouse_create_sql,
+            insert_sql=clickhouse_insert_sql,
+        )
 
         yield
 
-        # Cleanup
-        with clickhouse_engine.connect() as conn:
-            conn.execute(text(f'DROP TABLE IF EXISTS {table_name}'))
-            conn.commit()
+
 
     def test_custom_query_comparison_basic(self, postgres_engine, clickhouse_engine):
         """Test basic comparison with id and name columns"""
@@ -197,7 +195,9 @@ class TestCustomQueryComparisonPGClickHouse:
         """
 
         target_query = """
-            SELECT id, updated_at
+            SELECT 
+                id, 
+                updated_at
             FROM test_custom_data_pg_ch
             WHERE created_at >= toDate(:start_date)
               AND created_at < toDate(:end_date) + INTERVAL 1 day
