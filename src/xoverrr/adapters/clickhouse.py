@@ -83,7 +83,55 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
         return ObjectType.UNKNOWN
     
     def get_metadata_for_custom_query(self, query: Union[str, Tuple[str, Dict]], engine: Engine) -> pd.DataFrame:
-        pass
+        """
+        Get metadata for a custom query without executing it fully.
+        Uses ClickHouse's DESCRIBE functionality.
+        """
+        start_time = time.time()
+        app_logger.info('Getting metadata for custom query')
+        
+        # Extract query text if tuple is passed
+        if isinstance(query, tuple):
+            query_text, _ = query
+        else:
+            query_text = query
+        
+
+        # Use ClickHouse's DESCRIBE to get column information
+        # DESCRIBE works with any SELECT query in ClickHouse
+        describe_query = f"DESCRIBE ({query_text})"
+        
+        app_logger.debug(f'Executing DESCRIBE: {describe_query[:200]}...')
+        
+        # Execute the DESCRIBE query
+        if isinstance(query, tuple):
+            _, params = query
+            df = self._execute_query((describe_query, params), engine, None)
+        else:
+            df = self._execute_query(describe_query, engine, None)
+        
+        if df.empty:
+            raise QueryExecutionError('DESCRIBE returned no results')
+        
+        # ClickHouse DESCRIBE returns columns: name, type, default_type, default_expression, comment, codec_expression, ttl_expression
+        metadata = []
+        for i, row in df.iterrows():
+            metadata.append({
+                'column_id': i + 1,
+                'column_name': row['name'].lower(),
+                'data_type': row['type'].lower()
+            })
+        
+        metadata_df = pd.DataFrame(metadata)
+        
+        execution_time = time.time() - start_time
+        app_logger.info(f'Metadata retrieved in {execution_time:.2f}s')
+        app_logger.info(f'Found {len(metadata_df)} columns')
+        app_logger.debug('Discovered columns:\n' + metadata_df.to_string(index=False))
+        
+        return metadata_df
+            
+     
 
     def build_metadata_columns_query(self, data_ref: DataReference) -> Tuple[str, Dict]:
         query = """
