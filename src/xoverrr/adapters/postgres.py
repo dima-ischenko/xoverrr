@@ -20,6 +20,7 @@ class PostgresAdapter(BaseDatabaseAdapter):
         df = None
         tz_set = None
         start_time = time.time()
+        
         app_logger.info('start')
 
         if timezone:
@@ -32,12 +33,12 @@ class PostgresAdapter(BaseDatabaseAdapter):
                     query = f'{tz_set}\n{query}'
                 app_logger.info(f'query\n {query}')
                 app_logger.info(f'{params=}')
-                df = pd.read_sql(text(query), engine, params=params)
+                df = pd.read_sql(text(query), engine, params=params, coerce_float=False)
             else:
                 if tz_set:
                     query = f'{tz_set}\n{query}'
                 app_logger.info(f'query\n {query}')
-                df = pd.read_sql(text(query), engine)
+                df = pd.read_sql(text(query), engine, coerce_float=False)
             execution_time = time.time() - start_time
             app_logger.info(f'Query executed in {execution_time:.2f}s')
             app_logger.info('complete')
@@ -288,6 +289,7 @@ class PostgresAdapter(BaseDatabaseAdapter):
             return condition, params
 
         return None, None
+       
 
     def _get_type_conversion_rules(self, timezone) -> Dict[str, Callable]:
         return {
@@ -309,9 +311,15 @@ class PostgresAdapter(BaseDatabaseAdapter):
                 .dt.strftime(DATETIME_FORMAT)
                 .str.replace(r'\s00:00:00$', '', regex=True)
             ),
-            r'integer|numeric|double|float|double precision|real': lambda x: x.astype(
-                str
-            ).str.replace(r'\.0+$', '', regex=True),
+            r'numeric|decimal|bigint|int8|double precision|real': lambda x: (
+                        x.astype(str)
+                        .str.replace(r'\.0+$', '', regex=True)  # Убираем .0 и .00 и т.д.
+                        .str.replace(r'^(-?\d+\.\d*?)0+$', r'\1', regex=True)  # Убираем trailing zeros после точки
+                    ),
+            r'integer|float': lambda x: (
+                x.astype(str)
+                .str.replace(r'\.0+$', '', regex=True)
+            ),
             r'json': lambda x: (
                 '"' + x.astype(str).str.replace(r'"', '\\"', regex=True) + '"'
             ),
