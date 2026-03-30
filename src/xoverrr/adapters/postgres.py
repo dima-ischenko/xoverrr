@@ -311,14 +311,15 @@ class PostgresAdapter(BaseDatabaseAdapter):
                 .dt.strftime(DATETIME_FORMAT)
                 .str.replace(r'\s00:00:00$', '', regex=True)
             ),
+            #lower in numerics for scientific notations
             r'numeric|decimal|bigint|int8|double precision|real': lambda x: (
                         x.astype(str)
-                        .str.replace(r'\.0+$', '', regex=True)  # Убираем .0 и .00 и т.д.
-                        .str.replace(r'^(-?\d+\.\d*?)0+$', r'\1', regex=True)  # Убираем trailing zeros после точки
+                        .str.lower().replace(r'\.0+$', '', regex=True) 
+                        .str.replace(r'^(-?\d+\.\d*?)0+$', r'\1', regex=True)
                     ),
             r'integer|float': lambda x: (
                 x.astype(str)
-                .str.replace(r'\.0+$', '', regex=True)
+                .str.lower().replace(r'\.0+$', '', regex=True)
             ),
             r'json': lambda x: (
                 '"' + x.astype(str).str.replace(r'"', '\\"', regex=True) + '"'
