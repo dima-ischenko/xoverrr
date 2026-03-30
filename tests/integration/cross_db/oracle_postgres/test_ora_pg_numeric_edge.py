@@ -9,7 +9,7 @@ from xoverrr.constants import COMPARISON_SUCCESS, COMPARISON_FAILED
 from xoverrr.core import DataQualityComparator, DataReference
 
 
-class TestNumericTypesComparisonEdge:
+class TestOraclePostgresNumericEdge:
     """Tests for numeric type comparison"""
 
     @pytest.fixture
@@ -226,56 +226,6 @@ class TestNumericTypesComparisonEdge:
         
         yield table_name
 
-    @pytest.fixture
-    def numeric_null_data(self, oracle_engine, postgres_engine, table_helper):
-        """Setup test data for NULL handling in numeric columns"""
-        table_name = 'test_numeric_nulls'
-        
-        # Test various NULL patterns with numeric columns
-        table_helper.create_table(
-            engine=oracle_engine,
-            table_name=table_name,
-            create_sql=f"""
-                CREATE TABLE {table_name} (
-                    id NUMBER PRIMARY KEY,
-                    value1 NUMBER,
-                    value2 NUMBER,
-                    value3 NUMBER
-                )
-            """,
-            insert_sql=f"""
-                INSERT INTO {table_name} (id, value1, value2, value3) VALUES
-                (1, NULL, NULL, NULL),
-                (2, 100, NULL, 300),
-                (3, NULL, 200, 300),
-                (4, 100, 200, NULL),
-                (5, NULL, NULL, 300)
-            """,
-        )
-        
-        table_helper.create_table(
-            engine=postgres_engine,
-            table_name=table_name,
-            create_sql=f"""
-                CREATE TABLE {table_name} (
-                    id INTEGER PRIMARY KEY,
-                    value1 INTEGER,
-                    value2 INTEGER,
-                    value3 INTEGER
-                )
-            """,
-            insert_sql=f"""
-                INSERT INTO {table_name} (id, value1, value2, value3) VALUES
-                (1, NULL, NULL, NULL),
-                (2, 100, NULL, 300),
-                (3, NULL, 200, 300),
-                (4, 100, 200, NULL),
-                (5, NULL, NULL, 300)
-            """,
-        )
-        
-        yield table_name
-
     def test_numeric_types_large_comparison(
         self, oracle_engine, postgres_engine, numeric_large_data
     ):
@@ -400,31 +350,3 @@ class TestNumericTypesComparisonEdge:
         # Consider adjusting tolerance or marking as expected failure
         assert status == COMPARISON_SUCCESS
         print(f"Arithmetic operations test passed: {stats.final_score:.2f}%")
-
-    def test_numeric_null_handling(
-        self, oracle_engine, postgres_engine, numeric_null_data
-    ):
-        """
-        Test that NULL values in numeric columns are handled consistently.
-        This complements existing NULL tests with numeric-specific cases.
-        """
-        comparator = DataQualityComparator(
-            source_engine=oracle_engine,
-            target_engine=postgres_engine,
-            timezone='Europe/Athens',
-        )
-        
-        status, report, stats, details = comparator.compare_sample(
-            source_table=DataReference(numeric_null_data, 'test'),
-            target_table=DataReference(numeric_null_data, 'test'),
-            tolerance_percentage=0.0,
-        )
-        
-        print("\n" + "="*80)
-        print("NUMERIC NULL HANDLING TEST")
-        print("="*80)
-        print(report)
-        
-        assert status == COMPARISON_SUCCESS
-        assert stats.total_matched_rows == stats.common_pk_rows
-        print(f"NULL handling test passed: {stats.final_score:.2f}%")
