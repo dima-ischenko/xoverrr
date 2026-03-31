@@ -369,6 +369,7 @@ class TestClickHouseOracleNumericEdge:
     def test_numeric_types_large_comparison(
         self, clickhouse_engine, oracle_engine, numeric_large_data
     ):
+        #pytest.skip('issue #48')
         """
         Compare numeric types with large values between ClickHouse and Oracle.
         ClickHouse uses Decimal, Oracle uses NUMBER.
@@ -394,6 +395,7 @@ class TestClickHouseOracleNumericEdge:
     def test_numeric_scientific_notation(
         self, clickhouse_engine, oracle_engine, numeric_scientific_data
     ):
+        #pytest.skip('issue #48')
         """
         Test that scientific notation is handled correctly between ClickHouse and Oracle.
         """
@@ -419,6 +421,7 @@ class TestClickHouseOracleNumericEdge:
     def test_numeric_edge_precision(
         self, clickhouse_engine, oracle_engine, numeric_edge_precision_data
     ):
+        #pytest.skip('issue #48')
         """
         Test edge cases of numeric precision between ClickHouse and Oracle:
         - Maximum precision numbers
@@ -447,6 +450,7 @@ class TestClickHouseOracleNumericEdge:
     def test_numeric_with_arithmetic_operations(
         self, clickhouse_engine, oracle_engine, numeric_arithmetic_data
     ):
+        #pytest.skip('issue #48')
         """
         Test that arithmetic operations in queries produce consistent results
         between ClickHouse and Oracle.
@@ -500,6 +504,7 @@ class TestClickHouseOracleNumericEdge:
     def test_numeric_null_handling(
         self, clickhouse_engine, oracle_engine, numeric_null_data
     ):
+        #pytest.skip('issue #48')
         """
         Test that NULL values in numeric columns are handled consistently
         between ClickHouse and Oracle.
@@ -530,6 +535,7 @@ class TestClickHouseOracleNumericEdge:
     def test_decimal_precision_handling(
         self, clickhouse_engine, oracle_engine, numeric_decimal_precision_data
     ):
+        #pytest.skip('issue #48')    
         """
         Test Decimal precision handling between ClickHouse Decimal and Oracle NUMBER.
         ClickHouse has fixed precision Decimal, Oracle NUMBER has arbitrary precision.

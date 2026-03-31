@@ -229,6 +229,7 @@ class TestOraclePostgresNumericEdge:
     def test_numeric_types_large_comparison(
         self, oracle_engine, postgres_engine, numeric_large_data
     ):
+        #pytest.skip('issue #48')
         """
         Compare numeric types with the large value (16+ digits)
         """
@@ -251,6 +252,7 @@ class TestOraclePostgresNumericEdge:
     def test_numeric_scientific_notation(
         self, oracle_engine, postgres_engine, numeric_scientific_data
     ):
+        #pytest.skip('issue #48')
         """
         Test that scientific notation is handled correctly.
         Numbers that might be represented in scientific notation by PostgreSQL.
@@ -275,6 +277,7 @@ class TestOraclePostgresNumericEdge:
     def test_numeric_edge_precision(
         self, oracle_engine, postgres_engine, numeric_edge_precision_data
     ):
+        #pytest.skip('issue #48')
         """
         Test edge cases of numeric precision:
         - Maximum Oracle NUMBER precision (38 digits)
@@ -301,6 +304,7 @@ class TestOraclePostgresNumericEdge:
     def test_numeric_with_arithmetic_operations(
         self, oracle_engine, postgres_engine, numeric_arithmetic_data
     ):
+        #pytest.skip('issue #48')
         """
         Test that arithmetic operations in queries produce consistent results.
         This ensures that when users use expressions in SELECT, the comparison works.
