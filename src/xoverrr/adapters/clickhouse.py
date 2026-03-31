@@ -31,12 +31,12 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
                     query = f'{query} {tz_set}'
                 app_logger.info(f'query\n {query}')
                 app_logger.info(f'{params=}')
-                df = pd.read_sql(text(query), engine, params=params)
+                df = pd.read_sql(text(query), engine, params=params, coerce_float = False)
             else:
                 if tz_set:
                     query = f'{query} {tz_set}'
                 app_logger.info(f'query\n {query}')
-                df = pd.read_sql(text(query), engine)
+                df = pd.read_sql(text(query), engine, coerce_float = False)
 
             execution_time = time.time() - start_time
             app_logger.info(f'Query executed in {execution_time:.2f}s')
@@ -248,7 +248,8 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
                 .dt.strftime(DATE_FORMAT)
                 .str.replace(r'\s00:00:00$', '', regex=True)
             ),
-            r'uint64|uint8|float|decimal|int32': lambda x: x.astype(str).str.replace(
+            #lower for scientific notation
+            r'uint64|uint8|float|decimal|int32': lambda x: x.astype(str).str.lower().replace(
                 r'\.0+$', '', regex=True
             ),
         }

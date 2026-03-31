@@ -305,7 +305,7 @@ class TestClickHouseOracleNumericEdge:
         
         # Test cases with different decimal precisions
         test_cases = [
-            (1, "123.45", "123.45"),
+            (1, "123.450", "123.450"),
             (2, "0.0000000001", "0.0000000001"),
             (3, "9999999999.9999999999", None),  # Very high precision
             (4, "-1234567890.123456789", "-1234567890.123456789"),
