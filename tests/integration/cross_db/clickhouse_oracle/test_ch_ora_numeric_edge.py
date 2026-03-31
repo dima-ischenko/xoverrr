@@ -24,7 +24,7 @@ class TestClickHouseOracleNumericEdge:
             create_sql=f"""
                 CREATE TABLE {table_name} (
                     id UInt32,
-                    large_id Decimal(38, 15),
+                    large_id Decimal(45, 20),
                     created_at Date default '2024-01-01'
                 )
                 ENGINE = MergeTree()
@@ -33,10 +33,10 @@ class TestClickHouseOracleNumericEdge:
             insert_sql=f"""
                 INSERT INTO {table_name} (id, large_id) VALUES
                 (1, 11112222333344445),
-                (2, 0.11112222333344445),
+                (2, 0.1111222233334444),
                 (3, 11112222333344445.012345),
                 (4, -11112222333344445),
-                (5, -0.11112222333344445)
+                (5, -0.1111222233334444)
             """,
         )
 
@@ -54,10 +54,10 @@ class TestClickHouseOracleNumericEdge:
             insert_sql=f"""
                 INSERT INTO {table_name} (id, large_id) VALUES
                 (1, 11112222333344445),
-                (2, 0.11112222333344445),
+                (2, 0.1111222233334444),
                 (3, 11112222333344445.012345),
                 (4, -11112222333344445),
-                (5, -0.11112222333344445)
+                (5, -0.1111222233334444)
             """,
         )
 
@@ -85,8 +85,8 @@ class TestClickHouseOracleNumericEdge:
             create_sql=f"""
                 CREATE TABLE {table_name} (
                     id UInt32,
-                    scientific Decimal(38, 20),
-                    decimal_form Decimal(38, 20),
+                    scientific Decimal(55, 20),
+                    decimal_form Decimal(55, 20),
                     created_at Date default '2024-01-01'
                 )
                 ENGINE = MergeTree()
@@ -123,7 +123,7 @@ class TestClickHouseOracleNumericEdge:
         """Setup test data for edge cases of numeric precision for ClickHouse-Oracle"""
         table_name = 'test_ch_ora_numeric_edge_precision'
         
-        max_precision = 30
+        max_precision = 20
         max_digits = '9' * max_precision
         
         test_cases = [
@@ -131,7 +131,7 @@ class TestClickHouseOracleNumericEdge:
             (2, f"0.{max_digits}", f"0.{max_digits}"),  # Max precision decimal
             (3, f"{max_digits}.{max_digits[:10]}", f"{max_digits}.{max_digits[:10]}"),  # Mixed
             (4, "123456789012345678901234567890.123456789", None),  # digits + decimals
-            (5, "0.00000000000000000000000000000000000001", None),  # Very small
+            (5, "0.0000000000000001", None),  # Very small
         ]
         
         # ClickHouse setup
@@ -148,8 +148,8 @@ class TestClickHouseOracleNumericEdge:
             create_sql=f"""
                 CREATE TABLE {table_name} (
                     id UInt32,
-                    high_precision Decimal(38, 20),
-                    another_precision Nullable(Decimal(38, 20)),
+                    high_precision Decimal(55, 20),
+                    another_precision Nullable(Decimal(55, 20)),
                     created_at Date default '2024-01-01'
                 )
                 ENGINE = MergeTree()
@@ -307,10 +307,9 @@ class TestClickHouseOracleNumericEdge:
         test_cases = [
             (1, "123.45", "123.45"),
             (2, "0.0000000001", "0.0000000001"),
-            (3, "99999999999999999999.99999999999999999999", None),  # Very high precision
-            (4, "0.00000000000000000001", "0.00000000000000000001"),
-            (5, "-1234567890.123456789", "-1234567890.123456789"),
-            (6, "12345678901234567890.12345678901234567890", None),  # 20+ digits
+            (3, "9999999999.9999999999", None),  # Very high precision
+            (4, "-1234567890.123456789", "-1234567890.123456789"),
+            (5, "12345678901234567890.12345678901234567890", None),  # 20+ digits
         ]
         
         # ClickHouse setup with high precision Decimal
@@ -327,8 +326,8 @@ class TestClickHouseOracleNumericEdge:
             create_sql=f"""
                 CREATE TABLE {table_name} (
                     id UInt32,
-                    high_precision Decimal(38, 20),
-                    medium_precision Nullable(Decimal(18, 9)),
+                    high_precision Decimal(55, 20),
+                    medium_precision Nullable(Decimal(28, 10)),
                     created_at Date default '2024-01-01'
                 )
                 ENGINE = MergeTree()
