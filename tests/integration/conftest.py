@@ -108,6 +108,8 @@ class DBHelper:
         elif dialect in ('postgresql', 'postgres'):
             if object_type == 'view':
                 return f'DROP VIEW IF EXISTS {object_name} CASCADE'
+            elif object_type == 'mview':
+                return f'DROP MATERIALIZED VIEW IF EXISTS {object_name} CASCADE'
             else:
                 return f'DROP TABLE IF EXISTS {object_name} CASCADE'
         else:
@@ -130,6 +132,15 @@ class DBHelper:
 
         with engine.begin() as conn:
             conn.execute(text(drop_sql))
+
+    def drop_mview(self, engine, mview_name: str) -> None:
+        """
+        Drop a mat view from database
+        """
+        drop_sql = self.get_drop_sql(engine, mview_name, 'mview')
+
+        with engine.begin() as conn:
+            conn.execute(text(drop_sql))            
 
     def create_table(
         self, engine, table_name: str, create_sql: str, insert_sql: str = None
@@ -163,6 +174,20 @@ class DBHelper:
         # Register for cleanup
         self._cleanup_stack.append((engine, view_name, 'view'))
 
+    def create_mview(self, engine, mview_name: str, mview_sql: str) -> None:
+        """
+        Create a view and register it for automatic cleanup
+        """
+        # Clean up if exists
+        self.drop_mview(engine, mview_name)
+
+        # Create mview
+        with engine.begin() as conn:
+            conn.execute(text(mview_sql))
+
+        # Register for cleanup
+        self._cleanup_stack.append((engine, mview_name, 'mview'))
+
     def cleanup(self) -> None:
         """Cleanup all registered objects in reverse order"""
         for engine, object_name, object_type in reversed(self._cleanup_stack):
@@ -170,6 +195,8 @@ class DBHelper:
                 self.drop_table(engine, object_name)
             elif object_type == 'view':
                 self.drop_view(engine, object_name)
+            elif object_type == 'mview':
+                self.drop_mview(engine, object_name)    
         self._cleanup_stack.clear()
 
 

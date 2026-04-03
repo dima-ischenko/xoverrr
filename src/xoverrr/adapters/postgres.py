@@ -183,15 +183,22 @@ class PostgresAdapter(BaseDatabaseAdapter):
 
     def build_metadata_columns_query(self, data_ref: DataReference) -> pd.DataFrame:
 
+
         query = """
-            SELECT
-                lower(column_name) as column_name,
-                lower(data_type) as data_type,
-                ordinal_position as column_id
-            FROM information_schema.columns
-            WHERE table_schema = :schema
-            AND table_name = :table
-            ORDER BY ordinal_position
+              select lower(a.attname) as column_name,
+                     lower(t.typname ) as data_type,
+                     a.attnum as column_id
+                from pg_attribute a
+                join pg_class c on a.attrelid = c.oid
+                join pg_catalog.pg_namespace as ns on c.relnamespace = ns.oid
+                join pg_catalog.pg_type t
+                  on a.atttypid = t.oid
+               where 1=1
+                 and lower(ns.nspname) = :schema
+                 and lower(c.relname) = :table
+                 and a.attnum > 0
+                 and not a.attisdropped
+               order by a.attnum 
         """
         params = {'schema': data_ref.schema, 'table': data_ref.name}
         return query, params
@@ -298,7 +305,7 @@ class PostgresAdapter(BaseDatabaseAdapter):
                 .dt.strftime(DATETIME_FORMAT)
                 .str.replace(r'\s00:00:00$', '', regex=True)
             ),
-            r'boolean': lambda x: x.map({True: '1', False: '0', None: ''}),
+            r'bool': lambda x: x.map({True: '1', False: '0', None: ''}),
             r'timestamptz|timestamp.*\bwith\b.*time\szone': lambda x: (
                 pd.to_datetime(x, utc=True, errors='coerce')
                 .dt.tz_convert(timezone)
@@ -317,7 +324,7 @@ class PostgresAdapter(BaseDatabaseAdapter):
                         .str.lower().replace(r'\.0+$', '', regex=True) 
                         .str.replace(r'^(-?\d+\.\d*?)0+$', r'\1', regex=True)
                     ),
-            r'integer|float': lambda x: (
+            r'int|float': lambda x: (
                 x.astype(str)
                 .str.lower().replace(r'\.0+$', '', regex=True)
             ),
