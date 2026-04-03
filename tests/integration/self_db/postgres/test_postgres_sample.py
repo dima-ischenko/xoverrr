@@ -141,7 +141,7 @@ class TestPostgresSelfComparison:
         """
         Compare identical tables within same PostgreSQL database.
         """
-        pytest.skip('issue #50')    
+        #pytest.skip('issue #50')    
         comparator = DataQualityComparator(
             source_engine=postgres_engine,
             target_engine=postgres_engine,
