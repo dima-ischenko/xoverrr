@@ -33,19 +33,13 @@ class TestPostgresOracleMixedTimezoneOffsets:
             """,
             insert_sql=f"""
                 INSERT INTO {table_name} (id, event_name, created_on, updated_on, record_date) VALUES
-                (1, 'Event in +05', TIMESTAMP '2024-01-01 10:00:00 +05:00', 
-                 TIMESTAMP '2024-01-01 11:00:00 +05:00', DATE '2024-01-01'),
-                (2, 'Event in +06', TIMESTAMP '2024-01-02 10:00:00 +06:00', 
-                 TIMESTAMP '2024-01-02 11:00:00 +06:00', DATE '2024-01-02'),
-                (3, 'Event in +00', TIMESTAMP '2024-01-03 10:00:00 +00:00', 
-                 TIMESTAMP '2024-01-03 11:00:00 +00:00', DATE '2024-01-03'),
-                (4, 'Event in -08', TIMESTAMP '2024-01-04 10:00:00 -08:00', 
-                 TIMESTAMP '2024-01-04 11:00:00 -08:00', DATE '2024-01-04'),
+                (1, 'Event in +05', TIMESTAMP '2024-01-01 10:00:00 +05:00', TIMESTAMP '2024-01-01 11:00:00 +05:00', DATE '2024-01-01'),
+                (2, 'Event in +06', TIMESTAMP '2024-01-02 10:00:00 +06:00', TIMESTAMP '2024-01-02 11:00:00 +06:00', DATE '2024-01-02'),
+                (3, 'Event in +00', TIMESTAMP '2024-01-03 10:00:00 +00:00', TIMESTAMP '2024-01-03 11:00:00 +00:00', DATE '2024-01-03'),
+                (4, 'Event in -08', TIMESTAMP '2024-01-04 10:00:00 -08:00', TIMESTAMP '2024-01-04 11:00:00 -08:00', DATE '2024-01-04'),
                 (5, 'Event with NULL', NULL, NULL, DATE '2024-01-05'),
-                (6, 'Event crossing midnight UTC', TIMESTAMP '2024-01-06 23:30:00 +05:00', 
-                 TIMESTAMP '2024-01-07 00:30:00 +05:00', DATE '2024-01-06'),
-                (7, 'Event with future date', TIMESTAMP '3023-04-04 00:00:00 +00:00', 
-                 TIMESTAMP '3023-04-04 01:00:00 +00:00', DATE '3023-04-04')
+                (6, 'Event crossing midnight UTC', TIMESTAMP '2024-01-06 23:30:00 +05:00', TIMESTAMP '2024-01-07 00:30:00 +05:00', DATE '2024-01-06'),
+                (7, 'Event with future date', TIMESTAMP '3023-04-04 00:00:00 +00:00', TIMESTAMP '3023-04-04 01:00:00 +00:00', DATE '3023-04-04')
             """,
         )
 
@@ -77,11 +71,7 @@ class TestPostgresOracleMixedTimezoneOffsets:
         yield
 
     def test_cross_db_comparison_with_utc_only(self, postgres_engine, oracle_engine):
-        """
-        Test cross-database comparison MUST use UTC when comparing tz-aware columns.
-        This is Rule 1: All tz-aware comparisons must be done in UTC.
-        """
-        pytest.skip('issue #33')
+        #pytest.skip('issue #33')
         table_name = 'test_mixed_timezones_ora_pg'
 
         # Only UTC is valid for cross-db tz-aware comparisons

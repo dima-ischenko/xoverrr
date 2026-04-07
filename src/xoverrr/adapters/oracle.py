@@ -345,6 +345,20 @@ class OracleAdapter(BaseDatabaseAdapter):
         end_date: Optional[str],
         exclude_recent_hours: Optional[int] = None,
     ) -> Tuple[str, Dict]:
+        
+        tz_columns = ['created_on', 'updated_on']
+        target_timezone = 'utc'
+
+        converted_columns = []
+        for col in columns:
+                if col in tz_columns:
+                    # Cast TIMESTAMP WITH TIME ZONE to TIMESTAMP at target timezone
+                    converted_col = f"""
+                        cast({col} at time zone '{target_timezone}' as timestamp) as {col}
+                    """
+                    converted_columns.append(converted_col.strip())
+                else:
+                    converted_columns.append(col)
 
         params = {}
         # Add recent data exclusion flag
@@ -353,11 +367,11 @@ class OracleAdapter(BaseDatabaseAdapter):
         )
 
         if exclusion_condition:
-            columns.append(exclusion_condition)
+            converted_columns.append(exclusion_condition)
             params.update(exclusion_params)
 
         query = f"""
-        SELECT {', '.join(columns)}
+        SELECT {', '.join(converted_columns)}
         FROM {data_ref.full_name}
         WHERE 1=1\n"""
 
