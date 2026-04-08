@@ -228,6 +228,8 @@ class PostgresAdapter(BaseDatabaseAdapter):
         date_column: str,
         start_date: Optional[str],
         end_date: Optional[str],
+        columns_meta: Optional[pd.DataFrame],
+        timezone: Optional[str]
     ) -> Tuple[str, Dict]:
         query = f"""
             SELECT

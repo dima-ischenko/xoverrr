@@ -205,15 +205,27 @@ class DataQualityComparator:
             source_adapter = self._get_adapter(self.source_db_type)
             target_adapter = self._get_adapter(self.target_db_type)
 
-            source_query, source_params = source_adapter.build_count_query(
-                source_table, date_column, start_date, end_date
+            source_columns_meta = self._get_metadata_cols(
+                source_table, self.source_engine
+            )
+            app_logger.info('source_columns meta:\n')
+            app_logger.info(source_columns_meta.to_string(index=False))
+
+            target_columns_meta = self._get_metadata_cols(
+                target_table, self.target_engine
+            )
+            app_logger.info('target_columns meta:\n')
+            app_logger.info(target_columns_meta.to_string(index=False))
+
+            source_query, source_params = source_adapter.build_count_query_common(
+                source_table, date_column, start_date, end_date, source_columns_meta, self.timezone
             )
             source_counts = self._execute_query(
                 (source_query, source_params), self.source_engine, self.timezone
             )
 
-            target_query, target_params = target_adapter.build_count_query(
-                target_table, date_column, start_date, end_date
+            target_query, target_params = target_adapter.build_count_query_common(
+                target_table, date_column, start_date, end_date, target_columns_meta, self.timezone
             )
             target_counts = self._execute_query(
                 (target_query, target_params), self.target_engine, self.timezone

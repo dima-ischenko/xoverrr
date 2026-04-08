@@ -1,8 +1,3 @@
-"""
-Test for bug fix: Mixed timezone offsets in timestamptz columns should be handled correctly.
-All cross-database comparisons with tz-aware columns must use UTC.
-"""
-
 import pytest
 
 from xoverrr.constants import COMPARISON_SUCCESS
@@ -190,7 +185,7 @@ class TestPostgresOracleMixedTimezoneOffsets:
             date_range=(
                 '2024-01-06',
                 '2024-01-07',
-            ),  # Specifically test the midnight crossing
+            ),
             exclude_recent_hours=24,
             tolerance_percentage=0.0,
         )

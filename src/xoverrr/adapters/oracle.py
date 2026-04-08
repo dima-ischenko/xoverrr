@@ -316,23 +316,37 @@ class OracleAdapter(BaseDatabaseAdapter):
         date_column: str,
         start_date: Optional[str],
         end_date: Optional[str],
+        columns_meta: Optional[pd.DataFrame],
+        timezone: Optional[str]
     ) -> Tuple[str, Dict]:
+        
+        tz_columns = []
+        tz_columns = self._identify_timestamp_tz_columns(columns_meta)
+
+        date_expr = None
+        date_expr = self._build_cast_tz_column_expression(
+                    column_name=date_column,
+                    tz_columns=tz_columns,
+                    target_timezone=timezone,
+                    as_alias=False,
+                )
+        
         query = f"""
             SELECT
-                to_char(trunc({date_column}, 'dd'),'YYYY-MM-DD') as dt,
+                to_char(trunc({date_expr}, 'dd'),'YYYY-MM-DD') as dt,
                 count(*) as cnt
             FROM {data_ref.full_name}
             WHERE 1=1\n"""
         params = {}
 
         if start_date:
-            query += f" AND {date_column} >= trunc(to_date(:start_date, 'YYYY-MM-DD'), 'dd')\n"
+            query += f" AND {date_expr} >= trunc(to_date(:start_date, 'YYYY-MM-DD'), 'dd')\n"
             params['start_date'] = start_date
         if end_date:
-            query += f" AND {date_column} < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1\n"
+            query += f" AND {date_expr} < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1\n"
             params['end_date'] = end_date
 
-        query += f" GROUP BY to_char(trunc({date_column}, 'dd'),'YYYY-MM-DD') ORDER BY dt DESC"
+        query += f" GROUP BY to_char(trunc({date_expr}, 'dd'),'YYYY-MM-DD') ORDER BY dt DESC"
         return query, params
 
     def build_data_query(

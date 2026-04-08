@@ -84,7 +84,7 @@ class TestPostgresOracleMixedTimezoneOffsets:
         comparator = DataQualityComparator(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
-            timezone='UTC',  # MUST be UTC for tz-aware data
+            timezone='Europe/Paris', 
         )
 
         source_query = """
