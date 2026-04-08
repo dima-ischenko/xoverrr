@@ -87,7 +87,7 @@ class TestClickHouseOracleQueryMixedTimezoneOffsets:
         comparator = DataQualityComparator(
             source_engine=clickhouse_engine,
             target_engine=oracle_engine,
-            timezone='UTC',  # Must be UTC for tz-aware columns
+            timezone='UTC',
         )
         source_query = """
             SELECT id, event_name, created_on, record_date

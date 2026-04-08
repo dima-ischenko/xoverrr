@@ -78,18 +78,13 @@ class TestClickHouseOracleMixedTimezoneOffsets:
         yield
 
     def test_comparison_with_utc_only(self, oracle_engine, clickhouse_engine):
-        """
-        Test Oracle ↔ ClickHouse comparison MUST use UTC.
-        Oracle has tz-aware columns, ClickHouse stores UTC.
-        """
-        pytest.skip('issue #33')
+        #pytest.skip('issue #33')
         table_name = 'test_mixed_timezones_ch_ora'
 
-        # Only UTC is valid for this comparison
         comparator = DataQualityComparator(
             source_engine=clickhouse_engine,
             target_engine=oracle_engine,
-            timezone='UTC',  # MUST be UTC
+            timezone='Europe/Paris',
         )
 
         status, report, stats, details = comparator.compare_sample(
