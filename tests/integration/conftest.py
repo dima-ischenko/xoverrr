@@ -140,7 +140,7 @@ class DBHelper:
         drop_sql = self.get_drop_sql(engine, mview_name, 'mview')
 
         with engine.begin() as conn:
-            conn.execute(text(drop_sql))            
+            conn.execute(text(drop_sql))
 
     def create_table(
         self, engine, table_name: str, create_sql: str, insert_sql: str = None
@@ -196,7 +196,7 @@ class DBHelper:
             elif object_type == 'view':
                 self.drop_view(engine, object_name)
             elif object_type == 'mview':
-                self.drop_mview(engine, object_name)    
+                self.drop_mview(engine, object_name)
         self._cleanup_stack.clear()
 
 

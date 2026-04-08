@@ -80,15 +80,15 @@ class TestPostgresOracleMixedTimezoneOffsets:
         """
         Test custom query comparison with tz-aware data must use UTC.
         """
-        pytest.skip('issue #33')
+        # pytest.skip('issue #33')
         comparator = DataQualityComparator(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
-            timezone='UTC',  # MUST be UTC for tz-aware data
+            timezone='Europe/Paris',
         )
 
         source_query = """
-            SELECT id, event_name, created_on, record_date
+            SELECT id, event_name, cast(created_on at time zone 'Europe/Paris' as timestamp) created_on, record_date
             FROM test.test_mixed_timezones_query_ora_pg
             WHERE record_date >= trunc(to_date(:start_date, 'YYYY-MM-DD'), 'dd')
               AND record_date < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1

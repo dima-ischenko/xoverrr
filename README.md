@@ -6,64 +6,50 @@ A tool for cross-database and intra-source data comparison with detailed discrep
 **Sample comparison** (Greenplum vs Oracle):
 
 ```python
-from xoverrr import DataQualityComparator, DataReference, COMPARISON_SUCCESS, COMPARISON_FAILED, COMPARISON_SKIPPED
-import os
+from xoverrr import DataQualityComparator, DataReference, COMPARISON_SUCCESS
+from sqlalchemy import create_engine
 from datetime import date, timedelta
 
-USER_ORA = os.getenv('USER_ORA', '')
-PASSWORD_ORA = os.getenv('PASSWORD_ORA', '')
+# 1. Create database connections
+source_engine = create_engine('postgresql://user:pass@localhost:5432/source_db')
+target_engine = create_engine('oracle+oracledb://user:pass@localhost:1521/target_db')
 
-USER_GP = os.getenv('USER_GP', '')
-PASSWORD_GP = os.getenv('PASSWORD_GP', '')
-
-HOST_ORA = os.getenv('HOST_ORA', '')
-HOST_GP = os.getenv('HOST_GP', '')
-
-def create_src_engine(user, password, host):
-    """Source engine (Oracle)"""
-    os.environ['NLS_LANG'] = '.AL32UTF8'
-    return create_engine(f'oracle+oracledb://{user}:{password}@{host}:1521/?service_name=dwh')
-
-def create_trg_engine(user, password, host):
-    """Target engine (Postgres/Greenplum)"""
-    connection_string = f'postgresql+psycopg2://{user}:{password}@{host}:5432/adb'
-    engine = create_engine(connection_string)
-    return engine
-
-
-src_engine = create_src_engine(USER_ORA, PASSWORD_ORA, HOST_ORA)
-trg_engine = create_trg_engine(USER_GP, PASSWORD_GP, HOST_GP)
-
+# 2. Initialize comparator
 comparator = DataQualityComparator(
-    source_engine=src_engine,
-    target_engine=trg_engine,
-    timezone='Europe/Athens'
+    source_engine=source_engine,
+    target_engine=target_engine,
+    timezone='Europe/Moscow'
 )
 
-source = DataReference("users", "schema1")
-target = DataReference("users", "schema2")
+# 3. Define tables to compare
+source_table = DataReference("employees", schema="hr")
+target_table = DataReference("employees", schema="hr")
 
-FORMAT = '%Y-%m-%d'
-recent_range_end = date.today()
-recent_range_begin = recent_range_end - timedelta(days=1)
+# 4. Set date range (last 7 days)
+end_date = date.today()
+start_date = end_date - timedelta(days=7)
 
+# 5. Run comparison
 status, report, stats, details = comparator.compare_sample(
-    source,
-    target,
-    date_column="created_at",
-    update_column="modified_date",
-    exclude_columns=["audit_timestamp", "internal_id"],
+    source_table=source_table,
+    target_table=target_table,
+    date_column="hire_date",
+    update_column="modified_at",
+    date_range=(start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')),
+    custom_primary_key=["employee_id"],
+    exclude_columns=["audit_log", "temp_field"],
+    tolerance_percentage=0.5,
     exclude_recent_hours=3,
-    date_range=(
-        recent_range_begin.strftime(FORMAT),
-        recent_range_end.strftime(FORMAT)
-    ),
-    tolerance_percentage=0
+    max_examples=5
 )
 
+# 6. Check results
 print(report)
-if status == COMPARISON_FAILED:
-    raise Exception("Sample check failed")
+
+if status == COMPARISON_SUCCESS:
+    print("Data quality check passed")
+else:
+    print("Data quality check failed")
 ```
 
 ## Key Features
@@ -89,74 +75,78 @@ if status == COMPARISON_FAILED:
 ================================================================================
 2025-11-24 20:09:40
 DATA SAMPLE COMPARISON REPORT:
-public.account
+hr.employees
 VS
-stage.account
+hr.employees
 ================================================================================
-timezone: Europe/Athens
+timezone: Europe/Moscow
 
-        SELECT created_at, updated_at, id, code, bank_code, account_type, counterparty_id, special_code, case when updated_at > (now() - INTERVAL '%(exclude_recent_hours)s hours') then 'y' end as xrecently_changed
-        FROM public.account
-        WHERE 1=1
-            AND created_at >= date_trunc('day', cast(:start_date as date))
-            AND created_at < date_trunc('day', cast(:end_date as date)  + interval '1 days'
+    SELECT employee_id, first_name, last_name, salary, department_id, hire_date,
+           case when updated_at > (now() - INTERVAL '3 hours') then 'y' end as xrecently_changed
+    FROM hr.employees
+    WHERE 1=1
+        AND hire_date >= date_trunc('day', cast(:start_date as date))
+        AND hire_date < date_trunc('day', cast(:end_date as date)) + interval '1 day'
 
-    params: {'exclude_recent_hours': 1, 'start_date': '2025-11-17', 'end_date': '2025-11-24'}
+    params: {'start_date': '2025-11-17', 'end_date': '2025-11-24'}
 ----------------------------------------
 
-        SELECT created_at, updated_at, id, code, bank_code, account_type, counterparty_id, special_code, case when updated_at > (sysdate - :exclude_recent_hours/24) then 'y' end as xrecently_changed
-        FROM stage.account
-        WHERE 1=1
-            AND created_at >= trunc(to_date(:start_date, 'YYYY-MM-DD'), 'dd')
-            AND created_at < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1
+    SELECT employee_id, first_name, last_name, salary, department_id, hire_date,
+           case when updated_at > (sysdate - 3/24) then 'y' end as xrecently_changed
+    FROM hr.employees
+    WHERE 1=1
+        AND hire_date >= trunc(to_date(:start_date, 'YYYY-MM-DD'), 'dd')
+        AND hire_date < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1
 
-    params: {'exclude_recent_hours': 1, 'start_date': '2025-11-17', 'end_date': '2025-11-24'}
+    params: {'start_date': '2025-11-17', 'end_date': '2025-11-24'}
 ----------------------------------------
 
 SUMMARY:
-  Source rows: 10966
-  Target rows: 10966
+  Source rows: 105
+  Target rows: 105
   Duplicated source rows: 0
   Duplicated target rows: 0
   Only source rows: 0
   Only target rows: 0
-  Common rows (by primary key): 10966
-  Totally matched rows: 10965
+  Common rows (by primary key): 105
+  Totally matched rows: 103
 ----------------------------------------
   Source only rows %: 0.00000
   Target only rows %: 0.00000
   Duplicated source rows %: 0.00000
   Duplicated target rows %: 0.00000
-  Mismatched rows %: 0.00912
-  Final discrepancies score: 0.00456
-  Final data quality score: 99.99544
+  Mismatched rows %: 1.90476
+  Final discrepancies score: 0.95238
+  Final data quality score: 99.04762
   Source-only key examples: None
   Target-only key examples: None
   Duplicated source key examples: None
   Duplicated target key examples: None
-  Common attribute columns: created_at, updated_at, code, bank_code, account_type, counterparty_id, special_code
-  Skipped source columns:
-  Skipped target columns: mt_change_date
+  Common attribute columns: first_name, last_name, salary, department_id
+  Skipped source columns: audit_log, temp_field
+  Skipped target columns:
 
 COLUMN DIFFERENCES:
-  Discrepancies per column (max %): 0.00912
+  Discrepancies per column (max %): 1.90476
   Count of mismatches per column:
 
  column_name  mismatch_count
-special_code               1
+     salary                2
+
   Some examples:
 
-primary_key                          column_name  source_value target_value
-f8153447-****-****-****-****** special_code       N/A          XYZ
+ primary_key column_name source_value target_value
+         101      salary        50000        51000
+         102      salary        60000        60500
 
 DISCREPANT DATA (first pairs):
 Sorted by primary key and dataset:
 
-
-created_at          updated_at          id                                   code                 bank_code account_type counterparty_id                      special_code xflg
-2025-11-24 18:58:27 2025-11-24 18:58:27 f8153447-****-****-****-****** 42****************87 0********* 11           62aa01a6-****-****-****-f17e2b*****4
-N/A       src
-2025-11-24 18:58:27 2025-11-24 18:58:27 f8153447-****-****-****-****** 42****************87 0********* 11           62aa01a6-****-****-****-f17e2b*****4 XYZ       trg
+ employee_id first_name last_name salary department_id xflg
+         101       John      Doe  50000            10   src
+         101       John      Doe  51000            10   trg
+         102       Jane      Doe  60000            20   src
+         102       Jane      Doe  60500            20   trg
 
 ================================================================================
 ```
@@ -299,3 +289,28 @@ Logs include timing information and structured context:
 - If `final_diff_score ≤ tolerance`: status = `COMPARISON_SUCCESS`
 - Enables configuration of acceptable discrepancy levels.
 
+## Known Limitations
+
+### Oracle Thin Client & TIMESTAMP WITH TIME ZONE
+
+When using the Oracle thin client with `compare_custom_query`, columns of type `TIMESTAMP WITH TIME ZONE` lose timezone information in the result set. The thin driver returns them as without timezone context.
+
+**Workaround:** Explicitly cast such columns to `TIMESTAMP` in your custom query:
+
+```python
+# Instead of:
+source_query = """
+    select order_id, created_at, amount
+    from orders
+    where status = 'completed'
+"""
+
+# Do this:
+source_query = """
+    select 
+        order_id, 
+        cast(created_at at time zone 'Europe/Paris' as timestamp) as created_at,
+        amount
+    from orders
+    where status = 'completed'
+"""

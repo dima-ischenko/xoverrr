@@ -77,46 +77,14 @@ class TestClickHouseOracleMixedTimezoneOffsets:
 
         yield
 
-    def test_comparison_with_utc_only(self, oracle_engine, clickhouse_engine):
-        """
-        Test Oracle ↔ ClickHouse comparison MUST use UTC.
-        Oracle has tz-aware columns, ClickHouse stores UTC.
-        """
-        pytest.skip('issue #33')
-        table_name = 'test_mixed_timezones_ch_ora'
-
-        # Only UTC is valid for this comparison
-        comparator = DataQualityComparator(
-            source_engine=clickhouse_engine,
-            target_engine=oracle_engine,
-            timezone='UTC',  # MUST be UTC
-        )
-
-        status, report, stats, details = comparator.compare_sample(
-            source_table=DataReference(table_name, 'test'),
-            target_table=DataReference(table_name, 'test'),
-            date_column='record_date',
-            update_column='updated_on',
-            date_range=('2024-01-01', '2024-01-08'),
-            exclude_recent_hours=24,
-            tolerance_percentage=0.0,
-        )
-        print(report)
-        assert status == COMPARISON_SUCCESS, 'Failed with UTC timezone'
-        assert stats.final_diff_score == 0.0, f'Non-zero diff with UTC timezone'
-        print(f'Oracle   ClickHouse with UTC passed: {stats.final_score:.2f}%')
-
-    def test_clickhouse_to_oracle_with_utc(self, clickhouse_engine, oracle_engine):
-        """
-        Test ClickHouse   Oracle comparison must use UTC.
-        """
-        pytest.skip('issue #33')
+    def test_comparison_with_non_utc_tz(self, oracle_engine, clickhouse_engine):
+        # pytest.skip('issue #33')
         table_name = 'test_mixed_timezones_ch_ora'
 
         comparator = DataQualityComparator(
             source_engine=clickhouse_engine,
             target_engine=oracle_engine,
-            timezone='UTC',  # Must be UTC
+            timezone='Europe/Paris',
         )
 
         status, report, stats, details = comparator.compare_sample(
@@ -131,7 +99,30 @@ class TestClickHouseOracleMixedTimezoneOffsets:
         print(report)
         assert status == COMPARISON_SUCCESS
         assert stats.final_diff_score == 0.0
-        print(f'ClickHouse   Oracle with UTC passed: {stats.final_score:.2f}%')
+
+    def test_clickhouse_to_oracle_with_utc(self, clickhouse_engine, oracle_engine):
+
+        # pytest.skip('issue #33')
+        table_name = 'test_mixed_timezones_ch_ora'
+
+        comparator = DataQualityComparator(
+            source_engine=clickhouse_engine,
+            target_engine=oracle_engine,
+            timezone='UTC',
+        )
+
+        status, report, stats, details = comparator.compare_sample(
+            source_table=DataReference(table_name, 'test'),
+            target_table=DataReference(table_name, 'test'),
+            date_column='record_date',
+            update_column='updated_on',
+            date_range=('2024-01-01', '2024-01-08'),
+            exclude_recent_hours=24,
+            tolerance_percentage=0.0,
+        )
+        print(report)
+        assert status == COMPARISON_SUCCESS
+        assert stats.final_diff_score == 0.0
 
     def test_oracle_tz_naive_comparison(
         self, oracle_engine, clickhouse_engine, table_helper

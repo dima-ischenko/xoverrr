@@ -316,23 +316,41 @@ class OracleAdapter(BaseDatabaseAdapter):
         date_column: str,
         start_date: Optional[str],
         end_date: Optional[str],
+        columns_meta: Optional[pd.DataFrame],
+        timezone: Optional[str],
     ) -> Tuple[str, Dict]:
+
+        tz_columns = []
+        tz_columns = self._identify_timestamp_tz_columns(columns_meta)
+
+        date_expr = None
+        date_expr = self._build_cast_tz_column_expression(
+            column_name=date_column,
+            tz_columns=tz_columns,
+            target_timezone=timezone,
+            as_alias=False,
+        )
+
         query = f"""
             SELECT
-                to_char(trunc({date_column}, 'dd'),'YYYY-MM-DD') as dt,
+                to_char(trunc({date_expr}, 'dd'),'YYYY-MM-DD') as dt,
                 count(*) as cnt
             FROM {data_ref.full_name}
             WHERE 1=1\n"""
         params = {}
 
         if start_date:
-            query += f" AND {date_column} >= trunc(to_date(:start_date, 'YYYY-MM-DD'), 'dd')\n"
+            query += (
+                f" AND {date_expr} >= trunc(to_date(:start_date, 'YYYY-MM-DD'), 'dd')\n"
+            )
             params['start_date'] = start_date
         if end_date:
-            query += f" AND {date_column} < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1\n"
+            query += f" AND {date_expr} < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1\n"
             params['end_date'] = end_date
 
-        query += f" GROUP BY to_char(trunc({date_column}, 'dd'),'YYYY-MM-DD') ORDER BY dt DESC"
+        query += (
+            f" GROUP BY to_char(trunc({date_expr}, 'dd'),'YYYY-MM-DD') ORDER BY dt DESC"
+        )
         return query, params
 
     def build_data_query(
@@ -344,7 +362,20 @@ class OracleAdapter(BaseDatabaseAdapter):
         start_date: Optional[str],
         end_date: Optional[str],
         exclude_recent_hours: Optional[int] = None,
+        columns_meta: pd.DataFrame = None,
+        timezone: str = None,
     ) -> Tuple[str, Dict]:
+
+        tz_columns = []
+        tz_columns = self._identify_timestamp_tz_columns(columns_meta)
+
+        converted_columns = self._apply_timestamp_tz_casts(
+            columns=columns,
+            tz_columns=tz_columns,
+            target_timezone=timezone,
+        )
+
+        app_logger.info(columns_meta)
 
         params = {}
         # Add recent data exclusion flag
@@ -353,20 +384,29 @@ class OracleAdapter(BaseDatabaseAdapter):
         )
 
         if exclusion_condition:
-            columns.append(exclusion_condition)
+            converted_columns.append(exclusion_condition)
             params.update(exclusion_params)
 
         query = f"""
-        SELECT {', '.join(columns)}
+        SELECT {', '.join(converted_columns)}
         FROM {data_ref.full_name}
         WHERE 1=1\n"""
 
-        if start_date and date_column:
-            query += f"            AND {date_column} >= trunc(to_date(:start_date, 'YYYY-MM-DD'), 'dd')\n"
+        date_expr = None
+        if date_column:
+            date_expr = self._build_cast_tz_column_expression(
+                column_name=date_column,
+                tz_columns=tz_columns,
+                target_timezone=timezone,
+                as_alias=False,  # No alias in WHERE
+            )
+
+        if start_date and date_expr:
+            query += f"            AND {date_expr} >= trunc(to_date(:start_date, 'YYYY-MM-DD'), 'dd')\n"
             params['start_date'] = start_date
 
-        if end_date and date_column:
-            query += f"            AND {date_column} < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1\n"
+        if end_date and date_expr:
+            query += f"            AND {date_expr} < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1\n"
             params['end_date'] = end_date
 
         return query, params
@@ -392,8 +432,7 @@ class OracleAdapter(BaseDatabaseAdapter):
                 .str.replace(r'\s00:00:00$', '', regex=True)
             ),
             r'timestamp.*\bwith\b.*time\szone': lambda x: (
-                pd.to_datetime(x, utc=True, errors='coerce')
-                .dt.tz_convert(timezone)
+                pd.to_datetime(x, errors='coerce')
                 .dt.tz_localize(None)
                 .dt.strftime(DATETIME_FORMAT)
                 .str.replace(r'\s00:00:00$', '', regex=True)
@@ -407,3 +446,90 @@ class OracleAdapter(BaseDatabaseAdapter):
                 x.astype(str).str.replace(r'\.0+$', '', regex=True).str.lower()
             ),  # lower case for exponential form compare
         }
+
+    def _identify_timestamp_tz_columns(
+        self, columns_metadata: pd.DataFrame
+    ) -> List[str]:
+        """
+        Identify columns that need timezone casting, because of the thin driver as well (missed tz info in the result column)
+
+        Parameters:
+            columns_metadata: DataFrame with column metadata (from _get_metadata_cols)
+                            Must contain 'column_name' and 'data_type' columns
+
+        Returns:
+            List of column names that are TIMESTAMP WITH TIME ZONE (not LOCAL)
+        """
+        if columns_metadata is None or columns_metadata.empty:
+            return []
+
+        # Filter for TIMESTAMP WITH TIME ZONE (excluding LOCAL TIME ZONE)
+        tz_mask = (
+            columns_metadata['data_type']
+            .str.lower()
+            .str.contains(r'timestamp.*time zone', regex=True, na=False)
+        )
+
+        # Exclude LOCAL TIME ZONE
+        local_mask = (
+            columns_metadata['data_type']
+            .str.lower()
+            .str.contains(r'local', regex=True, na=False)
+        )
+
+        tz_columns = columns_metadata[tz_mask & ~local_mask]['column_name'].tolist()
+
+        if tz_columns:
+            app_logger.info(
+                f'Identified TIMESTAMP WITH TIME ZONE columns: {tz_columns}'
+            )
+
+        return tz_columns
+
+    def _build_cast_tz_column_expression(
+        self,
+        column_name: str,
+        tz_columns: List[str],
+        target_timezone: str,
+        as_alias: bool = True,  # Add AS alias for SELECT clause
+    ) -> str:
+        """
+        Wrapper to cast a single TIMESTAMP WITH TIME ZONE column if needed.
+
+        Parameters:
+            column_name: Name of the column
+            tz_columns: List of columns that need casting
+            target_timezone: Target timezone for conversion
+            as_alias: If True, adds 'AS column_name' to the expression
+
+        Returns:
+            SQL expression (original column or CAST expression)
+        """
+
+        if column_name not in tz_columns:
+            return column_name
+
+        # Build CAST expression
+        cast_expr = f"cast({column_name} at time zone '{target_timezone}' as timestamp)"
+
+        # Add alias if needed (for SELECT clause)
+        if as_alias:
+            return f'{cast_expr} AS {column_name}'
+
+        return cast_expr
+
+    def _apply_timestamp_tz_casts(
+        self,
+        columns: List[str],
+        tz_columns: List[str],
+        target_timezone: str,
+    ) -> List[str]:
+        return [
+            self._build_cast_tz_column_expression(
+                col,
+                tz_columns,
+                target_timezone,
+                as_alias=True,
+            )
+            for col in columns
+        ]

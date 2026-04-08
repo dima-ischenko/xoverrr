@@ -1,8 +1,3 @@
-"""
-Test for bug fix: Mixed timezone offsets in timestamptz columns should be handled correctly.
-All cross-database comparisons with tz-aware columns must use UTC.
-"""
-
 import pytest
 
 from xoverrr.constants import COMPARISON_SUCCESS
@@ -33,19 +28,13 @@ class TestPostgresOracleMixedTimezoneOffsets:
             """,
             insert_sql=f"""
                 INSERT INTO {table_name} (id, event_name, created_on, updated_on, record_date) VALUES
-                (1, 'Event in +05', TIMESTAMP '2024-01-01 10:00:00 +05:00', 
-                 TIMESTAMP '2024-01-01 11:00:00 +05:00', DATE '2024-01-01'),
-                (2, 'Event in +06', TIMESTAMP '2024-01-02 10:00:00 +06:00', 
-                 TIMESTAMP '2024-01-02 11:00:00 +06:00', DATE '2024-01-02'),
-                (3, 'Event in +00', TIMESTAMP '2024-01-03 10:00:00 +00:00', 
-                 TIMESTAMP '2024-01-03 11:00:00 +00:00', DATE '2024-01-03'),
-                (4, 'Event in -08', TIMESTAMP '2024-01-04 10:00:00 -08:00', 
-                 TIMESTAMP '2024-01-04 11:00:00 -08:00', DATE '2024-01-04'),
+                (1, 'Event in +05', TIMESTAMP '2024-01-01 10:00:00 +05:00', TIMESTAMP '2024-01-01 11:00:00 +05:00', DATE '2024-01-01'),
+                (2, 'Event in +06', TIMESTAMP '2024-01-02 10:00:00 +06:00', TIMESTAMP '2024-01-02 11:00:00 +06:00', DATE '2024-01-02'),
+                (3, 'Event in +00', TIMESTAMP '2024-01-03 10:00:00 +00:00', TIMESTAMP '2024-01-03 11:00:00 +00:00', DATE '2024-01-03'),
+                (4, 'Event in -08', TIMESTAMP '2024-01-04 10:00:00 -08:00', TIMESTAMP '2024-01-04 11:00:00 -08:00', DATE '2024-01-04'),
                 (5, 'Event with NULL', NULL, NULL, DATE '2024-01-05'),
-                (6, 'Event crossing midnight UTC', TIMESTAMP '2024-01-06 23:30:00 +05:00', 
-                 TIMESTAMP '2024-01-07 00:30:00 +05:00', DATE '2024-01-06'),
-                (7, 'Event with future date', TIMESTAMP '3023-04-04 00:00:00 +00:00', 
-                 TIMESTAMP '3023-04-04 01:00:00 +00:00', DATE '3023-04-04')
+                (6, 'Event crossing midnight UTC', TIMESTAMP '2024-01-06 23:30:00 +05:00', TIMESTAMP '2024-01-07 00:30:00 +05:00', DATE '2024-01-06'),
+                (7, 'Event with future date', TIMESTAMP '3023-04-04 00:00:00 +00:00', TIMESTAMP '3023-04-04 01:00:00 +00:00', DATE '3023-04-04')
             """,
         )
 
@@ -77,18 +66,13 @@ class TestPostgresOracleMixedTimezoneOffsets:
         yield
 
     def test_cross_db_comparison_with_utc_only(self, postgres_engine, oracle_engine):
-        """
-        Test cross-database comparison MUST use UTC when comparing tz-aware columns.
-        This is Rule 1: All tz-aware comparisons must be done in UTC.
-        """
-        pytest.skip('issue #33')
+        # pytest.skip('issue #33')
         table_name = 'test_mixed_timezones_ora_pg'
 
-        # Only UTC is valid for cross-db tz-aware comparisons
         comparator = DataQualityComparator(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
-            timezone='UTC',  # MUST be UTC for tz-aware columns
+            timezone='Europe/Athens',
         )
 
         status, report, stats, details = comparator.compare_sample(
@@ -182,14 +166,14 @@ class TestPostgresOracleMixedTimezoneOffsets:
 
     def test_midnight_boundary_case_with_utc(self, postgres_engine, oracle_engine):
         """
-        Test midnight boundary case with UTC timezone.
+        Test midnight boundary case with timezone.
         """
         table_name = 'test_mixed_timezones_ora_pg'
-        pytest.skip('issue #33')
+        # pytest.skip('issue #33')
         comparator = DataQualityComparator(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
-            timezone='UTC',  # Boundary cases must use UTC
+            timezone='UTC',
         )
 
         # Test specific date range that includes the midnight-crossing record
@@ -201,7 +185,7 @@ class TestPostgresOracleMixedTimezoneOffsets:
             date_range=(
                 '2024-01-06',
                 '2024-01-07',
-            ),  # Specifically test the midnight crossing
+            ),
             exclude_recent_hours=24,
             tolerance_percentage=0.0,
         )
