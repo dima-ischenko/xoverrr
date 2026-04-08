@@ -171,14 +171,14 @@ class TestPostgresOracleMixedTimezoneOffsets:
 
     def test_midnight_boundary_case_with_utc(self, postgres_engine, oracle_engine):
         """
-        Test midnight boundary case with UTC timezone.
+        Test midnight boundary case with timezone.
         """
         table_name = 'test_mixed_timezones_ora_pg'
-        pytest.skip('issue #33')
+        #pytest.skip('issue #33')
         comparator = DataQualityComparator(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
-            timezone='UTC',  # Boundary cases must use UTC
+            timezone='UTC',
         )
 
         # Test specific date range that includes the midnight-crossing record
