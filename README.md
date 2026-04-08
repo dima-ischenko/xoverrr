@@ -293,7 +293,7 @@ Logs include timing information and structured context:
 
 ### Oracle Thin Client & TIMESTAMP WITH TIME ZONE
 
-When using the Oracle thin client (`oracle+oracledb`) with `compare_custom_query`, columns of type `TIMESTAMP WITH TIME ZONE` lose timezone information in the result set. The thin driver returns them as without timezone context.
+When using the Oracle thin client with `compare_custom_query`, columns of type `TIMESTAMP WITH TIME ZONE` lose timezone information in the result set. The thin driver returns them as without timezone context.
 
 **Workaround:** Explicitly cast such columns to `TIMESTAMP` in your custom query:
 
