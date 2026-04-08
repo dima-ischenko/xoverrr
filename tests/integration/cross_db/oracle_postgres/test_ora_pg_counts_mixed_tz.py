@@ -66,13 +66,13 @@ class TestPostgresOracleMixedTimezoneOffsets:
         yield
 
     def test_date_only_comparison_with_utc(self, postgres_engine, oracle_engine):
-        #pytest.skip('issue #33')
+        # pytest.skip('issue #33')
         table_name = 'test_mixed_timezones_counts_ora_pg'
 
         comparator = DataQualityComparator(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
-            timezone='US/Pacific', 
+            timezone='US/Pacific',
         )
 
         status, report, stats, details = comparator.compare_counts(

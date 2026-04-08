@@ -78,7 +78,7 @@ class TestClickHouseOracleMixedTimezoneOffsets:
         yield
 
     def test_comparison_with_non_utc_tz(self, oracle_engine, clickhouse_engine):
-        #pytest.skip('issue #33')
+        # pytest.skip('issue #33')
         table_name = 'test_mixed_timezones_ch_ora'
 
         comparator = DataQualityComparator(
@@ -102,7 +102,7 @@ class TestClickHouseOracleMixedTimezoneOffsets:
 
     def test_clickhouse_to_oracle_with_utc(self, clickhouse_engine, oracle_engine):
 
-        #pytest.skip('issue #33')
+        # pytest.skip('issue #33')
         table_name = 'test_mixed_timezones_ch_ora'
 
         comparator = DataQualityComparator(

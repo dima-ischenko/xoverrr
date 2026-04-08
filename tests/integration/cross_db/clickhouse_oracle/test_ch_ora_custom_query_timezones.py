@@ -78,7 +78,7 @@ class TestClickHouseOracleQueryMixedTimezoneOffsets:
         """
         Test custom query comparison with proper timezone handling.
         """
-        #pytest.skip('issue #33')
+        # pytest.skip('issue #33')
         comparator = DataQualityComparator(
             source_engine=clickhouse_engine,
             target_engine=oracle_engine,
@@ -107,7 +107,7 @@ class TestClickHouseOracleQueryMixedTimezoneOffsets:
             tolerance_percentage=0.0,
         )
         print(report)
-        #assert status == COMPARISON_SUCCESS
+        # assert status == COMPARISON_SUCCESS
         print(
             f'Oracle   ClickHouse custom query with UTC passed: {stats.final_score:.2f}%'
         )

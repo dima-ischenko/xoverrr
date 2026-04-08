@@ -41,7 +41,6 @@ class BaseDatabaseAdapter(ABC):
     def build_primary_key_query(self, data_ref: DataReference) -> Tuple[str, Dict]:
         pass
 
-    
     def build_count_query_common(
         self,
         data_ref: DataReference,
@@ -49,19 +48,13 @@ class BaseDatabaseAdapter(ABC):
         start_date: Optional[str],
         end_date: Optional[str],
         columns_meta: Optional[pd.DataFrame],
-        timezone: Optional[str]
+        timezone: Optional[str],
     ) -> Tuple[str, Dict]:
         """Returns tuple of (query, params) with recent data exclusion"""
         result = self.build_count_query(
-            data_ref,
-            date_column,
-            start_date,
-            end_date,
-            columns_meta,
-            timezone
+            data_ref, date_column, start_date, end_date, columns_meta, timezone
         )
         return result
-
 
     @abstractmethod
     def build_count_query(
@@ -71,7 +64,7 @@ class BaseDatabaseAdapter(ABC):
         start_date: Optional[str],
         end_date: Optional[str],
         columns_meta: Optional[pd.DataFrame],
-        timezone: Optional[str]
+        timezone: Optional[str],
     ) -> Tuple[str, Dict]:
         """Returns tuple of (query, params) with recent data exclusion"""
         pass
@@ -86,12 +79,13 @@ class BaseDatabaseAdapter(ABC):
         end_date: Optional[str],
         exclude_recent_hours: Optional[int] = None,
         columns_meta: pd.DataFrame = None,
-        timezone: str = None
+        timezone: str = None,
     ) -> Tuple[str, Dict]:
         """Build data query for the DBMS with recent data exclusion"""
         # Handle reserved words
         cols_select = [
-            f'"{col}"' if col.lower() in RESERVED_WORDS else col for col in common_columns
+            f'"{col}"' if col.lower() in RESERVED_WORDS else col
+            for col in common_columns
         ]
 
         result = self.build_data_query(
@@ -103,7 +97,7 @@ class BaseDatabaseAdapter(ABC):
             end_date,
             exclude_recent_hours,
             columns_meta,
-            timezone
+            timezone,
         )
         return result
 

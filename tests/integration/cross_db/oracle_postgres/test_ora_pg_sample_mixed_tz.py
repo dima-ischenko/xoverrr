@@ -66,7 +66,7 @@ class TestPostgresOracleMixedTimezoneOffsets:
         yield
 
     def test_cross_db_comparison_with_utc_only(self, postgres_engine, oracle_engine):
-        #pytest.skip('issue #33')
+        # pytest.skip('issue #33')
         table_name = 'test_mixed_timezones_ora_pg'
 
         comparator = DataQualityComparator(
@@ -169,7 +169,7 @@ class TestPostgresOracleMixedTimezoneOffsets:
         Test midnight boundary case with timezone.
         """
         table_name = 'test_mixed_timezones_ora_pg'
-        #pytest.skip('issue #33')
+        # pytest.skip('issue #33')
         comparator = DataQualityComparator(
             source_engine=oracle_engine,
             target_engine=postgres_engine,

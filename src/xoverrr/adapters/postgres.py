@@ -20,7 +20,7 @@ class PostgresAdapter(BaseDatabaseAdapter):
         df = None
         tz_set = None
         start_time = time.time()
-        
+
         app_logger.info('start')
 
         if timezone:
@@ -183,7 +183,6 @@ class PostgresAdapter(BaseDatabaseAdapter):
 
     def build_metadata_columns_query(self, data_ref: DataReference) -> pd.DataFrame:
 
-
         query = """
               select lower(a.attname) as column_name,
                      lower(t.typname ) as data_type,
@@ -229,7 +228,7 @@ class PostgresAdapter(BaseDatabaseAdapter):
         start_date: Optional[str],
         end_date: Optional[str],
         columns_meta: Optional[pd.DataFrame],
-        timezone: Optional[str]
+        timezone: Optional[str],
     ) -> Tuple[str, Dict]:
         query = f"""
             SELECT
@@ -261,7 +260,7 @@ class PostgresAdapter(BaseDatabaseAdapter):
         end_date: Optional[str],
         exclude_recent_hours: Optional[int] = None,
         columns_meta: pd.DataFrame = None,
-        timezone: str = None
+        timezone: str = None,
     ) -> Tuple[str, Dict]:
 
         params = {}
@@ -300,7 +299,6 @@ class PostgresAdapter(BaseDatabaseAdapter):
             return condition, params
 
         return None, None
-       
 
     def _get_type_conversion_rules(self, timezone) -> Dict[str, Callable]:
         return {
@@ -322,15 +320,15 @@ class PostgresAdapter(BaseDatabaseAdapter):
                 .dt.strftime(DATETIME_FORMAT)
                 .str.replace(r'\s00:00:00$', '', regex=True)
             ),
-            #lower in numerics for scientific notations
+            # lower in numerics for scientific notations
             r'numeric|decimal|bigint|int8|double precision|real': lambda x: (
-                        x.astype(str)
-                        .str.lower().replace(r'\.0+$', '', regex=True) 
-                        .str.replace(r'^(-?\d+\.\d*?)0+$', r'\1', regex=True)
-                    ),
-            r'int|float': lambda x: (
                 x.astype(str)
-                .str.lower().replace(r'\.0+$', '', regex=True)
+                .str.lower()
+                .replace(r'\.0+$', '', regex=True)
+                .str.replace(r'^(-?\d+\.\d*?)0+$', r'\1', regex=True)
+            ),
+            r'int|float': lambda x: (
+                x.astype(str).str.lower().replace(r'\.0+$', '', regex=True)
             ),
             r'json': lambda x: (
                 '"' + x.astype(str).str.replace(r'"', '\\"', regex=True) + '"'

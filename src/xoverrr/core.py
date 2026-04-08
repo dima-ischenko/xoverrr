@@ -218,14 +218,24 @@ class DataQualityComparator:
             app_logger.info(target_columns_meta.to_string(index=False))
 
             source_query, source_params = source_adapter.build_count_query_common(
-                source_table, date_column, start_date, end_date, source_columns_meta, self.timezone
+                source_table,
+                date_column,
+                start_date,
+                end_date,
+                source_columns_meta,
+                self.timezone,
             )
             source_counts = self._execute_query(
                 (source_query, source_params), self.source_engine, self.timezone
             )
 
             target_query, target_params = target_adapter.build_count_query_common(
-                target_table, date_column, start_date, end_date, target_columns_meta, self.timezone
+                target_table,
+                date_column,
+                start_date,
+                end_date,
+                target_columns_meta,
+                self.timezone,
             )
             target_counts = self._execute_query(
                 (target_query, target_params), self.target_engine, self.timezone
@@ -692,7 +702,7 @@ class DataQualityComparator:
             end_date,
             exclude_recent_hours,
             columns_meta,
-            self.timezone
+            self.timezone,
         )
 
         df = self._execute_query((query, params), engine, self.timezone)

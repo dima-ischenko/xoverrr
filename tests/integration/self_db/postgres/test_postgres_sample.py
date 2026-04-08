@@ -89,9 +89,11 @@ class TestPostgresSelfComparison:
             """,
         )
 
-        yield       
+        yield
 
-    def test_postgres_self_comparison_identical(self, postgres_engine, setup_postgres_data):
+    def test_postgres_self_comparison_identical(
+        self, postgres_engine, setup_postgres_data
+    ):
         """
         Compare identical tables within same PostgreSQL database.
         """
@@ -114,7 +116,9 @@ class TestPostgresSelfComparison:
         assert stats.final_diff_score == 0.0
         print(f'PostgreSQL self-comparison passed: {stats.final_score:.2f}%')
 
-    def test_postgres_self_comparison_identical_view(self, postgres_engine, setup_postgres_data):
+    def test_postgres_self_comparison_identical_view(
+        self, postgres_engine, setup_postgres_data
+    ):
         """
         Compare identical tables within same PostgreSQL database.
         """
@@ -137,11 +141,13 @@ class TestPostgresSelfComparison:
         assert stats.final_diff_score == 0.0
         print(f'PostgreSQL self-comparison passed: {stats.final_score:.2f}%')
 
-    def test_postgres_self_comparison_identical_mview(self, postgres_engine, setup_postgres_data_mv):
+    def test_postgres_self_comparison_identical_mview(
+        self, postgres_engine, setup_postgres_data_mv
+    ):
         """
         Compare identical tables within same PostgreSQL database.
         """
-        #pytest.skip('issue #50')    
+        # pytest.skip('issue #50')
         comparator = DataQualityComparator(
             source_engine=postgres_engine,
             target_engine=postgres_engine,
@@ -159,4 +165,4 @@ class TestPostgresSelfComparison:
 
         assert status == COMPARISON_SUCCESS
         assert stats.final_diff_score == 0.0
-        print(f'PostgreSQL self-comparison passed: {stats.final_score:.2f}%')       
+        print(f'PostgreSQL self-comparison passed: {stats.final_score:.2f}%')
