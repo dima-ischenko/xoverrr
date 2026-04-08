@@ -74,11 +74,10 @@ class TestPostgresOracleMixedTimezoneOffsets:
         #pytest.skip('issue #33')
         table_name = 'test_mixed_timezones_ora_pg'
 
-        # Only UTC is valid for cross-db tz-aware comparisons
         comparator = DataQualityComparator(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
-            timezone='UTC',  # MUST be UTC for tz-aware columns
+            timezone='Europe/Athens',
         )
 
         status, report, stats, details = comparator.compare_sample(

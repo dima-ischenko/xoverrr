@@ -55,17 +55,19 @@ class BaseDatabaseAdapter(ABC):
     def build_data_query_common(
         self,
         data_ref: DataReference,
-        columns: List[str],
+        common_columns: List[str],
         date_column: Optional[str],
         update_column: Optional[str],
         start_date: Optional[str],
         end_date: Optional[str],
         exclude_recent_hours: Optional[int] = None,
+        columns_meta: pd.DataFrame = None,
+        timezone: str = None
     ) -> Tuple[str, Dict]:
         """Build data query for the DBMS with recent data exclusion"""
         # Handle reserved words
         cols_select = [
-            f'"{col}"' if col.lower() in RESERVED_WORDS else col for col in columns
+            f'"{col}"' if col.lower() in RESERVED_WORDS else col for col in common_columns
         ]
 
         result = self.build_data_query(
@@ -76,6 +78,8 @@ class BaseDatabaseAdapter(ABC):
             start_date,
             end_date,
             exclude_recent_hours,
+            columns_meta,
+            timezone
         )
         return result
 
@@ -89,6 +93,7 @@ class BaseDatabaseAdapter(ABC):
         start_date: Optional[str],
         end_date: Optional[str],
         exclude_recent_hours: Optional[int] = None,
+        columns_meta: pd.DataFrame = None,
     ) -> Tuple[str, Dict]:
         pass
 

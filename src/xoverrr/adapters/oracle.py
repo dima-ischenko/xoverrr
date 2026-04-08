@@ -344,21 +344,23 @@ class OracleAdapter(BaseDatabaseAdapter):
         start_date: Optional[str],
         end_date: Optional[str],
         exclude_recent_hours: Optional[int] = None,
+        columns_meta: pd.DataFrame = None,
+        timezone: str = None,
     ) -> Tuple[str, Dict]:
         
         tz_columns = ['created_on', 'updated_on']
         target_timezone = 'utc'
 
-        converted_columns = []
-        for col in columns:
-                if col in tz_columns:
-                    # Cast TIMESTAMP WITH TIME ZONE to TIMESTAMP at target timezone
-                    converted_col = f"""
-                        cast({col} at time zone '{target_timezone}' as timestamp) as {col}
-                    """
-                    converted_columns.append(converted_col.strip())
-                else:
-                    converted_columns.append(col)
+        tz_columns = []
+        tz_columns = self._identify_timestamp_tz_columns(columns_meta)
+
+        converted_columns = self._apply_timestamp_tz_casts(
+        columns=columns,
+        tz_columns=tz_columns,
+        target_timezone=timezone,
+        )
+
+        app_logger.info(columns_meta)
 
         params = {}
         # Add recent data exclusion flag
@@ -406,8 +408,7 @@ class OracleAdapter(BaseDatabaseAdapter):
                 .str.replace(r'\s00:00:00$', '', regex=True)
             ),
             r'timestamp.*\bwith\b.*time\szone': lambda x: (
-                pd.to_datetime(x, utc=True, errors='coerce')
-                .dt.tz_convert(timezone)
+                pd.to_datetime(x, errors='coerce')
                 .dt.tz_localize(None)
                 .dt.strftime(DATETIME_FORMAT)
                 .str.replace(r'\s00:00:00$', '', regex=True)
@@ -421,3 +422,97 @@ class OracleAdapter(BaseDatabaseAdapter):
                 x.astype(str).str.replace(r'\.0+$', '', regex=True).str.lower()
             ),  # lower case for exponential form compare
         }
+
+
+    def _identify_timestamp_tz_columns(self, columns_metadata: pd.DataFrame) -> List[str]:
+        """
+        Identify columns that need timezone casting, because of the thin driver as well (missed tz info in the result column)
+        
+        Parameters:
+            columns_metadata: DataFrame with column metadata (from _get_metadata_cols)
+                            Must contain 'column_name' and 'data_type' columns
+        
+        Returns:
+            List of column names that are TIMESTAMP WITH TIME ZONE (not LOCAL)
+        """
+        if columns_metadata is None or columns_metadata.empty:
+            return []
+        
+        # Filter for TIMESTAMP WITH TIME ZONE (excluding LOCAL TIME ZONE)
+        tz_mask = (
+            columns_metadata['data_type']
+            .str.lower()
+            .str.contains(r'timestamp.*time zone', regex=True, na=False)
+        )
+        
+        # Exclude LOCAL TIME ZONE
+        local_mask = (
+            columns_metadata['data_type']
+            .str.lower()
+            .str.contains(r'local', regex=True, na=False)
+        )
+        
+        tz_columns = columns_metadata[tz_mask & ~local_mask]['column_name'].tolist()
+        
+        if tz_columns:
+            app_logger.info(f'Identified TIMESTAMP WITH TIME ZONE columns: {tz_columns}')
+        
+        return tz_columns
+    
+    def build_timestamp_tz_cast_expression(
+        self, 
+        column_name: str, 
+        tz_columns: List[str], 
+        target_timezone: str
+    ) -> str:
+        """
+        Build CAST expression for timestamp with time zone column if needed.
+        
+        Parameters:
+            column_name: Name of the column to check
+            tz_columns: List of columns that need casting (from identify_timestamp_tz_columns)
+            target_timezone: Target timezone for conversion
+        
+        Returns:
+            CAST expression string if column needs casting, otherwise column as is
+        """
+        # Check if column needs casting
+        if column_name not in tz_columns:
+            return column_name
+        
+        # Build CAST expression
+        cast_expr = f"""cast({column_name} at time zone '{target_timezone}' as timestamp) as {column_name}"""
+        
+        return cast_expr
+    
+    def _apply_timestamp_tz_casts(
+        self,
+        columns: List[str],
+        tz_columns: List[str],
+        target_timezone: str,
+    ) -> List[str]:
+        """
+        Apply CAST expressions to all columns that need timezone conversion.
+        
+        Parameters:
+            columns: List of column names to process
+            tz_columns: List of columns that need casting (from identify_timestamp_tz_columns)
+            target_timezone: Target timezone for conversion
+            exclude_columns: Columns that should not be cast
+        
+        Returns:
+            List of column expressions (either original name or CAST expression)
+        """
+        result_columns = []
+        
+        for col in columns:
+            cast_expr = self.build_timestamp_tz_cast_expression(
+                col, tz_columns, target_timezone
+            )
+            
+            if cast_expr:
+                result_columns.append(cast_expr)
+            else:
+                result_columns.append(col)
+        
+        return result_columns    

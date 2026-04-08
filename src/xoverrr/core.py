@@ -658,8 +658,8 @@ class DataQualityComparator:
         self,
         engine,
         data_ref: DataReference,
-        metadata,
-        columns: List[str],
+        columns_meta: pd.DataFrame,
+        common_columns: List[str],
         date_column: str,
         update_column: str,
         start_date: Optional[str],
@@ -673,18 +673,20 @@ class DataQualityComparator:
 
         query, params = adapter.build_data_query_common(
             data_ref,
-            columns,
+            common_columns,
             date_column,
             update_column,
             start_date,
             end_date,
             exclude_recent_hours,
+            columns_meta,
+            self.timezone
         )
 
         df = self._execute_query((query, params), engine, self.timezone)
 
         # Apply type conversions
-        df = adapter.convert_types(df, metadata, self.timezone)
+        df = adapter.convert_types(df, columns_meta, self.timezone)
 
         return df, query, params
 

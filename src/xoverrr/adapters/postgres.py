@@ -258,6 +258,8 @@ class PostgresAdapter(BaseDatabaseAdapter):
         start_date: Optional[str],
         end_date: Optional[str],
         exclude_recent_hours: Optional[int] = None,
+        columns_meta: pd.DataFrame = None,
+        timezone: str = None
     ) -> Tuple[str, Dict]:
 
         params = {}
