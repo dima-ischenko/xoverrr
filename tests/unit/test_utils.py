@@ -7,10 +7,10 @@ import pytest
 from xoverrr.utils import (ComparisonDiffDetails, ComparisonStats,
                            clean_recently_changed_data, compare_dataframes,
                            cross_fill_missing_dates,
-                           generate_comparison_sample_report,
                            get_dataframe_size_gb, prepare_dataframe,
                            validate_dataframe_size)
 
+from xoverrr.reporting import generate_sample_report
 
 class TestUtils:
     """Unit tests for utility functions"""

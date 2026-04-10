@@ -13,9 +13,9 @@ from .logger import app_logger
 from .models import DataReference, DBMSType, ObjectType
 from .utils import (ComparisonDiffDetails, ComparisonStats,
                     clean_recently_changed_data, compare_dataframes,
-                    cross_fill_missing_dates, generate_comparison_count_report,
-                    generate_comparison_sample_report, normalize_column_names,
+                    cross_fill_missing_dates, normalize_column_names,
                     prepare_dataframe, validate_dataframe_size)
+from .reporting import generate_sample_report, generate_count_report, ComparisonResult
 
 
 class DataQualityComparator:
@@ -276,7 +276,7 @@ class DataQualityComparator:
                     else ct.COMPARISON_SUCCESS
                 )
 
-                report = generate_comparison_count_report(
+                report = generate_count_report(
                     source_table.full_name,
                     target_table.full_name,
                     stats,
@@ -480,7 +480,7 @@ class DataQualityComparator:
                 details.skipped_source_columns = source_only_cols
                 details.skipped_target_columns = target_only_cols
 
-                report = generate_comparison_sample_report(
+                report = generate_sample_report(
                     source_table.full_name,
                     target_table.full_name,
                     stats,
@@ -606,7 +606,7 @@ class DataQualityComparator:
             )
 
             if stats:
-                report = generate_comparison_sample_report(
+                report = generate_sample_report(
                     None,
                     None,
                     stats,
