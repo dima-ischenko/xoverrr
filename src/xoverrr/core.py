@@ -2,7 +2,6 @@ from collections import defaultdict
 from typing import Dict, List, Optional, Tuple, Union
 
 import pandas as pd
-import numpy as np
 from sqlalchemy.engine import Engine
 
 from . import constants as ct
@@ -14,6 +13,7 @@ from .exceptions import DQCompareException, MetadataError
 from .logger import app_logger
 from .models import DataReference, DBMSType, ObjectType
 from .utils import (ComparisonDiffDetails, ComparisonStats,
+                    build_comparison_stats,
                     clean_recently_changed_data, compare_dataframes,
                     cross_fill_missing_dates, generate_comparison_count_report,
                     generate_comparison_sample_report, normalize_column_names,
@@ -883,40 +883,7 @@ class DataQualityComparator:
                 f'Nothing to compare, rows returned from source: {total_source_rows}, from target: {total_target_rows}'
             )
 
-        if common_pk_rows == 0:
-            source_dup_percentage = 100
-            target_dup_percentage = 100
-            source_only_percentage = 100
-            target_only_percentage = 100
-            total_diff_percentage = 100
-            max_diff_pct_cols = 100
-            median_diff_pct_cols = 100
-            final_diff_score = 100
-        else:
-            source_dup_percentage = (dup_source_rows / total_source_rows) * 100
-            target_dup_percentage = (dup_target_rows / total_target_rows) * 100
-            source_only_percentage = (only_source_rows / common_pk_rows) * 100
-            target_only_percentage = (only_target_rows / common_pk_rows) * 100
-            total_diff_percentage = (1 - total_matched_rows / common_pk_rows) * 100
-
-            mismatch_percentages = [
-                (cnt / common_pk_rows) * 100 for cnt in mismatch_counter.values()
-            ]
-            max_diff_pct_cols = (
-                float(np.max(mismatch_percentages)) if mismatch_percentages else 0.0
-            )
-            median_diff_pct_cols = (
-                float(np.median(mismatch_percentages)) if mismatch_percentages else 0.0
-            )
-            final_diff_score = (
-                source_dup_percentage * 0.1
-                + target_dup_percentage * 0.1
-                + source_only_percentage * 0.15
-                + target_only_percentage * 0.15
-                + total_diff_percentage * 0.5
-            )
-
-        stats = ComparisonStats(
+        stats = build_comparison_stats(
             total_source_rows=total_source_rows,
             total_target_rows=total_target_rows,
             dup_source_rows=dup_source_rows,
@@ -925,15 +892,7 @@ class DataQualityComparator:
             only_target_rows=only_target_rows,
             common_pk_rows=common_pk_rows,
             total_matched_rows=total_matched_rows,
-            dup_source_percentage_rows=source_dup_percentage,
-            dup_target_percentage_rows=target_dup_percentage,
-            source_only_percentage_rows=source_only_percentage,
-            target_only_percentage_rows=target_only_percentage,
-            total_diff_percentage_rows=total_diff_percentage,
-            max_diff_percentage_cols=max_diff_pct_cols,
-            median_diff_percentage_cols=median_diff_pct_cols,
-            final_diff_score=final_diff_score,
-            final_score=100 - final_diff_score,
+            mismatch_counts=list(mismatch_counter.values()),
         )
 
         mismatches_per_column = (

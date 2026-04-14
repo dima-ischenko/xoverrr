@@ -9,6 +9,81 @@ from .constants import DATETIME_FORMAT, DEFAULT_MAX_EXAMPLES, NULL_REPLACEMENT
 from .logger import app_logger
 
 
+def build_comparison_stats(
+    total_source_rows: int,
+    total_target_rows: int,
+    dup_source_rows: int,
+    dup_target_rows: int,
+    only_source_rows: int,
+    only_target_rows: int,
+    common_pk_rows: int,
+    total_matched_rows: int,
+    mismatch_counts: Optional[List[int]] = None,
+) -> 'ComparisonStats':
+    mismatch_counts = mismatch_counts or []
+
+    if common_pk_rows == 0:
+        return ComparisonStats(
+            total_source_rows=total_source_rows,
+            total_target_rows=total_target_rows,
+            dup_source_rows=dup_source_rows,
+            dup_target_rows=dup_target_rows,
+            only_source_rows=only_source_rows,
+            only_target_rows=only_target_rows,
+            common_pk_rows=0,
+            total_matched_rows=total_matched_rows,
+            dup_source_percentage_rows=100,
+            dup_target_percentage_rows=100,
+            source_only_percentage_rows=100,
+            target_only_percentage_rows=100,
+            total_diff_percentage_rows=100,
+            max_diff_percentage_cols=100,
+            median_diff_percentage_cols=100,
+            final_diff_score=100,
+            final_score=0,
+        )
+
+    source_dup_percentage = (dup_source_rows / total_source_rows) * 100
+    target_dup_percentage = (dup_target_rows / total_target_rows) * 100
+    source_only_percentage = (only_source_rows / common_pk_rows) * 100
+    target_only_percentage = (only_target_rows / common_pk_rows) * 100
+    total_diff_percentage = (1 - total_matched_rows / common_pk_rows) * 100
+
+    mismatch_percentages = [(cnt / common_pk_rows) * 100 for cnt in mismatch_counts]
+    max_diff_pct_cols = float(np.max(mismatch_percentages)) if mismatch_percentages else 0.0
+    median_diff_pct_cols = (
+        float(np.median(mismatch_percentages)) if mismatch_percentages else 0.0
+    )
+
+    final_diff_score = (
+        source_dup_percentage * 0.1
+        + target_dup_percentage * 0.1
+        + source_only_percentage * 0.15
+        + target_only_percentage * 0.15
+        + total_diff_percentage * 0.5
+    )
+
+    return ComparisonStats(
+        total_source_rows=total_source_rows,
+        total_target_rows=total_target_rows,
+        dup_source_rows=dup_source_rows,
+        dup_target_rows=dup_target_rows,
+        only_source_rows=only_source_rows,
+        only_target_rows=only_target_rows,
+        common_pk_rows=common_pk_rows,
+        total_matched_rows=total_matched_rows,
+        dup_source_percentage_rows=source_dup_percentage,
+        dup_target_percentage_rows=target_dup_percentage,
+        source_only_percentage_rows=source_only_percentage,
+        target_only_percentage_rows=target_only_percentage,
+        total_diff_percentage_rows=total_diff_percentage,
+        max_diff_percentage_cols=max_diff_pct_cols,
+        median_diff_percentage_cols=median_diff_pct_cols,
+        final_diff_score=final_diff_score,
+        final_score=100 - final_diff_score,
+    )
+
+
 def normalize_column_names(columns: List[str]) -> List[str]:
     """
     Normalize column names to lowercase for consistent comparison.
@@ -284,7 +359,7 @@ def compare_dataframes(
 
     if not common_keys_cnt:
         # Special case when there is no matched primary keys at all
-        comparison_stats = ComparisonStats(
+        comparison_stats = build_comparison_stats(
             total_source_rows=len(source_df),
             total_target_rows=len(target_df),
             dup_source_rows=source_dup_cnt,
@@ -293,18 +368,7 @@ def compare_dataframes(
             only_target_rows=xor_target_only_keys_cnt,
             common_pk_rows=0,
             total_matched_rows=0,
-            #
-            dup_source_percentage_rows=100,
-            dup_target_percentage_rows=100,
-            source_only_percentage_rows=100,
-            target_only_percentage_rows=100,
-            total_diff_percentage_rows=100,
-            #
-            max_diff_percentage_cols=100,
-            median_diff_percentage_cols=100,
-            #
-            final_diff_score=100,
-            final_score=0,
+            mismatch_counts=[],
         )
 
         comparison_diff_detais = ComparisonDiffDetails(
@@ -324,31 +388,13 @@ def compare_dataframes(
     # get number of that totally equal in two datasets
     total_matched_records_cnt = common_keys_cnt - xor_common_keys_cnt
 
-    source_only_percentage = (xor_source_only_keys_cnt / common_keys_cnt) * 100
-    target_only_percentage = (xor_target_only_keys_cnt / common_keys_cnt) * 100
-
-    source_dup_percentage = (source_dup_cnt / len(source_df)) * 100
-    target_dup_percentage = (target_dup_cnt / len(target_df)) * 100
-
-    diff_col_metrics, diff_col_examples, diff_col_counters = (
+    _, diff_col_examples, diff_col_counters = (
         analyze_column_discrepancies(
             xor_df_multi, key_columns, non_key_columns, common_keys_cnt, max_examples
         )
     )
 
-    source_and_target_total_diff_percentage = (
-        1 - total_matched_records_cnt / common_keys_cnt
-    ) * 100
-
-    final_diff_score = (
-        source_dup_percentage * 0.1
-        + target_dup_percentage * 0.1
-        + source_only_percentage * 0.15
-        + target_only_percentage * 0.15
-        + source_and_target_total_diff_percentage * 0.5
-    )
-
-    comparison_stats = ComparisonStats(
+    comparison_stats = build_comparison_stats(
         total_source_rows=len(source_df),
         total_target_rows=len(target_df),
         dup_source_rows=source_dup_cnt,
@@ -357,18 +403,7 @@ def compare_dataframes(
         only_target_rows=xor_target_only_keys_cnt,
         common_pk_rows=common_keys_cnt,
         total_matched_rows=total_matched_records_cnt,
-        #
-        dup_source_percentage_rows=source_dup_percentage,
-        dup_target_percentage_rows=target_dup_percentage,
-        source_only_percentage_rows=source_only_percentage,
-        target_only_percentage_rows=target_only_percentage,
-        total_diff_percentage_rows=source_and_target_total_diff_percentage,
-        #
-        max_diff_percentage_cols=diff_col_metrics['max_pct'],
-        median_diff_percentage_cols=diff_col_metrics['median_pct'],
-        #
-        final_diff_score=final_diff_score,
-        final_score=100 - final_diff_score,
+        mismatch_counts=diff_col_counters['mismatch_count'].tolist(),
     )
 
     comparison_diff_detais = ComparisonDiffDetails(
