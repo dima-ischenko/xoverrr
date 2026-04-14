@@ -449,6 +449,7 @@ def generate_comparison_sample_report(
     source_params: Dict = None,
     target_query: str = None,
     target_params: Dict = None,
+    date_chunks: Optional[List[Tuple[str, str]]] = None,
 ) -> None:
     """Generate comparison report (logger output looks uuugly)"""
     rl = []
@@ -471,6 +472,11 @@ def generate_comparison_sample_report(
         rl.append(f'    {target_query}')
         if target_params:
             rl.append(f'    params: {target_params}')
+
+    if date_chunks and len(date_chunks) > 1:
+        rl.append(f'\nCHUNKS PROCESSED ({len(date_chunks)} intervals):')
+        for start, end in date_chunks:
+            rl.append(f'  {start} → {end}')        
 
     rl.append('-' * 40)
 
@@ -555,6 +561,7 @@ def generate_comparison_count_report(
     source_params: Dict = None,
     target_query: str = None,
     target_params: Dict = None,
+    date_chunks: Optional[List[Tuple[str, str]]] = None,
 ) -> None:
     """Generates comparison report (logger output looks uuugly)"""
     rl = []
@@ -576,6 +583,12 @@ def generate_comparison_count_report(
         rl.append(f'    {target_query}')
         if target_params:
             rl.append(f'    params: {target_params}')
+
+    if date_chunks and len(date_chunks) > 1:
+        rl.append(f'\nCHUNKS PROCESSED ({len(date_chunks)} intervals):')
+        for start, end in date_chunks:
+            rl.append(f'  {start} → {end}')
+
     rl.append('-' * 40)
 
     rl.append(f'\nSUMMARY:')

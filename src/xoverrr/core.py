@@ -228,10 +228,12 @@ class DataQualityComparator:
             target_chunks = []
             source_query, source_params = None, None
             target_query, target_params = None, None
-
-            for chunk_start, chunk_end in self._iter_date_chunks(
+            
+            date_chunks = self._iter_date_chunks(
                 date_column, start_date, end_date, chunk_size_days
-            ):
+            )
+
+            for chunk_start, chunk_end in date_chunks:
                 source_query, source_params = source_adapter.build_count_query_common(
                     source_table,
                     date_column,
@@ -531,16 +533,16 @@ class DataQualityComparator:
 
             source_adapter = self._get_adapter(self.source_db_type)
             target_adapter = self._get_adapter(self.target_db_type)
-            chunk_ranges = self._resolve_custom_query_chunks(
+            date_chunks = self._resolve_custom_query_chunks(
                 source_params, target_params, chunk_size_days
             )
 
-            if len(chunk_ranges) == 1:
+            if len(date_chunks) == 1:
                 stats, details = self._execute_custom_query_chunk(
                     source_query=source_query,
-                    source_params=chunk_ranges[0][0],
+                    source_params=date_chunks[0][0],
                     target_query=target_query,
-                    target_params=chunk_ranges[0][1],
+                    target_params=date_chunks[0][1],
                     source_engine=source_engine,
                     target_engine=target_engine,
                     source_adapter=source_adapter,
@@ -556,7 +558,7 @@ class DataQualityComparator:
                 stats, details = self._compare_custom_query_iterative(
                     source_query=source_query,
                     target_query=target_query,
-                    chunk_ranges=chunk_ranges,
+                    chunk_ranges=date_chunks,
                     source_engine=source_engine,
                     target_engine=target_engine,
                     source_adapter=source_adapter,
@@ -583,6 +585,7 @@ class DataQualityComparator:
                     source_params,
                     target_query,
                     target_params,
+                    date_chunks=date_chunks
                 )
                 status = (
                     ct.COMPARISON_FAILED
@@ -1021,9 +1024,10 @@ class DataQualityComparator:
         source_query, source_params = None, None
         target_query, target_params = None, None
 
-        for chunk_start, chunk_end in self._iter_date_chunks(
+        date_chunks = self._iter_date_chunks(
             date_column, start_date, end_date, chunk_size_days
-        ):
+        )
+        for chunk_start, chunk_end in date_chunks:
             source_data, source_query, source_params = self._get_table_data(
                 self.source_engine,
                 source_table,
@@ -1194,6 +1198,7 @@ class DataQualityComparator:
             source_params,
             target_query,
             target_params,
+            date_chunks=date_chunks,
         )
         status = (
             ct.COMPARISON_FAILED
