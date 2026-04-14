@@ -184,7 +184,7 @@ status, report, stats, details = comparator.compare_sample(
     target_table=DataReference("table_name", "schema_name"),
     date_column="created_at",
     update_column="modified_date",
-    date_range=("2024-01-01", "2025-01-31"),
+    date_range=("2024-01-01", "2024-12-31"),
     chunk_size_days=30,
     exclude_columns=["audit_timestamp", "internal_id"],
     include_columns=None,
@@ -216,7 +216,7 @@ status, report, stats, details = comparator.compare_counts(
     source_table=DataReference("users", "schema1"),
     target_table=DataReference("users", "schema2"),
     date_column="created_at",
-    date_range=("2024-01-01", "2025-01-31"),
+    date_range=("2024-01-01", "2024-12-31"),
     chunk_size_days=30,
     tolerance_percentage=2.0,
     max_examples=5
@@ -240,8 +240,32 @@ status, report, stats, details = comparator.compare_custom_query(
     source_params={'status': 'active'},
     target_query="""SELECT user_id, user_name, created_date FROM scott.target_table WHERE status = :status""",
     target_params={'status': 'active'},
-    custom_primary_key=["id"],
+    custom_primary_key=["user_id"],
     exclude_columns=["internal_code"],
+    tolerance_percentage=0.5,
+    max_examples=3
+)
+```
+
+**Custom query with chunking (`start_date`/`end_date` required):**
+```python
+status, report, stats, details = comparator.compare_custom_query(
+    source_query="""
+        SELECT id, name, created_at
+        FROM scott.source_table
+        WHERE created_at >= date_trunc('day', cast(:start_date as date))
+          AND created_at < date_trunc('day', cast(:end_date as date)) + interval '1 day'
+    """,
+    source_params={'start_date': '2024-01-01', 'end_date': '2024-12-31'},
+    target_query="""
+        SELECT id, name, created_at
+        FROM scott.target_table
+        WHERE created_at >= date_trunc('day', cast(:start_date as date))
+          AND created_at < date_trunc('day', cast(:end_date as date)) + interval '1 day'
+    """,
+    target_params={'start_date': '2024-01-01', 'end_date': '2024-12-31'},
+    custom_primary_key=["id"],
+    chunk_size_days=30,
     tolerance_percentage=0.5,
     max_examples=3
 )
@@ -262,13 +286,13 @@ status, report, stats, details = comparator.compare_custom_query(
 
 ### Chunked Processing (`chunk_size_days`)
 - Available in all methods: `compare_sample`, `compare_counts`, `compare_custom_query`.
-- Splits `date_range` into N-day windows and compares chunk-by-chunk, then aggregates final metrics and examples.
+- Splits the requested period into N-day windows and compares chunk-by-chunk, then aggregates final metrics and examples.
 - Useful for long ranges or large tables to reduce peak query/dataframe size.
 - For `compare_custom_query`, chunking is applied only when both `source_params` and `target_params` contain `start_date` and `end_date`.
 
 **Automatic Primary‑Key Detection:**
-- If `custom_primary_key` is not supplied, the system automatically infers the PK from metadata.
-- When source and target PKs differ, the source PK is used with a warning.
+- For `compare_sample`, if `custom_primary_key` is not supplied, the system automatically infers the PK from metadata.
+- For `compare_custom_query`, `custom_primary_key` is mandatory.
 
 **Performance Considerations:**
 - DataFrame size validation (hard limit: 3 GB per sample)
