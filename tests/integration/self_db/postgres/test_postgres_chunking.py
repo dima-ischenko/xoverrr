@@ -128,7 +128,7 @@ class TestPostgresChunkedComparison:
         non_chunked_mismatch = details_non_chunked.mismatches_per_column.set_index(
             'column_name'
         )['mismatch_count']
-        chunked_mismatch = details_chunked.mismatches_per_column.set_index('column_name')[
-            'mismatch_count'
-        ]
+        chunked_mismatch = details_chunked.mismatches_per_column.set_index(
+            'column_name'
+        )['mismatch_count']
         assert int(chunked_mismatch['name']) == int(non_chunked_mismatch['name']) == 2

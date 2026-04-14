@@ -109,11 +109,15 @@ class TestOracleYearlyChunking:
 
         assert status_counts_full == COMPARISON_SUCCESS
         assert status_counts_chunked == COMPARISON_SUCCESS
-        assert stats_counts_chunked.final_diff_score == stats_counts_full.final_diff_score
+        assert (
+            stats_counts_chunked.final_diff_score == stats_counts_full.final_diff_score
+        )
 
         assert status_sample_full == COMPARISON_SUCCESS
         assert status_sample_chunked == COMPARISON_SUCCESS
-        assert stats_sample_chunked.final_diff_score == stats_sample_full.final_diff_score
+        assert (
+            stats_sample_chunked.final_diff_score == stats_sample_full.final_diff_score
+        )
 
     def test_oracle_chunking_30_days_negative_sample(self, oracle_engine):
         comparator = DataQualityComparator(
@@ -124,13 +128,15 @@ class TestOracleYearlyChunking:
         source_ref = DataReference('test_ora_chunking_yearly', 'test')
         target_ref = DataReference('test_ora_chunking_yearly_target', 'test')
 
-        status_sample_full, _, stats_sample_full, details_sample_full = comparator.compare_sample(
-            source_table=source_ref,
-            target_table=target_ref,
-            date_column='created_at',
-            update_column='updated_at',
-            date_range=('2024-01-01', '2024-12-31'),
-            tolerance_percentage=0.0,
+        status_sample_full, _, stats_sample_full, details_sample_full = (
+            comparator.compare_sample(
+                source_table=source_ref,
+                target_table=target_ref,
+                date_column='created_at',
+                update_column='updated_at',
+                date_range=('2024-01-01', '2024-12-31'),
+                tolerance_percentage=0.0,
+            )
         )
         status_sample_chunked, _, stats_sample_chunked, details_sample_chunked = (
             comparator.compare_sample(
@@ -146,8 +152,12 @@ class TestOracleYearlyChunking:
 
         assert status_sample_full == COMPARISON_FAILED
         assert status_sample_chunked == COMPARISON_FAILED
-        assert stats_sample_chunked.final_diff_score == stats_sample_full.final_diff_score
-        mismatch_full = details_sample_full.mismatches_per_column.set_index('column_name')
+        assert (
+            stats_sample_chunked.final_diff_score == stats_sample_full.final_diff_score
+        )
+        mismatch_full = details_sample_full.mismatches_per_column.set_index(
+            'column_name'
+        )
         mismatch_chunked = details_sample_chunked.mismatches_per_column.set_index(
             'column_name'
         )

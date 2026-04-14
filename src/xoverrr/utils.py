@@ -50,7 +50,9 @@ def build_comparison_stats(
     total_diff_percentage = (1 - total_matched_rows / common_pk_rows) * 100
 
     mismatch_percentages = [(cnt / common_pk_rows) * 100 for cnt in mismatch_counts]
-    max_diff_pct_cols = float(np.max(mismatch_percentages)) if mismatch_percentages else 0.0
+    max_diff_pct_cols = (
+        float(np.max(mismatch_percentages)) if mismatch_percentages else 0.0
+    )
     median_diff_pct_cols = (
         float(np.median(mismatch_percentages)) if mismatch_percentages else 0.0
     )
@@ -388,10 +390,8 @@ def compare_dataframes(
     # get number of that totally equal in two datasets
     total_matched_records_cnt = common_keys_cnt - xor_common_keys_cnt
 
-    _, diff_col_examples, diff_col_counters = (
-        analyze_column_discrepancies(
-            xor_df_multi, key_columns, non_key_columns, common_keys_cnt, max_examples
-        )
+    _, diff_col_examples, diff_col_counters = analyze_column_discrepancies(
+        xor_df_multi, key_columns, non_key_columns, common_keys_cnt, max_examples
     )
 
     comparison_stats = build_comparison_stats(

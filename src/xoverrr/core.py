@@ -13,9 +13,9 @@ from .exceptions import DQCompareException, MetadataError
 from .logger import app_logger
 from .models import DataReference, DBMSType, ObjectType
 from .utils import (ComparisonDiffDetails, ComparisonStats,
-                    build_comparison_stats,
-                    clean_recently_changed_data, compare_dataframes,
-                    cross_fill_missing_dates, generate_comparison_count_report,
+                    build_comparison_stats, clean_recently_changed_data,
+                    compare_dataframes, cross_fill_missing_dates,
+                    generate_comparison_count_report,
                     generate_comparison_sample_report, normalize_column_names,
                     prepare_dataframe, validate_dataframe_size)
 
@@ -621,10 +621,16 @@ class DataQualityComparator:
         ):
             return [(dict(source_params), dict(target_params))]
 
-        source_chunks = self._iter_date_chunks('date', source_start, source_end, chunk_size_days)
-        target_chunks = self._iter_date_chunks('date', target_start, target_end, chunk_size_days)
+        source_chunks = self._iter_date_chunks(
+            'date', source_start, source_end, chunk_size_days
+        )
+        target_chunks = self._iter_date_chunks(
+            'date', target_start, target_end, chunk_size_days
+        )
         if len(source_chunks) != len(target_chunks):
-            raise ValueError('source and target custom query date ranges produce different chunk counts')
+            raise ValueError(
+                'source and target custom query date ranges produce different chunk counts'
+            )
 
         chunk_ranges: List[Tuple[Dict, Dict]] = []
         for (s_start, s_end), (t_start, t_end) in zip(source_chunks, target_chunks):
@@ -654,11 +660,19 @@ class DataQualityComparator:
         max_examples: Optional[int],
         timezone: str,
     ) -> Tuple[Optional[ComparisonStats], Optional[ComparisonDiffDetails]]:
-        source_data = self._execute_query((source_query, source_params), source_engine, timezone)
-        target_data = self._execute_query((target_query, target_params), target_engine, timezone)
+        source_data = self._execute_query(
+            (source_query, source_params), source_engine, timezone
+        )
+        target_data = self._execute_query(
+            (target_query, target_params), target_engine, timezone
+        )
 
-        source_data = source_adapter.convert_types(source_data, source_metadata, timezone)
-        target_data = target_adapter.convert_types(target_data, target_metadata, timezone)
+        source_data = source_adapter.convert_types(
+            source_data, source_metadata, timezone
+        )
+        target_data = target_adapter.convert_types(
+            target_data, target_metadata, timezone
+        )
         source_data_prepared = prepare_dataframe(source_data)
         target_data_prepared = prepare_dataframe(target_data)
 
@@ -751,16 +765,24 @@ class DataQualityComparator:
                     mismatch_counter[row.column_name] += int(row.mismatch_count)
 
             self._merge_examples_set(
-                dup_source_examples, chunk_details.dup_source_keys_examples, examples_limit
+                dup_source_examples,
+                chunk_details.dup_source_keys_examples,
+                examples_limit,
             )
             self._merge_examples_set(
-                dup_target_examples, chunk_details.dup_target_keys_examples, examples_limit
+                dup_target_examples,
+                chunk_details.dup_target_keys_examples,
+                examples_limit,
             )
             self._merge_examples_set(
-                source_only_examples, chunk_details.source_only_keys_examples, examples_limit
+                source_only_examples,
+                chunk_details.source_only_keys_examples,
+                examples_limit,
             )
             self._merge_examples_set(
-                target_only_examples, chunk_details.target_only_keys_examples, examples_limit
+                target_only_examples,
+                chunk_details.target_only_keys_examples,
+                examples_limit,
             )
 
             if (
@@ -780,7 +802,9 @@ class DataQualityComparator:
                 chunk_details.discrepancies_per_col_examples is not None
                 and not chunk_details.discrepancies_per_col_examples.empty
             ):
-                for row in chunk_details.discrepancies_per_col_examples.to_dict('records'):
+                for row in chunk_details.discrepancies_per_col_examples.to_dict(
+                    'records'
+                ):
                     col = row['column_name']
                     if discrepancy_examples_by_col[col] < examples_limit:
                         discrepancy_examples_rows.append(row)
@@ -802,7 +826,9 @@ class DataQualityComparator:
         )
         mismatches_per_column = (
             pd.DataFrame(
-                sorted(mismatch_counter.items(), key=lambda item: item[1], reverse=True),
+                sorted(
+                    mismatch_counter.items(), key=lambda item: item[1], reverse=True
+                ),
                 columns=['column_name', 'mismatch_count'],
             )
             if mismatch_counter
@@ -1057,10 +1083,14 @@ class DataQualityComparator:
                     mismatch_counter[row.column_name] += int(row.mismatch_count)
 
             self._merge_examples_set(
-                dup_source_examples, chunk_details.dup_source_keys_examples, examples_limit
+                dup_source_examples,
+                chunk_details.dup_source_keys_examples,
+                examples_limit,
             )
             self._merge_examples_set(
-                dup_target_examples, chunk_details.dup_target_keys_examples, examples_limit
+                dup_target_examples,
+                chunk_details.dup_target_keys_examples,
+                examples_limit,
             )
             self._merge_examples_set(
                 source_only_examples,
@@ -1090,7 +1120,9 @@ class DataQualityComparator:
                 chunk_details.discrepancies_per_col_examples is not None
                 and not chunk_details.discrepancies_per_col_examples.empty
             ):
-                for row in chunk_details.discrepancies_per_col_examples.to_dict('records'):
+                for row in chunk_details.discrepancies_per_col_examples.to_dict(
+                    'records'
+                ):
                     col = row['column_name']
                     if discrepancy_examples_by_col[col] < examples_limit:
                         discrepancy_examples_rows.append(row)
@@ -1170,7 +1202,9 @@ class DataQualityComparator:
         )
         return status, report, stats, details
 
-    def _merge_examples_set(self, target_set: set, source_items, max_examples: int) -> None:
+    def _merge_examples_set(
+        self, target_set: set, source_items, max_examples: int
+    ) -> None:
         if not source_items:
             return
         for item in source_items:

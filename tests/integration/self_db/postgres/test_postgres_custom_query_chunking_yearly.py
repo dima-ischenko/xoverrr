@@ -55,7 +55,9 @@ class TestPostgresCustomQueryYearlyChunking:
         yield
 
     def test_custom_query_chunking_yearly_positive(self, postgres_engine):
-        comparator = DataQualityComparator(postgres_engine, postgres_engine, timezone='UTC')
+        comparator = DataQualityComparator(
+            postgres_engine, postgres_engine, timezone='UTC'
+        )
         query = """
             SELECT id, name, created_at
             FROM test.test_pg_custom_query_chunking_yearly
@@ -86,7 +88,9 @@ class TestPostgresCustomQueryYearlyChunking:
         assert stats_chunked.final_diff_score == stats_full.final_diff_score
 
     def test_custom_query_chunking_yearly_negative(self, postgres_engine):
-        comparator = DataQualityComparator(postgres_engine, postgres_engine, timezone='UTC')
+        comparator = DataQualityComparator(
+            postgres_engine, postgres_engine, timezone='UTC'
+        )
         source_query = """
             SELECT id, name, created_at
             FROM test.test_pg_custom_query_chunking_yearly
@@ -109,20 +113,26 @@ class TestPostgresCustomQueryYearlyChunking:
             custom_primary_key=['id'],
             tolerance_percentage=0.0,
         )
-        status_chunked, _, stats_chunked, details_chunked = comparator.compare_custom_query(
-            source_query=source_query,
-            source_params=params,
-            target_query=target_query,
-            target_params=params,
-            custom_primary_key=['id'],
-            chunk_size_days=30,
-            tolerance_percentage=0.0,
+        status_chunked, _, stats_chunked, details_chunked = (
+            comparator.compare_custom_query(
+                source_query=source_query,
+                source_params=params,
+                target_query=target_query,
+                target_params=params,
+                custom_primary_key=['id'],
+                chunk_size_days=30,
+                tolerance_percentage=0.0,
+            )
         )
         assert status_full == COMPARISON_FAILED
         assert status_chunked == COMPARISON_FAILED
         assert stats_chunked.final_diff_score == stats_full.final_diff_score
         assert (
-            int(details_full.mismatches_per_column.set_index('column_name').loc['name', 'mismatch_count'])
+            int(
+                details_full.mismatches_per_column.set_index('column_name').loc[
+                    'name', 'mismatch_count'
+                ]
+            )
             == 3
         )
         assert (
