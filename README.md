@@ -18,7 +18,7 @@ target_engine = create_engine('oracle+oracledb://user:pass@localhost:1521/target
 comparator = DataQualityComparator(
     source_engine=source_engine,
     target_engine=target_engine,
-    timezone='Europe/Moscow'
+    timezone='Europe/Athens'
 )
 
 # 3. Define tables to compare
@@ -80,7 +80,7 @@ hr.employees
 VS
 hr.employees
 ================================================================================
-timezone: Europe/Moscow
+timezone: Europe/Athens
 
     SELECT employee_id, first_name, last_name, salary, department_id, hire_date,
            case when updated_at > (now() - INTERVAL '3 hours') then 'y' end as xrecently_changed
