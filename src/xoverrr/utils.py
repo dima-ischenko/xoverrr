@@ -462,11 +462,12 @@ def generate_comparison_sample_report(
         rl.append(f'VS')
         rl.append(f'{target_table}')
         rl.append('=' * 80)
-        
+
     if date_chunks and len(date_chunks) > 1:
-        rl.append(f'\nCHUNKS PROCESSED ({len(date_chunks)} intervals):')
+        rl.append(f'\nchunks processed ({len(date_chunks)} intervals):')
         for start, end in date_chunks:
-            rl.append(f'  {start} → {end}')            
+            rl.append(f'  {start} → {end}')
+        rl.append(f'\n')           
 
     if source_query and target_query:
         rl.append(f'timezone: {timezone}')
@@ -575,9 +576,10 @@ def generate_comparison_count_report(
     rl.append('=' * 80)
 
     if date_chunks and len(date_chunks) > 1:
-        rl.append(f'\nCHUNKS PROCESSED ({len(date_chunks)} intervals):')
+        rl.append(f'\nchunks processed ({len(date_chunks)} intervals):')
         for start, end in date_chunks:
             rl.append(f'  {start} → {end}')
+        rl.append(f'\n')       
 
     if source_query and target_query:
         rl.append(f'timezone: {timezone}')
