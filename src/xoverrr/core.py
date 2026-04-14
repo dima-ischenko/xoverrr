@@ -972,7 +972,7 @@ class DataQualityComparator:
             skipped_target_columns=target_only_cols,
         )
 
-        report = generate_sample_report(
+        report = generate_comparison_sample_report(
             source_table.full_name,
             target_table.full_name,
             stats,
