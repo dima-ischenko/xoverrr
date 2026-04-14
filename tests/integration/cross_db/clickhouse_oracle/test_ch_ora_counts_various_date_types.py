@@ -175,7 +175,7 @@ class TestClickHouseOracleCountsWithVariousDateTypes:
         comparator = DataQualityComparator(
             source_engine=clickhouse_engine,
             target_engine=oracle_engine,
-            timezone='Europe/Moscow',  # Named timezone
+            timezone='Europe/Athens',  # Named timezone
         )
 
         status, report, stats, details = comparator.compare_counts(

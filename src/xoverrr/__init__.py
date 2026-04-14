@@ -10,4 +10,4 @@ __all__ = [
     'COMPARISON_SKIPPED',
 ]
 
-__version__ = '1.1.11'
+__version__ = '1.2.0'

@@ -18,7 +18,7 @@ target_engine = create_engine('oracle+oracledb://user:pass@localhost:1521/target
 comparator = DataQualityComparator(
     source_engine=source_engine,
     target_engine=target_engine,
-    timezone='Europe/Moscow'
+    timezone='Europe/Athens'
 )
 
 # 3. Define tables to compare
@@ -36,6 +36,7 @@ status, report, stats, details = comparator.compare_sample(
     date_column="hire_date",
     update_column="modified_at",
     date_range=(start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')),
+    chunk_size_days=30,
     custom_primary_key=["employee_id"],
     exclude_columns=["audit_log", "temp_field"],
     tolerance_percentage=0.5,
@@ -79,7 +80,7 @@ hr.employees
 VS
 hr.employees
 ================================================================================
-timezone: Europe/Moscow
+timezone: Europe/Athens
 
     SELECT employee_id, first_name, last_name, salary, department_id, hire_date,
            case when updated_at > (now() - INTERVAL '3 hours') then 'y' end as xrecently_changed
@@ -183,7 +184,8 @@ status, report, stats, details = comparator.compare_sample(
     target_table=DataReference("table_name", "schema_name"),
     date_column="created_at",
     update_column="modified_date",
-    date_range=("2024-01-01", "2024-01-31"),
+    date_range=("2024-01-01", "2024-12-31"),
+    chunk_size_days=30,
     exclude_columns=["audit_timestamp", "internal_id"],
     include_columns=None,
     custom_primary_key=["id", "user_id"],
@@ -198,6 +200,7 @@ status, report, stats, details = comparator.compare_sample(
 - `date_column` – column used for date‑range filtering
 - `update_column` – column identifying “fresh” data (excluded from both sides)
 - `date_range` – tuple `(start_date, end_date)` in “YYYY‑MM‑DD” format
+- `chunk_size_days` – optional chunk size (in days) for iterative processing across the date range
 - `exclude_columns` – list of columns to omit from comparison, aka blacklist
 - `include_columns` – list of columns to include, aka whitelist
 - `custom_primary_key` – user‑specified primary key (if not provided, auto‑detected)
@@ -213,7 +216,8 @@ status, report, stats, details = comparator.compare_counts(
     source_table=DataReference("users", "schema1"),
     target_table=DataReference("users", "schema2"),
     date_column="created_at",
-    date_range=("2024-01-01", "2024-01-31"),
+    date_range=("2024-01-01", "2024-12-31"),
+    chunk_size_days=30,
     tolerance_percentage=2.0,
     max_examples=5
 )
@@ -223,6 +227,7 @@ status, report, stats, details = comparator.compare_counts(
 - `source_table`, `target_table` – references to the tables/views to compare
 - `date_column` – column for daily grouping
 - `date_range` – date interval for analysis
+- `chunk_size_days` – optional chunk size (in days) for iterative processing across the date range
 - `tolerance_percentage` – acceptable discrepancy threshold
 - `max_examples` – maximum number of daily discrepancy examples included in the report
 
@@ -235,8 +240,32 @@ status, report, stats, details = comparator.compare_custom_query(
     source_params={'status': 'active'},
     target_query="""SELECT user_id, user_name, created_date FROM scott.target_table WHERE status = :status""",
     target_params={'status': 'active'},
-    custom_primary_key=["id"],
+    custom_primary_key=["user_id"],
     exclude_columns=["internal_code"],
+    tolerance_percentage=0.5,
+    max_examples=3
+)
+```
+
+**Custom query with chunking (`start_date`/`end_date` required):**
+```python
+status, report, stats, details = comparator.compare_custom_query(
+    source_query="""
+        SELECT id, name, created_at
+        FROM scott.source_table
+        WHERE created_at >= date_trunc('day', cast(:start_date as date))
+          AND created_at < date_trunc('day', cast(:end_date as date)) + interval '1 day'
+    """,
+    source_params={'start_date': '2024-01-01', 'end_date': '2024-12-31'},
+    target_query="""
+        SELECT id, name, created_at
+        FROM scott.target_table
+        WHERE created_at >= date_trunc('day', cast(:start_date as date))
+          AND created_at < date_trunc('day', cast(:end_date as date)) + interval '1 day'
+    """,
+    target_params={'start_date': '2024-01-01', 'end_date': '2024-12-31'},
+    custom_primary_key=["id"],
+    chunk_size_days=30,
     tolerance_percentage=0.5,
     max_examples=3
 )
@@ -246,6 +275,7 @@ status, report, stats, details = comparator.compare_custom_query(
 - `source_query`, `target_query` – parameterised SQL queries for the source and target
 - `source_params`, `target_params` – query parameters
 - `custom_primary_key` – mandatory list of column names constituting the primary key
+- `chunk_size_days` – optional chunk size (in days) for iterative processing when source and target params include `start_date` and `end_date`
 - `exclude_columns` – columns to omit from comparison
 - `tolerance_percentage` – acceptable discrepancy threshold
 - `max_examples` – maximum number of discrepancy examples included in the report
@@ -254,9 +284,15 @@ status, report, stats, details = comparator.compare_custom_query(
   case when updated_at > (sysdate - 3/24) then 'y' end as xrecently_changed
   ```
 
+### Chunked Processing (`chunk_size_days`)
+- Available in all methods: `compare_sample`, `compare_counts`, `compare_custom_query`.
+- Splits the requested period into N-day windows and compares chunk-by-chunk, then aggregates final metrics and examples.
+- Useful for long ranges or large tables to reduce peak query/dataframe size.
+- For `compare_custom_query`, chunking is applied only when both `source_params` and `target_params` contain `start_date` and `end_date`.
+
 **Automatic Primary‑Key Detection:**
-- If `custom_primary_key` is not supplied, the system automatically infers the PK from metadata.
-- When source and target PKs differ, the source PK is used with a warning.
+- For `compare_sample`, if `custom_primary_key` is not supplied, the system automatically infers the PK from metadata.
+- For `compare_custom_query`, `custom_primary_key` is mandatory.
 
 **Performance Considerations:**
 - DataFrame size validation (hard limit: 3 GB per sample)
