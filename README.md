@@ -36,6 +36,7 @@ status, report, stats, details = comparator.compare_sample(
     date_column="hire_date",
     update_column="modified_at",
     date_range=(start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')),
+    chunk_size_days=30,
     custom_primary_key=["employee_id"],
     exclude_columns=["audit_log", "temp_field"],
     tolerance_percentage=0.5,
@@ -183,7 +184,8 @@ status, report, stats, details = comparator.compare_sample(
     target_table=DataReference("table_name", "schema_name"),
     date_column="created_at",
     update_column="modified_date",
-    date_range=("2024-01-01", "2024-01-31"),
+    date_range=("2024-01-01", "2025-01-31"),
+    chunk_size_days=30,
     exclude_columns=["audit_timestamp", "internal_id"],
     include_columns=None,
     custom_primary_key=["id", "user_id"],
@@ -198,6 +200,7 @@ status, report, stats, details = comparator.compare_sample(
 - `date_column` – column used for date‑range filtering
 - `update_column` – column identifying “fresh” data (excluded from both sides)
 - `date_range` – tuple `(start_date, end_date)` in “YYYY‑MM‑DD” format
+- `chunk_size_days` – optional chunk size (in days) for iterative processing across the date range
 - `exclude_columns` – list of columns to omit from comparison, aka blacklist
 - `include_columns` – list of columns to include, aka whitelist
 - `custom_primary_key` – user‑specified primary key (if not provided, auto‑detected)
@@ -213,7 +216,8 @@ status, report, stats, details = comparator.compare_counts(
     source_table=DataReference("users", "schema1"),
     target_table=DataReference("users", "schema2"),
     date_column="created_at",
-    date_range=("2024-01-01", "2024-01-31"),
+    date_range=("2024-01-01", "2025-01-31"),
+    chunk_size_days=30,
     tolerance_percentage=2.0,
     max_examples=5
 )
@@ -223,6 +227,7 @@ status, report, stats, details = comparator.compare_counts(
 - `source_table`, `target_table` – references to the tables/views to compare
 - `date_column` – column for daily grouping
 - `date_range` – date interval for analysis
+- `chunk_size_days` – optional chunk size (in days) for iterative processing across the date range
 - `tolerance_percentage` – acceptable discrepancy threshold
 - `max_examples` – maximum number of daily discrepancy examples included in the report
 
@@ -246,6 +251,7 @@ status, report, stats, details = comparator.compare_custom_query(
 - `source_query`, `target_query` – parameterised SQL queries for the source and target
 - `source_params`, `target_params` – query parameters
 - `custom_primary_key` – mandatory list of column names constituting the primary key
+- `chunk_size_days` – optional chunk size (in days) for iterative processing when source and target params include `start_date` and `end_date`
 - `exclude_columns` – columns to omit from comparison
 - `tolerance_percentage` – acceptable discrepancy threshold
 - `max_examples` – maximum number of discrepancy examples included in the report
@@ -253,6 +259,12 @@ status, report, stats, details = comparator.compare_custom_query(
   ```sql
   case when updated_at > (sysdate - 3/24) then 'y' end as xrecently_changed
   ```
+
+### Chunked Processing (`chunk_size_days`)
+- Available in all methods: `compare_sample`, `compare_counts`, `compare_custom_query`.
+- Splits `date_range` into N-day windows and compares chunk-by-chunk, then aggregates final metrics and examples.
+- Useful for long ranges or large tables to reduce peak query/dataframe size.
+- For `compare_custom_query`, chunking is applied only when both `source_params` and `target_params` contain `start_date` and `end_date`.
 
 **Automatic Primary‑Key Detection:**
 - If `custom_primary_key` is not supplied, the system automatically infers the PK from metadata.
