@@ -1,6 +1,8 @@
+from collections import defaultdict
 from typing import Dict, List, Optional, Tuple, Union
 
 import pandas as pd
+import numpy as np
 from sqlalchemy.engine import Engine
 
 from . import constants as ct
@@ -87,6 +89,7 @@ class DataQualityComparator:
         target_table: DataReference,
         date_column: Optional[str] = None,
         date_range: Optional[Tuple[str, str]] = None,
+        chunk_size_days: Optional[int] = None,
         tolerance_percentage: float = 0.0,
         max_examples: Optional[int] = ct.DEFAULT_MAX_EXAMPLES,
     ) -> Tuple[str, Optional[ComparisonStats], Optional[ComparisonDiffDetails]]:
@@ -104,6 +107,7 @@ class DataQualityComparator:
                 date_column,
                 start_date,
                 end_date,
+                chunk_size_days,
                 tolerance_percentage,
                 max_examples,
             )
@@ -124,6 +128,7 @@ class DataQualityComparator:
         date_column: Optional[str] = None,
         update_column: Optional[str] = None,
         date_range: Optional[Tuple[str, str]] = None,
+        chunk_size_days: Optional[int] = None,
         exclude_columns: Optional[List[str]] = None,
         include_columns: Optional[List[str]] = None,
         custom_primary_key: Optional[List[str]] = None,
@@ -173,6 +178,7 @@ class DataQualityComparator:
                 update_column,
                 start_date,
                 end_date,
+                chunk_size_days,
                 exclude_cols,
                 include_cols,
                 custom_keys,
@@ -197,6 +203,7 @@ class DataQualityComparator:
         date_column: str,
         start_date: Optional[str],
         end_date: Optional[str],
+        chunk_size_days: Optional[int],
         tolerance_percentage: float,
         max_examples: int,
     ) -> Tuple[str, str, Optional[ComparisonStats], Optional[ComparisonDiffDetails]]:
@@ -217,29 +224,44 @@ class DataQualityComparator:
             app_logger.info('target_columns meta:\n')
             app_logger.info(target_columns_meta.to_string(index=False))
 
-            source_query, source_params = source_adapter.build_count_query_common(
-                source_table,
-                date_column,
-                start_date,
-                end_date,
-                source_columns_meta,
-                self.timezone,
-            )
-            source_counts = self._execute_query(
-                (source_query, source_params), self.source_engine, self.timezone
-            )
+            source_chunks = []
+            target_chunks = []
+            source_query, source_params = None, None
+            target_query, target_params = None, None
 
-            target_query, target_params = target_adapter.build_count_query_common(
-                target_table,
-                date_column,
-                start_date,
-                end_date,
-                target_columns_meta,
-                self.timezone,
-            )
-            target_counts = self._execute_query(
-                (target_query, target_params), self.target_engine, self.timezone
-            )
+            for chunk_start, chunk_end in self._iter_date_chunks(
+                date_column, start_date, end_date, chunk_size_days
+            ):
+                source_query, source_params = source_adapter.build_count_query_common(
+                    source_table,
+                    date_column,
+                    chunk_start,
+                    chunk_end,
+                    source_columns_meta,
+                    self.timezone,
+                )
+                chunk_source = self._execute_query(
+                    (source_query, source_params), self.source_engine, self.timezone
+                )
+                source_chunks.append(chunk_source)
+
+                target_query, target_params = target_adapter.build_count_query_common(
+                    target_table,
+                    date_column,
+                    chunk_start,
+                    chunk_end,
+                    target_columns_meta,
+                    self.timezone,
+                )
+                chunk_target = self._execute_query(
+                    (target_query, target_params), self.target_engine, self.timezone
+                )
+                target_chunks.append(chunk_target)
+
+            source_counts = pd.concat(source_chunks, ignore_index=True)
+            target_counts = pd.concat(target_chunks, ignore_index=True)
+            source_counts = source_counts.groupby('dt', as_index=False)['cnt'].sum()
+            target_counts = target_counts.groupby('dt', as_index=False)['cnt'].sum()
 
             source_counts_filled, target_counts_filled = cross_fill_missing_dates(
                 source_counts, target_counts
@@ -307,6 +329,7 @@ class DataQualityComparator:
         update_column: str,
         start_date: Optional[str],
         end_date: Optional[str],
+        chunk_size_days: Optional[int],
         exclude_columns: List[str],
         include_columns: List[str],
         custom_key_columns: Optional[List[str]],
@@ -432,74 +455,24 @@ class DataQualityComparator:
                     f'No one column to compare, need to check tables or reduce the exclude_columns list: {",".join(exclude_columns)}'
                 )
 
-            source_data, source_query, source_params = self._get_table_data(
-                self.source_engine,
-                source_table,
-                source_columns_meta,
-                common_cols,
-                date_column,
-                update_column,
-                start_date,
-                end_date,
-                exclude_recent_hours,
+            return self._compare_samples_iterative(
+                source_table=source_table,
+                target_table=target_table,
+                source_columns_meta=source_columns_meta,
+                target_columns_meta=target_columns_meta,
+                common_cols=common_cols,
+                key_columns=key_columns,
+                source_only_cols=source_only_cols,
+                target_only_cols=target_only_cols,
+                date_column=date_column,
+                update_column=update_column,
+                start_date=start_date,
+                end_date=end_date,
+                chunk_size_days=chunk_size_days,
+                exclude_recent_hours=exclude_recent_hours,
+                tolerance_percentage=tolerance_percentage,
+                max_examples=max_examples,
             )
-
-            target_data, target_query, target_params = self._get_table_data(
-                self.target_engine,
-                target_table,
-                target_columns_meta,
-                common_cols,
-                date_column,
-                update_column,
-                start_date,
-                end_date,
-                exclude_recent_hours,
-            )
-            status = None
-            # special case
-            if target_data.empty and source_data.empty:
-                status = ct.COMPARISON_SKIPPED
-                return status, None, None, None
-            elif source_data.empty or target_data.empty:
-                raise DQCompareException(
-                    f'Nothing to compare, rows returned from source: {len(source_data)}, from target: {len(target_data)}'
-                )
-
-            source_data = prepare_dataframe(source_data)
-            target_data = prepare_dataframe(target_data)
-            if update_column and exclude_recent_hours:
-                source_data, target_data = clean_recently_changed_data(
-                    source_data, target_data, key_columns
-                )
-
-            stats, details = compare_dataframes(
-                source_data, target_data, key_columns, max_examples
-            )
-
-            if stats:
-                details.skipped_source_columns = source_only_cols
-                details.skipped_target_columns = target_only_cols
-
-                report = generate_comparison_sample_report(
-                    source_table.full_name,
-                    target_table.full_name,
-                    stats,
-                    details,
-                    self.timezone,
-                    source_query,
-                    source_params,
-                    target_query,
-                    target_params,
-                )
-                status = (
-                    ct.COMPARISON_FAILED
-                    if stats.final_diff_score > tolerance_percentage
-                    else ct.COMPARISON_SUCCESS
-                )
-                return status, report, stats, details
-            else:
-                status = ct.COMPARISON_SKIPPED
-                return status, None, None, None
 
         except Exception as e:
             app_logger.error(f'Sample comparison failed: {str(e)}')
@@ -718,6 +691,312 @@ class DataQualityComparator:
             return self.adapters[db_type]
         except KeyError:
             raise ValueError(f'No adapter available for {db_type}')
+
+    def _iter_date_chunks(
+        self,
+        date_column: Optional[str],
+        start_date: Optional[str],
+        end_date: Optional[str],
+        chunk_size_days: Optional[int],
+    ) -> List[Tuple[Optional[str], Optional[str]]]:
+        if chunk_size_days is not None and chunk_size_days <= 0:
+            raise ValueError('chunk_size_days must be greater than 0')
+
+        if not (
+            chunk_size_days
+            and date_column
+            and start_date is not None
+            and end_date is not None
+        ):
+            return [(start_date, end_date)]
+
+        start_ts = pd.Timestamp(start_date).normalize()
+        end_ts = pd.Timestamp(end_date).normalize()
+        if start_ts > end_ts:
+            raise ValueError(
+                f'date_range start {start_date} is greater than end {end_date}'
+            )
+
+        chunks: List[Tuple[str, str]] = []
+        current = start_ts
+        while current <= end_ts:
+            chunk_end = min(current + pd.Timedelta(days=chunk_size_days - 1), end_ts)
+            chunks.append(
+                (
+                    current.strftime(ct.DATE_FORMAT),
+                    chunk_end.strftime(ct.DATE_FORMAT),
+                )
+            )
+            current = chunk_end + pd.Timedelta(days=1)
+        return chunks
+
+    def _compare_samples_iterative(
+        self,
+        source_table: DataReference,
+        target_table: DataReference,
+        source_columns_meta: pd.DataFrame,
+        target_columns_meta: pd.DataFrame,
+        common_cols: List[str],
+        key_columns: List[str],
+        source_only_cols: List[str],
+        target_only_cols: List[str],
+        date_column: Optional[str],
+        update_column: Optional[str],
+        start_date: Optional[str],
+        end_date: Optional[str],
+        chunk_size_days: Optional[int],
+        exclude_recent_hours: Optional[int],
+        tolerance_percentage: float,
+        max_examples: Optional[int],
+    ) -> Tuple[str, str, Optional[ComparisonStats], Optional[ComparisonDiffDetails]]:
+        examples_limit = max_examples or ct.DEFAULT_MAX_EXAMPLES
+
+        total_source_rows = 0
+        total_target_rows = 0
+        dup_source_rows = 0
+        dup_target_rows = 0
+        only_source_rows = 0
+        only_target_rows = 0
+        common_pk_rows = 0
+        total_matched_rows = 0
+        mismatch_counter = defaultdict(int)
+
+        dup_source_examples: set = set()
+        dup_target_examples: set = set()
+        source_only_examples: set = set()
+        target_only_examples: set = set()
+        discrepant_chunks: List[pd.DataFrame] = []
+        discrepancy_examples_rows: List[Dict] = []
+        discrepancy_examples_by_col = defaultdict(int)
+
+        total_source_rows_raw = 0
+        total_target_rows_raw = 0
+        source_query, source_params = None, None
+        target_query, target_params = None, None
+
+        for chunk_start, chunk_end in self._iter_date_chunks(
+            date_column, start_date, end_date, chunk_size_days
+        ):
+            source_data, source_query, source_params = self._get_table_data(
+                self.source_engine,
+                source_table,
+                source_columns_meta,
+                common_cols,
+                date_column,
+                update_column,
+                chunk_start,
+                chunk_end,
+                exclude_recent_hours,
+            )
+            target_data, target_query, target_params = self._get_table_data(
+                self.target_engine,
+                target_table,
+                target_columns_meta,
+                common_cols,
+                date_column,
+                update_column,
+                chunk_start,
+                chunk_end,
+                exclude_recent_hours,
+            )
+
+            total_source_rows_raw += len(source_data)
+            total_target_rows_raw += len(target_data)
+
+            if source_data.empty and target_data.empty:
+                continue
+
+            source_data = prepare_dataframe(source_data)
+            target_data = prepare_dataframe(target_data)
+            if update_column and exclude_recent_hours:
+                source_data, target_data = clean_recently_changed_data(
+                    source_data, target_data, key_columns
+                )
+
+            if source_data.empty and target_data.empty:
+                continue
+
+            chunk_stats, chunk_details = compare_dataframes(
+                source_data, target_data, key_columns, examples_limit
+            )
+            if not chunk_stats:
+                continue
+
+            total_source_rows += chunk_stats.total_source_rows
+            total_target_rows += chunk_stats.total_target_rows
+            dup_source_rows += chunk_stats.dup_source_rows
+            dup_target_rows += chunk_stats.dup_target_rows
+            only_source_rows += chunk_stats.only_source_rows
+            only_target_rows += chunk_stats.only_target_rows
+            common_pk_rows += chunk_stats.common_pk_rows
+            total_matched_rows += chunk_stats.total_matched_rows
+
+            if not chunk_details.mismatches_per_column.empty:
+                for row in chunk_details.mismatches_per_column.itertuples(index=False):
+                    mismatch_counter[row.column_name] += int(row.mismatch_count)
+
+            self._merge_examples_set(
+                dup_source_examples, chunk_details.dup_source_keys_examples, examples_limit
+            )
+            self._merge_examples_set(
+                dup_target_examples, chunk_details.dup_target_keys_examples, examples_limit
+            )
+            self._merge_examples_set(
+                source_only_examples,
+                chunk_details.source_only_keys_examples,
+                examples_limit,
+            )
+            self._merge_examples_set(
+                target_only_examples,
+                chunk_details.target_only_keys_examples,
+                examples_limit,
+            )
+
+            if (
+                chunk_details.discrepant_data_examples is not None
+                and not chunk_details.discrepant_data_examples.empty
+                and len(discrepant_chunks) < examples_limit
+            ):
+                needed = examples_limit * 2
+                current_cnt = sum(len(x) for x in discrepant_chunks)
+                if current_cnt < needed:
+                    remain = needed - current_cnt
+                    discrepant_chunks.append(
+                        chunk_details.discrepant_data_examples.head(remain)
+                    )
+
+            if (
+                chunk_details.discrepancies_per_col_examples is not None
+                and not chunk_details.discrepancies_per_col_examples.empty
+            ):
+                for row in chunk_details.discrepancies_per_col_examples.to_dict('records'):
+                    col = row['column_name']
+                    if discrepancy_examples_by_col[col] < examples_limit:
+                        discrepancy_examples_rows.append(row)
+                        discrepancy_examples_by_col[col] += 1
+
+        if (total_source_rows_raw, total_target_rows_raw) == (0, 0):
+            status = ct.COMPARISON_SKIPPED
+            return status, None, None, None
+        if total_source_rows == 0 or total_target_rows == 0:
+            raise DQCompareException(
+                f'Nothing to compare, rows returned from source: {total_source_rows}, from target: {total_target_rows}'
+            )
+
+        if common_pk_rows == 0:
+            source_dup_percentage = 100
+            target_dup_percentage = 100
+            source_only_percentage = 100
+            target_only_percentage = 100
+            total_diff_percentage = 100
+            max_diff_pct_cols = 100
+            median_diff_pct_cols = 100
+            final_diff_score = 100
+        else:
+            source_dup_percentage = (dup_source_rows / total_source_rows) * 100
+            target_dup_percentage = (dup_target_rows / total_target_rows) * 100
+            source_only_percentage = (only_source_rows / common_pk_rows) * 100
+            target_only_percentage = (only_target_rows / common_pk_rows) * 100
+            total_diff_percentage = (1 - total_matched_rows / common_pk_rows) * 100
+
+            mismatch_percentages = [
+                (cnt / common_pk_rows) * 100 for cnt in mismatch_counter.values()
+            ]
+            max_diff_pct_cols = (
+                float(np.max(mismatch_percentages)) if mismatch_percentages else 0.0
+            )
+            median_diff_pct_cols = (
+                float(np.median(mismatch_percentages)) if mismatch_percentages else 0.0
+            )
+            final_diff_score = (
+                source_dup_percentage * 0.1
+                + target_dup_percentage * 0.1
+                + source_only_percentage * 0.15
+                + target_only_percentage * 0.15
+                + total_diff_percentage * 0.5
+            )
+
+        stats = ComparisonStats(
+            total_source_rows=total_source_rows,
+            total_target_rows=total_target_rows,
+            dup_source_rows=dup_source_rows,
+            dup_target_rows=dup_target_rows,
+            only_source_rows=only_source_rows,
+            only_target_rows=only_target_rows,
+            common_pk_rows=common_pk_rows,
+            total_matched_rows=total_matched_rows,
+            dup_source_percentage_rows=source_dup_percentage,
+            dup_target_percentage_rows=target_dup_percentage,
+            source_only_percentage_rows=source_only_percentage,
+            target_only_percentage_rows=target_only_percentage,
+            total_diff_percentage_rows=total_diff_percentage,
+            max_diff_percentage_cols=max_diff_pct_cols,
+            median_diff_percentage_cols=median_diff_pct_cols,
+            final_diff_score=final_diff_score,
+            final_score=100 - final_diff_score,
+        )
+
+        mismatches_per_column = (
+            pd.DataFrame(
+                sorted(
+                    mismatch_counter.items(),
+                    key=lambda item: item[1],
+                    reverse=True,
+                ),
+                columns=['column_name', 'mismatch_count'],
+            )
+            if mismatch_counter
+            else pd.DataFrame(columns=['column_name', 'mismatch_count'])
+        )
+        discrepancies_per_col_examples = (
+            pd.DataFrame(discrepancy_examples_rows)
+            if discrepancy_examples_rows
+            else pd.DataFrame()
+        )
+        discrepant_data_examples = (
+            pd.concat(discrepant_chunks, ignore_index=True)
+            if discrepant_chunks
+            else pd.DataFrame()
+        )
+
+        details = ComparisonDiffDetails(
+            mismatches_per_column=mismatches_per_column,
+            discrepancies_per_col_examples=discrepancies_per_col_examples,
+            dup_source_keys_examples=tuple(dup_source_examples) or None,
+            dup_target_keys_examples=tuple(dup_target_examples) or None,
+            source_only_keys_examples=tuple(source_only_examples) or None,
+            target_only_keys_examples=tuple(target_only_examples) or None,
+            discrepant_data_examples=discrepant_data_examples,
+            common_attribute_columns=common_cols,
+            skipped_source_columns=source_only_cols,
+            skipped_target_columns=target_only_cols,
+        )
+
+        report = generate_sample_report(
+            source_table.full_name,
+            target_table.full_name,
+            stats,
+            details,
+            self.timezone,
+            source_query,
+            source_params,
+            target_query,
+            target_params,
+        )
+        status = (
+            ct.COMPARISON_FAILED
+            if stats.final_diff_score > tolerance_percentage
+            else ct.COMPARISON_SUCCESS
+        )
+        return status, report, stats, details
+
+    def _merge_examples_set(self, target_set: set, source_items, max_examples: int) -> None:
+        if not source_items:
+            return
+        for item in source_items:
+            if len(target_set) >= max_examples:
+                break
+            target_set.add(item)
 
     def _execute_query(
         self, query: Union[str, Tuple[str, Dict]], engine: Engine, timezone: str = None
