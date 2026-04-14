@@ -466,8 +466,7 @@ def generate_comparison_sample_report(
     if date_chunks and len(date_chunks) > 1:
         rl.append(f'\nchunks processed ({len(date_chunks)} intervals):')
         for start, end in date_chunks:
-            rl.append(f'  {start} → {end}')
-        rl.append(f'\n')           
+            rl.append(f'  {start} → {end}')        
 
     if source_query and target_query:
         rl.append(f'timezone: {timezone}')
@@ -578,8 +577,7 @@ def generate_comparison_count_report(
     if date_chunks and len(date_chunks) > 1:
         rl.append(f'\nchunks processed ({len(date_chunks)} intervals):')
         for start, end in date_chunks:
-            rl.append(f'  {start} → {end}')
-        rl.append(f'\n')       
+            rl.append(f'  {start} → {end}') 
 
     if source_query and target_query:
         rl.append(f'timezone: {timezone}')
