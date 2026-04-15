@@ -667,28 +667,48 @@ def clean_recently_changed_data(
         tuple: (df1_processed, df2_processed)
     """
     app_logger.info(
-        f'before exclusion recently changed rows source: {len(df1)}, target {len(df2)}'
+        f'Before exclusion: source={len(df1)}, target={len(df2)}'
     )
 
-    filtered_df1 = df1.copy()
-    filtered_df2 = df2.copy()
+    if df1.empty and df2.empty:
+        app_logger.info('Both dataframes are empty, skipping exclusion')
+        return df1, df2
 
-    filtered_df1 = filtered_df1.loc[filtered_df1['xrecently_changed'] == 'y']
-    filtered_df2 = filtered_df2.loc[filtered_df2['xrecently_changed'] == 'y']
 
-    excluded_from_df1_keys = _create_keys_set(filtered_df1, primary_keys)
-    excluded_from_df2_keys = _create_keys_set(filtered_df2, primary_keys)
+    has_flag_df1 = 'xrecently_changed' in df1.columns
+    has_flag_df2 = 'xrecently_changed' in df2.columns
 
-    excluded_keys = excluded_from_df1_keys | excluded_from_df2_keys
-    df1_processed = exclude_by_keys(df1, primary_keys, excluded_keys).drop(
-        'xrecently_changed', axis=1
-    )
-    df2_processed = exclude_by_keys(df2, primary_keys, excluded_keys).drop(
-        'xrecently_changed', axis=1
-    )
+    if not has_flag_df1 and not has_flag_df2:
+        app_logger.info('xrecently_changed column not found in either dataframe')
+        return df1, df2
+
+    excluded_keys = set()
+
+    if has_flag_df1 and not df1.empty:
+        filtered_df1 = df1[df1['xrecently_changed'] == 'y']
+        if not filtered_df1.empty:
+            excluded_keys.update(_create_keys_set(filtered_df1, primary_keys))
+
+    if has_flag_df2 and not df2.empty:
+        filtered_df2 = df2[df2['xrecently_changed'] == 'y']
+        if not filtered_df2.empty:
+            excluded_keys.update(_create_keys_set(filtered_df2, primary_keys))
+
+    if not excluded_keys:
+        app_logger.info('No recently changed records to exclude')
+        df1_processed = df1.drop('xrecently_changed', axis=1, errors='ignore') if has_flag_df1 else df1.copy()
+        df2_processed = df2.drop('xrecently_changed', axis=1, errors='ignore') if has_flag_df2 else df2.copy()
+    else:
+        df1_processed = exclude_by_keys(df1, primary_keys, excluded_keys)
+        df2_processed = exclude_by_keys(df2, primary_keys, excluded_keys)
+
+        if has_flag_df1:
+            df1_processed = df1_processed.drop('xrecently_changed', axis=1, errors='ignore')
+        if has_flag_df2:
+            df2_processed = df2_processed.drop('xrecently_changed', axis=1, errors='ignore')
 
     app_logger.info(
-        f'after exclusion recently changed rows source: {len(df1_processed)}, target {len(df2_processed)}'
+        f'After exclusion: source={len(df1_processed)}, target={len(df2_processed)}'
     )
 
     return df1_processed, df2_processed
