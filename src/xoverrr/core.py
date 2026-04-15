@@ -1132,13 +1132,9 @@ class DataQualityComparator:
                         discrepancy_examples_rows.append(row)
                         discrepancy_examples_by_col[col] += 1
 
-        if (total_source_rows_raw, total_target_rows_raw) == (0, 0):
+        if (total_source_rows, total_target_rows) == (0, 0):
             status = ct.COMPARISON_SKIPPED
             return status, None, None, None
-        if total_source_rows == 0 or total_target_rows == 0:
-            raise DQCompareException(
-                f'Nothing to compare, rows returned from source: {total_source_rows}, from target: {total_target_rows}'
-            )
 
         stats = build_comparison_stats(
             total_source_rows=total_source_rows,
