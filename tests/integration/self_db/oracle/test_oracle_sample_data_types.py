@@ -155,3 +155,23 @@ class TestOracleComplexDataTypes:
         # Should be skipped due to empty result
         assert status == COMPARISON_SKIPPED
         print(f'Oracle empty date range test passed: No data to compare')
+
+    def test_oracle_with_empty_only_after_exclusion(self, oracle_engine):
+
+        comparator = DataQualityComparator(
+            source_engine=oracle_engine,
+            target_engine=oracle_engine,
+            timezone='Europe/Athens',
+        )
+
+        status, report, stats, details = comparator.compare_sample(
+            source_table=DataReference('test_oracle_complex', 'test'),
+            target_table=DataReference('test_oracle_complex', 'test'),
+            date_column='created_at',
+            update_column='created_at',
+            date_range=('2024-01-01', '2024-01-03'),
+            tolerance_percentage=0.0,
+            exclude_recent_hours=9000000, #exclude all data in fact
+        )
+        print(report)
+        assert status == COMPARISON_SKIPPED     
