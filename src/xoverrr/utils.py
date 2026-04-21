@@ -8,6 +8,83 @@ from .constants import DEFAULT_MAX_EXAMPLES, NULL_REPLACEMENT
 from .logger import app_logger
 
 
+def build_comparison_stats(
+    total_source_rows: int,
+    total_target_rows: int,
+    dup_source_rows: int,
+    dup_target_rows: int,
+    only_source_rows: int,
+    only_target_rows: int,
+    common_pk_rows: int,
+    total_matched_rows: int,
+    mismatch_counts: Optional[List[int]] = None,
+) -> 'ComparisonStats':
+    mismatch_counts = mismatch_counts or []
+
+    if common_pk_rows == 0:
+        return ComparisonStats(
+            total_source_rows=total_source_rows,
+            total_target_rows=total_target_rows,
+            dup_source_rows=dup_source_rows,
+            dup_target_rows=dup_target_rows,
+            only_source_rows=only_source_rows,
+            only_target_rows=only_target_rows,
+            common_pk_rows=0,
+            total_matched_rows=total_matched_rows,
+            dup_source_percentage_rows=100,
+            dup_target_percentage_rows=100,
+            source_only_percentage_rows=100,
+            target_only_percentage_rows=100,
+            total_diff_percentage_rows=100,
+            max_diff_percentage_cols=100,
+            median_diff_percentage_cols=100,
+            final_diff_score=100,
+            final_score=0,
+        )
+
+    source_dup_percentage = (dup_source_rows / total_source_rows) * 100
+    target_dup_percentage = (dup_target_rows / total_target_rows) * 100
+    source_only_percentage = (only_source_rows / common_pk_rows) * 100
+    target_only_percentage = (only_target_rows / common_pk_rows) * 100
+    total_diff_percentage = (1 - total_matched_rows / common_pk_rows) * 100
+
+    mismatch_percentages = [(cnt / common_pk_rows) * 100 for cnt in mismatch_counts]
+    max_diff_pct_cols = (
+        float(np.max(mismatch_percentages)) if mismatch_percentages else 0.0
+    )
+    median_diff_pct_cols = (
+        float(np.median(mismatch_percentages)) if mismatch_percentages else 0.0
+    )
+
+    final_diff_score = (
+        source_dup_percentage * 0.1
+        + target_dup_percentage * 0.1
+        + source_only_percentage * 0.15
+        + target_only_percentage * 0.15
+        + total_diff_percentage * 0.5
+    )
+
+    return ComparisonStats(
+        total_source_rows=total_source_rows,
+        total_target_rows=total_target_rows,
+        dup_source_rows=dup_source_rows,
+        dup_target_rows=dup_target_rows,
+        only_source_rows=only_source_rows,
+        only_target_rows=only_target_rows,
+        common_pk_rows=common_pk_rows,
+        total_matched_rows=total_matched_rows,
+        dup_source_percentage_rows=source_dup_percentage,
+        dup_target_percentage_rows=target_dup_percentage,
+        source_only_percentage_rows=source_only_percentage,
+        target_only_percentage_rows=target_only_percentage,
+        total_diff_percentage_rows=total_diff_percentage,
+        max_diff_percentage_cols=max_diff_pct_cols,
+        median_diff_percentage_cols=median_diff_pct_cols,
+        final_diff_score=final_diff_score,
+        final_score=100 - final_diff_score,
+    )
+
+
 def normalize_column_names(columns: List[str]) -> List[str]:
     """
     Normalize column names to lowercase for consistent comparison.
@@ -283,7 +360,7 @@ def compare_dataframes(
 
     if not common_keys_cnt:
         # Special case when there is no matched primary keys at all
-        comparison_stats = ComparisonStats(
+        comparison_stats = build_comparison_stats(
             total_source_rows=len(source_df),
             total_target_rows=len(target_df),
             dup_source_rows=source_dup_cnt,
@@ -292,18 +369,7 @@ def compare_dataframes(
             only_target_rows=xor_target_only_keys_cnt,
             common_pk_rows=0,
             total_matched_rows=0,
-            #
-            dup_source_percentage_rows=100,
-            dup_target_percentage_rows=100,
-            source_only_percentage_rows=100,
-            target_only_percentage_rows=100,
-            total_diff_percentage_rows=100,
-            #
-            max_diff_percentage_cols=100,
-            median_diff_percentage_cols=100,
-            #
-            final_diff_score=100,
-            final_score=0,
+            mismatch_counts=[],
         )
 
         comparison_diff_detais = ComparisonDiffDetails(
@@ -323,31 +389,11 @@ def compare_dataframes(
     # get number of that totally equal in two datasets
     total_matched_records_cnt = common_keys_cnt - xor_common_keys_cnt
 
-    source_only_percentage = (xor_source_only_keys_cnt / common_keys_cnt) * 100
-    target_only_percentage = (xor_target_only_keys_cnt / common_keys_cnt) * 100
-
-    source_dup_percentage = (source_dup_cnt / len(source_df)) * 100
-    target_dup_percentage = (target_dup_cnt / len(target_df)) * 100
-
-    diff_col_metrics, diff_col_examples, diff_col_counters = (
-        analyze_column_discrepancies(
-            xor_df_multi, key_columns, non_key_columns, common_keys_cnt, max_examples
-        )
+    _, diff_col_examples, diff_col_counters = analyze_column_discrepancies(
+        xor_df_multi, key_columns, non_key_columns, common_keys_cnt, max_examples
     )
 
-    source_and_target_total_diff_percentage = (
-        1 - total_matched_records_cnt / common_keys_cnt
-    ) * 100
-
-    final_diff_score = (
-        source_dup_percentage * 0.1
-        + target_dup_percentage * 0.1
-        + source_only_percentage * 0.15
-        + target_only_percentage * 0.15
-        + source_and_target_total_diff_percentage * 0.5
-    )
-
-    comparison_stats = ComparisonStats(
+    comparison_stats = build_comparison_stats(
         total_source_rows=len(source_df),
         total_target_rows=len(target_df),
         dup_source_rows=source_dup_cnt,
@@ -356,18 +402,7 @@ def compare_dataframes(
         only_target_rows=xor_target_only_keys_cnt,
         common_pk_rows=common_keys_cnt,
         total_matched_rows=total_matched_records_cnt,
-        #
-        dup_source_percentage_rows=source_dup_percentage,
-        dup_target_percentage_rows=target_dup_percentage,
-        source_only_percentage_rows=source_only_percentage,
-        target_only_percentage_rows=target_only_percentage,
-        total_diff_percentage_rows=source_and_target_total_diff_percentage,
-        #
-        max_diff_percentage_cols=diff_col_metrics['max_pct'],
-        median_diff_percentage_cols=diff_col_metrics['median_pct'],
-        #
-        final_diff_score=final_diff_score,
-        final_score=100 - final_diff_score,
+        mismatch_counts=diff_col_counters['mismatch_count'].tolist(),
     )
 
     comparison_diff_detais = ComparisonDiffDetails(
@@ -403,6 +438,190 @@ def _create_keys_set(df: pd.DataFrame, key_columns: List[str]) -> set:
     return set(df[key_columns].itertuples(index=False, name=None))
 
 
+<<<<<<< HEAD
+=======
+def generate_comparison_sample_report(
+    source_table: str,
+    target_table: str,
+    stats: ComparisonStats,
+    details: ComparisonDiffDetails,
+    timezone: str,
+    source_query: str = None,
+    source_params: Dict = None,
+    target_query: str = None,
+    target_params: Dict = None,
+    date_chunks: Optional[List[Tuple[str, str]]] = None,
+) -> None:
+    """Generate comparison report (logger output looks uuugly)"""
+    rl = []
+    rl.append('=' * 80)
+    current_datetime = datetime.now()
+    rl.append(current_datetime.strftime(DATETIME_FORMAT))
+    rl.append(f'DATA SAMPLE COMPARISON REPORT: ')
+    if source_table and target_table:  # empty for custom query
+        rl.append(f'{source_table}')
+        rl.append(f'VS')
+        rl.append(f'{target_table}')
+        rl.append('=' * 80)
+
+    if date_chunks and len(date_chunks) > 1:
+        rl.append(f'\nchunks processed ({len(date_chunks)} intervals):')
+        for start, end in date_chunks:
+            rl.append(f'  {start} → {end}')        
+
+    if source_query and target_query:
+        rl.append(f'timezone: {timezone}')
+        rl.append(f'    {source_query}')
+        if source_params:
+            rl.append(f'    params: {source_params}')
+        rl.append('-' * 40)
+        rl.append(f'    {target_query}')
+        if target_params:
+            rl.append(f'    params: {target_params}')    
+
+    rl.append('-' * 40)
+
+    rl.append(f'\nSUMMARY:')
+    rl.append(f'  Source rows: {stats.total_source_rows}')
+    rl.append(f'  Target rows: {stats.total_target_rows}')
+    rl.append(f'  Duplicated source rows: {stats.dup_source_rows}')
+    rl.append(f'  Duplicated target rows: {stats.dup_target_rows}')
+    rl.append(f'  Only source rows: {stats.only_source_rows}')
+    rl.append(f'  Only target rows: {stats.only_target_rows}')
+    rl.append(f'  Common rows (by primary key): {stats.common_pk_rows}')
+    rl.append(f'  Totally matched rows: {stats.total_matched_rows}')
+    rl.append('-' * 40)
+    rl.append(f'  Source only rows %: {stats.source_only_percentage_rows:.5f}')
+    rl.append(f'  Target only rows %: {stats.target_only_percentage_rows:.5f}')
+    rl.append(f'  Duplicated source rows %: {stats.dup_source_percentage_rows:.5f}')
+    rl.append(f'  Duplicated target rows %: {stats.dup_target_percentage_rows:.5f}')
+    rl.append(f'  Mismatched rows %: {stats.total_diff_percentage_rows:.5f}')
+    rl.append(f'  Final discrepancies score: {stats.final_diff_score:.5f}')
+    rl.append(f'  Final data quality score: {stats.final_score:.5f}')
+
+    rl.append(f'  Source-only key examples: {details.source_only_keys_examples}')
+    rl.append(f'  Target-only key examples: {details.target_only_keys_examples}')
+
+    rl.append(f'  Duplicated source key examples: {details.dup_source_keys_examples}')
+    rl.append(f'  Duplicated target key examples: {details.dup_target_keys_examples}')
+
+    rl.append(
+        f'  Common attribute columns: {", ".join(details.common_attribute_columns)}'
+    )
+    rl.append(f'  Skipped source columns: {", ".join(details.skipped_source_columns)}')
+    rl.append(f'  Skipped target columns: {", ".join(details.skipped_target_columns)}')
+
+    if stats.max_diff_percentage_cols > 0 and not details.mismatches_per_column.empty:
+        rl.append(f'\nCOLUMN DIFFERENCES:')
+
+        rl.append(
+            f'  Discrepancies per column (max %): {stats.max_diff_percentage_cols:.5f}'
+        )
+        rl.append(f'  Count of mismatches per column:\n')
+        rl.append(details.mismatches_per_column.to_string(index=False))
+
+        rl.append(f'  Some examples:\n')
+        rl.append(
+            details.discrepancies_per_col_examples.to_string(
+                index=False, max_colwidth=64, justify='left'
+            )
+        )
+
+    # Display sample data if available
+    if (
+        details.discrepant_data_examples is not None
+        and not details.discrepant_data_examples.empty
+    ):
+        rl.append(f'\nDISCREPANT DATA (first pairs):')
+        rl.append('Sorted by primary key and dataset:')
+        rl.append(f'\n')
+        rl.append(
+            details.discrepant_data_examples.to_string(
+                index=False, max_colwidth=64, justify='left'
+            )
+        )
+        rl.append(f'\n')
+
+    rl.append('=' * 80)
+
+    return '\n'.join(rl)
+
+
+def generate_comparison_count_report(
+    source_table: str,
+    target_table: str,
+    stats: ComparisonStats,
+    details: ComparisonDiffDetails,
+    total_source_count: int,
+    total_target_count: int,
+    discrepancies_counters_percentage: int,
+    result_diff_in_counters: int,
+    result_equal_in_counters: int,
+    timezone: str,
+    source_query: str = None,
+    source_params: Dict = None,
+    target_query: str = None,
+    target_params: Dict = None,
+    date_chunks: Optional[List[Tuple[str, str]]] = None,
+) -> None:
+    """Generates comparison report (logger output looks uuugly)"""
+    rl = []
+    rl.append('=' * 80)
+    current_datetime = datetime.now()
+    rl.append(current_datetime.strftime(DATETIME_FORMAT))
+    rl.append(f'COUNT COMPARISON REPORT:')
+    rl.append(f'{source_table}')
+    rl.append(f'VS')
+    rl.append(f'{target_table}')
+    rl.append('=' * 80)
+
+    if date_chunks and len(date_chunks) > 1:
+        rl.append(f'\nchunks processed ({len(date_chunks)} intervals):')
+        for start, end in date_chunks:
+            rl.append(f'  {start} → {end}') 
+
+    if source_query and target_query:
+        rl.append(f'timezone: {timezone}')
+        rl.append(f'    {source_query}')
+        if source_params:
+            rl.append(f'    params: {source_params}')
+        rl.append('-' * 40)
+        rl.append(f'    {target_query}')
+        if target_params:
+            rl.append(f'    params: {target_params}')
+
+    rl.append('-' * 40)
+
+    rl.append(f'\nSUMMARY:')
+    rl.append(f'  Source total count: {total_source_count}')
+    rl.append(f'  Target total count: {total_target_count}')
+    rl.append(f'  Common total count: {result_equal_in_counters}')
+    rl.append(f'  Diff total count: {result_diff_in_counters}')
+    rl.append(f'  Discrepancies percentage: {discrepancies_counters_percentage:.5f}%')
+    rl.append(f'  Final discrepancies score: {discrepancies_counters_percentage:.5f}')
+    rl.append(
+        f'  Final data quality score: {(100 - discrepancies_counters_percentage):.5f}'
+    )
+    if not details.mismatches_per_column.empty:
+        rl.append(f'\nDETAIL DIFFERENCES:')
+        rl.append(details.mismatches_per_column.to_string(index=False))
+
+    # Display sample data if available
+    if (
+        details.discrepant_data_examples is not None
+        and not details.discrepant_data_examples.empty
+    ):
+        rl.append(f'\nDISCREPANT DATA (first pairs):')
+        rl.append('Sorted by primary key and dataset:')
+        rl.append(f'\n')
+        rl.append(details.discrepant_data_examples.to_string(index=False))
+        rl.append(f'\n')
+    rl.append('=' * 80)
+
+    return '\n'.join(rl)
+
+
+>>>>>>> main
 def safe_remove_zeros(x):
     if pd.isna(x):
         return x
@@ -450,28 +669,48 @@ def clean_recently_changed_data(
         tuple: (df1_processed, df2_processed)
     """
     app_logger.info(
-        f'before exclusion recently changed rows source: {len(df1)}, target {len(df2)}'
+        f'Before exclusion: source={len(df1)}, target={len(df2)}'
     )
 
-    filtered_df1 = df1.copy()
-    filtered_df2 = df2.copy()
+    if df1.empty and df2.empty:
+        app_logger.info('Both dataframes are empty, skipping exclusion')
+        return df1, df2
 
-    filtered_df1 = filtered_df1.loc[filtered_df1['xrecently_changed'] == 'y']
-    filtered_df2 = filtered_df2.loc[filtered_df2['xrecently_changed'] == 'y']
 
-    excluded_from_df1_keys = _create_keys_set(filtered_df1, primary_keys)
-    excluded_from_df2_keys = _create_keys_set(filtered_df2, primary_keys)
+    has_flag_df1 = 'xrecently_changed' in df1.columns
+    has_flag_df2 = 'xrecently_changed' in df2.columns
 
-    excluded_keys = excluded_from_df1_keys | excluded_from_df2_keys
-    df1_processed = exclude_by_keys(df1, primary_keys, excluded_keys).drop(
-        'xrecently_changed', axis=1
-    )
-    df2_processed = exclude_by_keys(df2, primary_keys, excluded_keys).drop(
-        'xrecently_changed', axis=1
-    )
+    if not has_flag_df1 and not has_flag_df2:
+        app_logger.info('xrecently_changed column not found in either dataframe')
+        return df1, df2
+
+    excluded_keys = set()
+
+    if has_flag_df1 and not df1.empty:
+        filtered_df1 = df1[df1['xrecently_changed'] == 'y']
+        if not filtered_df1.empty:
+            excluded_keys.update(_create_keys_set(filtered_df1, primary_keys))
+
+    if has_flag_df2 and not df2.empty:
+        filtered_df2 = df2[df2['xrecently_changed'] == 'y']
+        if not filtered_df2.empty:
+            excluded_keys.update(_create_keys_set(filtered_df2, primary_keys))
+
+    if not excluded_keys:
+        app_logger.info('No recently changed records to exclude')
+        df1_processed = df1.drop('xrecently_changed', axis=1, errors='ignore') if has_flag_df1 else df1.copy()
+        df2_processed = df2.drop('xrecently_changed', axis=1, errors='ignore') if has_flag_df2 else df2.copy()
+    else:
+        df1_processed = exclude_by_keys(df1, primary_keys, excluded_keys)
+        df2_processed = exclude_by_keys(df2, primary_keys, excluded_keys)
+
+        if has_flag_df1:
+            df1_processed = df1_processed.drop('xrecently_changed', axis=1, errors='ignore')
+        if has_flag_df2:
+            df2_processed = df2_processed.drop('xrecently_changed', axis=1, errors='ignore')
 
     app_logger.info(
-        f'after exclusion recently changed rows source: {len(df1_processed)}, target {len(df2_processed)}'
+        f'After exclusion: source={len(df1_processed)}, target={len(df2_processed)}'
     )
 
     return df1_processed, df2_processed
