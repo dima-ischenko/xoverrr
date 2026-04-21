@@ -1,10 +1,12 @@
+from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import List, Optional, defaultdict
+from datetime import datetime
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 
-from .constants import DEFAULT_MAX_EXAMPLES, NULL_REPLACEMENT
+from .constants import DATETIME_FORMAT, DEFAULT_MAX_EXAMPLES, NULL_REPLACEMENT
 from .logger import app_logger
 
 
@@ -438,8 +440,6 @@ def _create_keys_set(df: pd.DataFrame, key_columns: List[str]) -> set:
     return set(df[key_columns].itertuples(index=False, name=None))
 
 
-<<<<<<< HEAD
-=======
 def generate_comparison_sample_report(
     source_table: str,
     target_table: str,
@@ -621,7 +621,6 @@ def generate_comparison_count_report(
     return '\n'.join(rl)
 
 
->>>>>>> main
 def safe_remove_zeros(x):
     if pd.isna(x):
         return x

@@ -5,9 +5,9 @@ Provides functions to format comparison statistics and details into
 human-readable reports and structured data formats (JSON, dict).
 """
 
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
@@ -26,6 +26,9 @@ class ComparisonResult:
     timestamp: str
     comparison_type: str  # 'sample', 'count', 'custom_query'
     status: str
+    comparison_name: Optional[str] = None
+    comparison_tags: Optional[Dict[str, Any]] = None
+    report: Optional[str] = None
     source_table: Optional[str] = None
     target_table: Optional[str] = None
     timezone: Optional[str] = None
@@ -80,6 +83,9 @@ class ComparisonResult:
             'timestamp': self.timestamp,
             'comparison_type': self.comparison_type,
             'status': self.status,
+            'comparison_name': self.comparison_name,
+            'comparison_tags': self.comparison_tags,
+            'report': self.report,
             'source_table': self.source_table,
             'target_table': self.target_table,
             'timezone': self.timezone,
