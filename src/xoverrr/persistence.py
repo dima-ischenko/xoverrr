@@ -2,11 +2,13 @@ import json
 from pathlib import Path
 from typing import Dict, Optional
 
-from sqlalchemy import Column, Float, Integer, MetaData, String, Table, Text
 from sqlalchemy.engine import Engine
 
+from .adapters.clickhouse import ClickHouseAdapter
+from .adapters.oracle import OracleAdapter
+from .adapters.postgres import PostgresAdapter
 from .logger import app_logger
-from .models import DataReference
+from .models import DBMSType, DataReference
 from .reporting import ComparisonResult
 
 
@@ -62,8 +64,11 @@ class ComparisonResultPersister:
         self.results_engine = results_engine
         self.results_table = results_table
         self.results_schema = results_schema
-        self._metadata = MetaData()
-        self._table_cache: Dict[str, Table] = {}
+        self.adapters = {
+            DBMSType.ORACLE: OracleAdapter(),
+            DBMSType.POSTGRESQL: PostgresAdapter(),
+            DBMSType.CLICKHOUSE: ClickHouseAdapter(),
+        }
 
     def persist(
         self,
@@ -116,10 +121,12 @@ class ComparisonResultPersister:
         try:
             payload = result.to_dict()
             record = self._build_db_record(payload)
-            table = self._get_results_table(persist_result_ref)
-            table.create(self.results_engine, checkfirst=True)
-            with self.results_engine.begin() as conn:
-                conn.execute(table.insert().values(**record))
+            table_ref = self._resolve_table_target(persist_result_ref)
+            adapter = self._get_adapter_for_engine(self.results_engine)
+            adapter.ensure_persistence_table(
+                self.results_engine, table_ref, self._build_column_types()
+            )
+            adapter.insert_persistence_record(self.results_engine, table_ref, record)
             table_name = persist_result_ref.full_name if persist_result_ref else self.results_table
             app_logger.info(f'Comparison result persisted to {table_name}')
         except Exception as exc:
@@ -160,50 +167,43 @@ class ComparisonResultPersister:
 
         return record
 
-    def _get_results_table(self, persist_result_ref: Optional[DataReference]) -> Table:
-        table_name = persist_result_ref.name if persist_result_ref else self.results_table
-        table_schema = (
-            persist_result_ref.schema if persist_result_ref else self.results_schema
-        )
-        cache_key = f'{table_schema}.{table_name}' if table_schema else table_name
-        if cache_key not in self._table_cache:
-            self._table_cache[cache_key] = self._build_results_table(
-                table_name=table_name,
-                table_schema=table_schema,
-            )
-        return self._table_cache[cache_key]
-
-    def _build_results_table(self, table_name: str, table_schema: Optional[str]) -> Table:
-        columns = [
-            Column('timestamp', String(32), nullable=False),
-            Column('comparison_type', String(64), nullable=False),
-            Column('status', String(32), nullable=False),
-            Column('comparison_name', String(255)),
-            Column('comparison_tags_json', Text),
-            Column('source_table', String(512)),
-            Column('target_table', String(512)),
-            Column('timezone', String(64)),
-            Column('source_query', Text),
-            Column('source_params_json', Text),
-            Column('target_query', Text),
-            Column('target_params_json', Text),
-            Column('report', Text),
-            Column('payload_json', Text),
-            Column('final_data_quality_score', Float),
-            Column('final_diff_score', Float),
-        ]
-
+    def _build_column_types(self) -> Dict[str, str]:
+        column_types = {
+            'timestamp': 'string',
+            'comparison_type': 'string',
+            'status': 'string',
+            'comparison_name': 'string',
+            'comparison_tags_json': 'text',
+            'source_table': 'string',
+            'target_table': 'string',
+            'timezone': 'string',
+            'source_query': 'text',
+            'source_params_json': 'text',
+            'target_query': 'text',
+            'target_params_json': 'text',
+            'report': 'text',
+            'payload_json': 'text',
+            'final_data_quality_score': 'float',
+            'final_diff_score': 'float',
+        }
         for field in self.STATS_INTEGER_FIELDS:
-            columns.append(Column(f'stats_{field}', Integer))
+            column_types[f'stats_{field}'] = 'int'
         for field in self.STATS_FLOAT_FIELDS:
-            columns.append(Column(f'stats_{field}', Float))
+            column_types[f'stats_{field}'] = 'float'
         for field in self.DETAILS_JSON_FIELDS:
-            columns.append(Column(f'details_{field}_json', Text))
+            column_types[f'details_{field}_json'] = 'text'
+        return column_types
 
-        return Table(
-            table_name,
-            self._metadata,
-            *columns,
-            schema=table_schema,
-            extend_existing=True,
-        )
+    def _resolve_table_target(
+        self, persist_result_ref: Optional[DataReference]
+    ) -> DataReference:
+        if persist_result_ref:
+            return persist_result_ref
+        return DataReference(self.results_table, self.results_schema)
+
+    def _get_adapter_for_engine(self, engine: Engine):
+        if engine.dialect.name == 'sqlite':
+            # Used in unit tests; PostgreSQL SQL syntax is compatible here.
+            return self.adapters[DBMSType.POSTGRESQL]
+        db_type = DBMSType.from_engine(engine)
+        return self.adapters[db_type]
