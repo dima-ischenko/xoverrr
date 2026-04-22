@@ -21,8 +21,6 @@ comparator = DataQualityComparator(
     target_engine=target_engine,
     timezone='Europe/Athens',
     results_engine=results_engine,                   # optional third engine
-    results_table='xoverrr_comparison_results',      # optional table name
-    results_schema='dq'                              # optional schema (if DB supports)
 )
 
 # 3. Define tables to compare

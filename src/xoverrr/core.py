@@ -34,8 +34,6 @@ class DataQualityComparator:
         default_exclude_recent_hours: Optional[int] = 24,
         timezone: str = ct.DEFAULT_TZ,
         results_engine: Optional[Engine] = None,
-        results_table: str = 'xoverrr_comparison_results',
-        results_schema: Optional[str] = None,
     ):
         self.source_engine = source_engine
         self.target_engine = target_engine
@@ -44,12 +42,8 @@ class DataQualityComparator:
         self.default_exclude_recent_hours = default_exclude_recent_hours
         self.timezone = timezone
         self.results_engine = results_engine
-        self.results_table = results_table
-        self.results_schema = results_schema
         self.result_persister = ComparisonResultPersister(
             results_engine=results_engine,
-            results_table=results_table,
-            results_schema=results_schema,
         )
 
         self.adapters = {
