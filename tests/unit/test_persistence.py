@@ -47,15 +47,14 @@ def _build_details() -> ComparisonDiffDetails:
     )
 
 
-def test_persist_outputs_writes_json_report(tmp_path):
+def test_persist_outputs_returns_json_report():
     comparator = DataQualityComparator.__new__(DataQualityComparator)
     comparator.timezone = 'UTC'
     comparator.results_engine = None
     comparator.results_table = 'dq_results'
     comparator.result_persister = ComparisonResultPersister()
 
-    json_path = tmp_path / 'reports' / 'sample_report.json'
-    comparator._persist_outputs(
+    report = comparator._persist_outputs(
         status='success',
         report='FULL TEXT REPORT',
         stats=_build_stats(),
@@ -63,26 +62,24 @@ def test_persist_outputs_writes_json_report(tmp_path):
         comparison_type='sample',
         source_table='public.source_table',
         target_table='public.target_table',
-        report_output_path=str(json_path),
         report_output_format='json',
     )
 
-    payload = json.loads(json_path.read_text(encoding='utf-8'))
+    payload = json.loads(report)
     assert payload['comparison_type'] == 'sample'
     assert payload['status'] == 'success'
     assert payload['report'] == 'FULL TEXT REPORT'
     assert payload['stats']['final_score'] == 100.0
 
 
-def test_persist_outputs_writes_text_report(tmp_path):
+def test_persist_outputs_returns_text_report():
     comparator = DataQualityComparator.__new__(DataQualityComparator)
     comparator.timezone = 'UTC'
     comparator.results_engine = None
     comparator.results_table = 'dq_results'
     comparator.result_persister = ComparisonResultPersister()
 
-    text_path = tmp_path / 'reports' / 'sample_report.txt'
-    comparator._persist_outputs(
+    report = comparator._persist_outputs(
         status='success',
         report='FULL TEXT REPORT',
         stats=_build_stats(),
@@ -90,11 +87,10 @@ def test_persist_outputs_writes_text_report(tmp_path):
         comparison_type='sample',
         source_table='public.source_table',
         target_table='public.target_table',
-        report_output_path=str(text_path),
         report_output_format='text',
     )
 
-    assert text_path.read_text(encoding='utf-8') == 'FULL TEXT REPORT'
+    assert report == 'FULL TEXT REPORT'
 
 
 def test_persist_outputs_writes_to_results_engine():
@@ -140,7 +136,6 @@ def test_validate_report_output_options_rejects_unknown_format():
     comparator = DataQualityComparator.__new__(DataQualityComparator)
     with pytest.raises(ValueError, match='report_output_format'):
         comparator._validate_report_output_options(
-            report_output_path='reports/sample.out',
             report_output_format='xml',
         )
 

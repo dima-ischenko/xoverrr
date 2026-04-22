@@ -49,7 +49,6 @@ status, report, stats, details = comparator.compare_sample(
     persist_result=DataReference("dq_results", "test"), # persist target as DataReference
     comparison_name="employees_daily",
     comparison_tags={"env": "prod", "domain": "hr"},
-    report_output_path='./reports/employees_diff.json',  # output file path
     report_output_format='json',                        # 'json' or 'text'
 )
 
@@ -76,7 +75,7 @@ else:
   * Automatic exclusion of columns with mismatched names
 - **Optimization**: Two samples of 1 million rows × 10 columns (each ~330 MB) compared in ~3 s (Intel Core i5 / 16 GB RAM)
 - **Detailed reporting**: In‑depth column‑level discrepancy analysis with example records (column view / record view)
-- **Persistent transparency**: Optional result persistence to a third SQLAlchemy engine and/or JSON file for dashboards and end‑user audit
+- **Persistent transparency**: Optional result persistence to a third SQLAlchemy engine for dashboards and end‑user audit
 - **Portable persistence engine**: `results_engine` can point to any supported DB backend (Oracle, PostgreSQL/Greenplum, ClickHouse)
 - **Flexible configuration**: Column exclusion/inclusion, tolerance thresholds, custom primary‑key specification
 - **Unit tests**: Coverage for comparison methods, functional and performance validation
@@ -221,8 +220,7 @@ status, report, stats, details = comparator.compare_sample(
 - `persist_result` – `False` (no DB persistence), `True` (persist to default results target), or `DataReference(name, schema)` to persist into an explicit target table per compare call
 - `comparison_name` – optional dashboard-friendly comparison name (for grouping/runs)
 - `comparison_tags` – optional dict with tags/labels for dashboard filtering (env, domain, pipeline, owner, etc.)
-- `report_output_path` – optional file path to persist report output
-- `report_output_format` – report file format: `'json'` (full structured payload) or `'text'` (plain report string)
+- `report_output_format` – controls returned `report` value: `'json'` (full structured payload string) or `'text'` (plain report string)
 
 ### 2. Count‑Based Comparison (`compare_counts`)
 Efficient for large‑volume comparisons over extended date ranges, identifying missing rows or duplicates.
@@ -249,8 +247,7 @@ status, report, stats, details = comparator.compare_counts(
 - `persist_result` – `False` (no DB persistence), `True` (persist to default results target), or `DataReference(name, schema)` to persist into an explicit target table per compare call
 - `comparison_name` – optional dashboard-friendly comparison name (for grouping/runs)
 - `comparison_tags` – optional dict with tags/labels for dashboard filtering (env, domain, pipeline, owner, etc.)
-- `report_output_path` – optional file path to persist report output
-- `report_output_format` – report file format: `'json'` (full structured payload) or `'text'` (plain report string)
+- `report_output_format` – controls returned `report` value: `'json'` (full structured payload string) or `'text'` (plain report string)
 
 ### 3. Custom‑Query Comparison (`compare_custom_query`)
 Compares data from arbitrary SQL queries. Suitable for complex scenarios.
@@ -303,8 +300,7 @@ status, report, stats, details = comparator.compare_custom_query(
 - `persist_result` – `False` (no DB persistence), `True` (persist to default results target), or `DataReference(name, schema)` to persist into an explicit target table per compare call
 - `comparison_name` – optional dashboard-friendly comparison name (for grouping/runs)
 - `comparison_tags` – optional dict with tags/labels for dashboard filtering (env, domain, pipeline, owner, etc.)
-- `report_output_path` – optional file path to persist report output
-- `report_output_format` – report file format: `'json'` (full structured payload) or `'text'` (plain report string)
+- `report_output_format` – controls returned `report` value: `'json'` (full structured payload string) or `'text'` (plain report string)
 - To automatically exclude recently changed records, add the following expression to your SELECT clause in `compare_custom_query`:
   ```sql
   case when updated_at > (sysdate - 3/24) then 'y' end as xrecently_changed
@@ -328,7 +324,7 @@ status, report, stats, details = comparator.compare_custom_query(
 **Return Values:**
 All methods return a tuple:
 - `status` – comparison status (`COMPARISON_SUCCESS` / `COMPARISON_FAILED` / `COMPARISON_SKIPPED`)
-- `report` – textual report detailing discrepancies
+- `report` – report output controlled by `report_output_format` (`text` report string or full `json` payload string)
 - `stats` – `ComparisonStats` dataclass instance containing comparison statistics
 - `details` – `ComparisonDiffDetails` dataclass instance with discrepancy examples and details
 

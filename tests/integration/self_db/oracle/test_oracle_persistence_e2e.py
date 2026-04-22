@@ -43,7 +43,7 @@ class TestOraclePersistenceE2E:
 
         yield
 
-    def test_oracle_persistence_e2e(self, oracle_engine, tmp_path):
+    def test_oracle_persistence_e2e(self, oracle_engine):
         src_table = 'test_persist_oracle_src'
         trg_table = 'test_persist_oracle_trg'
         results_table = 'test_persist_oracle_results'
@@ -55,8 +55,6 @@ class TestOraclePersistenceE2E:
             timezone='UTC',
         )
 
-        report_path = tmp_path / 'oracle_comparison_report.json'
-
         status, report, stats, details = comparator.compare_sample(
             source_table=DataReference(src_table, 'test'),
             target_table=DataReference(trg_table, 'test'),
@@ -67,14 +65,13 @@ class TestOraclePersistenceE2E:
             persist_result=DataReference(results_table),
             comparison_name='oracle_orders_daily',
             comparison_tags={'adapter': 'oracle', 'kind': 'self_db'},
-            report_output_path=str(report_path),
             report_output_format='json',
         )
 
         assert status == COMPARISON_SUCCESS
         assert stats.final_diff_score == 0.0
         assert details is not None
-        assert report_path.exists()
+        assert '"comparison_type": "sample"' in report
 
         with oracle_engine.begin() as conn:
             row = conn.execute(

@@ -45,7 +45,7 @@ class TestClickHousePersistenceE2E:
 
         yield
 
-    def test_clickhouse_persistence_e2e(self, clickhouse_engine, tmp_path):
+    def test_clickhouse_persistence_e2e(self, clickhouse_engine):
         src_table = 'test_persist_clickhouse_src'
         trg_table = 'test_persist_clickhouse_trg'
         results_table = 'test_persist_clickhouse_results'
@@ -57,8 +57,6 @@ class TestClickHousePersistenceE2E:
             timezone='UTC',
         )
 
-        report_path = tmp_path / 'clickhouse_comparison_report.json'
-
         status, report, stats, details = comparator.compare_sample(
             source_table=DataReference(src_table, 'test'),
             target_table=DataReference(trg_table, 'test'),
@@ -69,14 +67,13 @@ class TestClickHousePersistenceE2E:
             persist_result=DataReference(results_table),
             comparison_name='clickhouse_orders_daily',
             comparison_tags={'adapter': 'clickhouse', 'kind': 'self_db'},
-            report_output_path=str(report_path),
             report_output_format='json',
         )
 
         assert status == COMPARISON_SUCCESS
         assert stats.final_diff_score == 0.0
         assert details is not None
-        assert report_path.exists()
+        assert '"comparison_type": "sample"' in report
 
         with clickhouse_engine.begin() as conn:
             row = conn.execute(

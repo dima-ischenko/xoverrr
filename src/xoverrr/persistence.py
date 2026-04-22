@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 from typing import Dict, Optional
 
 from sqlalchemy.engine import Engine
@@ -75,45 +74,10 @@ class ComparisonResultPersister:
         result: ComparisonResult,
         persist_result: bool = False,
         persist_result_ref: Optional[DataReference] = None,
-        report_output_path: Optional[str] = None,
-        report_output_format: str = 'json',
     ) -> None:
-        output_format = (report_output_format or 'json').lower()
-        if output_format not in {'json', 'text'}:
-            raise ValueError("report_output_format must be either 'json' or 'text'")
-
         should_persist_db = persist_result and self.results_engine is not None
-        should_write_file = bool(report_output_path)
-
-        if not should_persist_db and not should_write_file:
-            return
-
-        if should_write_file:
-            self._persist_to_file(
-                result=result,
-                report_output_path=report_output_path,
-                report_output_format=output_format,
-            )
-
         if should_persist_db:
             self._persist_to_db(result, persist_result_ref)
-
-    def _persist_to_file(
-        self,
-        result: ComparisonResult,
-        report_output_path: str,
-        report_output_format: str,
-    ) -> None:
-        output_path = Path(report_output_path)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-
-        if report_output_format == 'text':
-            output_path.write_text(result.report or '', encoding='utf-8')
-            app_logger.info(f'Text comparison report persisted: {output_path}')
-            return
-
-        output_path.write_text(result.to_json(), encoding='utf-8')
-        app_logger.info(f'JSON comparison report persisted: {output_path}')
 
     def _persist_to_db(
         self, result: ComparisonResult, persist_result_ref: Optional[DataReference]

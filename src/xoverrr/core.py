@@ -108,13 +108,11 @@ class DataQualityComparator:
         persist_result: Union[bool, DataReference] = False,
         comparison_name: Optional[str] = None,
         comparison_tags: Optional[Dict] = None,
-        report_output_path: Optional[str] = None,
         report_output_format: str = 'json',
     ) -> Tuple[str, Optional[ComparisonStats], Optional[ComparisonDiffDetails]]:
 
         self._validate_inputs(source_table, target_table)
         self._validate_report_output_options(
-            report_output_path=report_output_path,
             report_output_format=report_output_format,
         )
         persist_enabled, persist_result_ref = self._resolve_persist_options(
@@ -137,7 +135,7 @@ class DataQualityComparator:
                 max_examples,
             )
 
-            self._persist_outputs(
+            report = self._persist_outputs(
                 status=status,
                 report=report,
                 stats=stats,
@@ -149,7 +147,6 @@ class DataQualityComparator:
                 target_table=target_table.full_name,
                 persist_result=persist_enabled,
                 persist_result_ref=persist_result_ref,
-                report_output_path=report_output_path,
                 report_output_format=report_output_format,
             )
             self._update_stats(status, source_table)
@@ -158,7 +155,7 @@ class DataQualityComparator:
         except Exception as e:
             app_logger.exception(f'Count comparison failed: {str(e)}')
             status = ct.COMPARISON_FAILED
-            self._persist_outputs(
+            report = self._persist_outputs(
                 status=status,
                 report=None,
                 stats=None,
@@ -170,11 +167,10 @@ class DataQualityComparator:
                 target_table=target_table.full_name,
                 persist_result=persist_enabled,
                 persist_result_ref=persist_result_ref,
-                report_output_path=report_output_path,
                 report_output_format=report_output_format,
             )
             self._update_stats(status, source_table)
-            return status, None, None, None
+            return status, report, None, None
 
     def compare_sample(
         self,
@@ -193,7 +189,6 @@ class DataQualityComparator:
         persist_result: Union[bool, DataReference] = False,
         comparison_name: Optional[str] = None,
         comparison_tags: Optional[Dict] = None,
-        report_output_path: Optional[str] = None,
         report_output_format: str = 'json',
     ) -> Tuple[str, str, Optional[ComparisonStats], Optional[ComparisonDiffDetails]]:
         """
@@ -217,7 +212,6 @@ class DataQualityComparator:
         """
         self._validate_inputs(source_table, target_table)
         self._validate_report_output_options(
-            report_output_path=report_output_path,
             report_output_format=report_output_format,
         )
         persist_enabled, persist_result_ref = self._resolve_persist_options(
@@ -254,7 +248,7 @@ class DataQualityComparator:
                 max_examples,
             )
 
-            self._persist_outputs(
+            report = self._persist_outputs(
                 status=status,
                 report=report,
                 stats=stats,
@@ -266,7 +260,6 @@ class DataQualityComparator:
                 target_table=target_table.full_name,
                 persist_result=persist_enabled,
                 persist_result_ref=persist_result_ref,
-                report_output_path=report_output_path,
                 report_output_format=report_output_format,
             )
             self._update_stats(status, source_table)
@@ -275,7 +268,7 @@ class DataQualityComparator:
         except Exception as e:
             app_logger.exception(f'Sample comparison failed: {str(e)}')
             status = ct.COMPARISON_FAILED
-            self._persist_outputs(
+            report = self._persist_outputs(
                 status=status,
                 report=None,
                 stats=None,
@@ -287,11 +280,10 @@ class DataQualityComparator:
                 target_table=target_table.full_name,
                 persist_result=persist_enabled,
                 persist_result_ref=persist_result_ref,
-                report_output_path=report_output_path,
                 report_output_format=report_output_format,
             )
             self._update_stats(status, source_table)
-            return status, None, None, None
+            return status, report, None, None
 
     def _compare_counts(
         self,
@@ -591,7 +583,6 @@ class DataQualityComparator:
         persist_result: Union[bool, DataReference] = False,
         comparison_name: Optional[str] = None,
         comparison_tags: Optional[Dict] = None,
-        report_output_path: Optional[str] = None,
         report_output_format: str = 'json',
     ) -> Tuple[str, str, Optional[ComparisonStats], Optional[ComparisonDiffDetails]]:
         """
@@ -619,7 +610,6 @@ class DataQualityComparator:
         target_engine = self.target_engine
         timezone = self.timezone
         self._validate_report_output_options(
-            report_output_path=report_output_path,
             report_output_format=report_output_format,
         )
         persist_enabled, persist_result_ref = self._resolve_persist_options(
@@ -702,7 +692,7 @@ class DataQualityComparator:
                     else ct.COMPARISON_SUCCESS
                 )
 
-            self._persist_outputs(
+            report = self._persist_outputs(
                 status=status,
                 report=report,
                 stats=stats,
@@ -718,7 +708,6 @@ class DataQualityComparator:
                 target_params=target_params,
                 persist_result=persist_enabled,
                 persist_result_ref=persist_result_ref,
-                report_output_path=report_output_path,
                 report_output_format=report_output_format,
             )
             self._update_stats(status, None)
@@ -727,7 +716,7 @@ class DataQualityComparator:
         except Exception as e:
             app_logger.exception('Custom query comparison failed')
             status = ct.COMPARISON_FAILED
-            self._persist_outputs(
+            report = self._persist_outputs(
                 status=status,
                 report=None,
                 stats=None,
@@ -743,15 +732,13 @@ class DataQualityComparator:
                 target_params=target_params,
                 persist_result=persist_enabled,
                 persist_result_ref=persist_result_ref,
-                report_output_path=report_output_path,
                 report_output_format=report_output_format,
             )
             self._update_stats(status, None)
-            return status, None, None, None
+            return status, report, None, None
 
     def _validate_report_output_options(
         self,
-        report_output_path: Optional[str],
         report_output_format: str,
     ) -> None:
         normalized_format = (report_output_format or 'json').lower()
@@ -784,9 +771,8 @@ class DataQualityComparator:
         target_params: Optional[Dict] = None,
         persist_result: bool = False,
         persist_result_ref: Optional[DataReference] = None,
-        report_output_path: Optional[str] = None,
         report_output_format: str = 'json',
-    ) -> None:
+    ) -> Optional[str]:
         result = ComparisonResult(
             timestamp=pd.Timestamp.now().strftime(ct.DATETIME_FORMAT),
             comparison_type=comparison_type,
@@ -808,9 +794,10 @@ class DataQualityComparator:
             result=result,
             persist_result=persist_result,
             persist_result_ref=persist_result_ref,
-            report_output_path=report_output_path,
-            report_output_format=report_output_format,
         )
+        if report_output_format == 'json':
+            return result.to_json()
+        return result.report
 
     def _resolve_custom_query_chunks(
         self,
