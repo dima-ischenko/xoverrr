@@ -13,12 +13,14 @@ from datetime import date, timedelta
 # 1. Create database connections
 source_engine = create_engine('postgresql://user:pass@localhost:5432/source_db')
 target_engine = create_engine('oracle+oracledb://user:pass@localhost:1521/target_db')
+results_engine = create_engine('postgresql://user:pass@localhost:5432/dq_audit')
 
 # 2. Initialize comparator
 comparator = DataQualityComparator(
     source_engine=source_engine,
     target_engine=target_engine,
-    timezone='Europe/Athens'
+    timezone='Europe/Athens',
+    results_engine=results_engine,                   # optional third engine
 )
 
 # 3. Define tables to compare
@@ -41,7 +43,11 @@ status, report, stats, details = comparator.compare_sample(
     exclude_columns=["audit_log", "temp_field"],
     tolerance_percentage=0.5,
     exclude_recent_hours=3,
-    max_examples=5
+    max_examples=5,
+    persist_result=DataReference("dq_results", "test"), # persist target as DataReference
+    comparison_name="employees_daily",
+    comparison_tags={"env": "prod", "domain": "hr"},
+    report_output_format='json',                        # 'json' or 'text'
 )
 
 # 6. Check results
@@ -67,6 +73,8 @@ else:
   * Automatic exclusion of columns with mismatched names
 - **Optimization**: Two samples of 1 million rows × 10 columns (each ~330 MB) compared in ~3 s (Intel Core i5 / 16 GB RAM)
 - **Detailed reporting**: In‑depth column‑level discrepancy analysis with example records (column view / record view)
+- **Persistent transparency**: Optional result persistence to a third SQLAlchemy engine for dashboards and end‑user audit
+- **Portable persistence engine**: `results_engine` can point to any supported DB backend (Oracle, PostgreSQL/Greenplum, ClickHouse)
 - **Flexible configuration**: Column exclusion/inclusion, tolerance thresholds, custom primary‑key specification
 - **Unit tests**: Coverage for comparison methods, functional and performance validation
 - **Integrations tests**: contains integration tests for xoverrr using real databases started via Docker
@@ -207,6 +215,10 @@ status, report, stats, details = comparator.compare_sample(
 - `tolerance_percentage` – acceptable discrepancy threshold (0.0–100.0)
 - `exclude_recent_hours` – exclude data modified within the last N hours
 - `max_examples` – maximum number of discrepancy examples included in the report
+- `persist_result` – `False` (no DB persistence), `True` (persist to default results target), or `DataReference(name, schema)` to persist into an explicit target table per compare call
+- `comparison_name` – optional dashboard-friendly comparison name (for grouping/runs)
+- `comparison_tags` – optional dict with tags/labels for dashboard filtering (env, domain, pipeline, owner, etc.)
+- `report_output_format` – controls returned `report` value: `'json'` (full structured payload string) or `'text'` (plain report string)
 
 ### 2. Count‑Based Comparison (`compare_counts`)
 Efficient for large‑volume comparisons over extended date ranges, identifying missing rows or duplicates.
@@ -230,6 +242,10 @@ status, report, stats, details = comparator.compare_counts(
 - `chunk_size_days` – optional chunk size (in days) for iterative processing across the date range
 - `tolerance_percentage` – acceptable discrepancy threshold
 - `max_examples` – maximum number of daily discrepancy examples included in the report
+- `persist_result` – `False` (no DB persistence), `True` (persist to default results target), or `DataReference(name, schema)` to persist into an explicit target table per compare call
+- `comparison_name` – optional dashboard-friendly comparison name (for grouping/runs)
+- `comparison_tags` – optional dict with tags/labels for dashboard filtering (env, domain, pipeline, owner, etc.)
+- `report_output_format` – controls returned `report` value: `'json'` (full structured payload string) or `'text'` (plain report string)
 
 ### 3. Custom‑Query Comparison (`compare_custom_query`)
 Compares data from arbitrary SQL queries. Suitable for complex scenarios.
@@ -279,6 +295,10 @@ status, report, stats, details = comparator.compare_custom_query(
 - `exclude_columns` – columns to omit from comparison
 - `tolerance_percentage` – acceptable discrepancy threshold
 - `max_examples` – maximum number of discrepancy examples included in the report
+- `persist_result` – `False` (no DB persistence), `True` (persist to default results target), or `DataReference(name, schema)` to persist into an explicit target table per compare call
+- `comparison_name` – optional dashboard-friendly comparison name (for grouping/runs)
+- `comparison_tags` – optional dict with tags/labels for dashboard filtering (env, domain, pipeline, owner, etc.)
+- `report_output_format` – controls returned `report` value: `'json'` (full structured payload string) or `'text'` (plain report string)
 - To automatically exclude recently changed records, add the following expression to your SELECT clause in `compare_custom_query`:
   ```sql
   case when updated_at > (sysdate - 3/24) then 'y' end as xrecently_changed
@@ -302,7 +322,7 @@ status, report, stats, details = comparator.compare_custom_query(
 **Return Values:**
 All methods return a tuple:
 - `status` – comparison status (`COMPARISON_SUCCESS` / `COMPARISON_FAILED` / `COMPARISON_SKIPPED`)
-- `report` – textual report detailing discrepancies
+- `report` – report output controlled by `report_output_format` (`text` report string or full `json` payload string)
 - `stats` – `ComparisonStats` dataclass instance containing comparison statistics
 - `details` – `ComparisonDiffDetails` dataclass instance with discrepancy examples and details
 

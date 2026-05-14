@@ -13,6 +13,12 @@ from .base import BaseDatabaseAdapter, Engine
 
 class ClickHouseAdapter(BaseDatabaseAdapter):
     """ClickHouse adapter with parameterized queries"""
+    TYPE_MAP = {
+        'string': 'Nullable(String)',
+        'text': 'Nullable(String)',
+        'float': 'Nullable(Float64)',
+        'int': 'Nullable(Int64)',
+    }
 
     def _execute_query(
         self, query: Union[str, Tuple[str, Dict]], engine: Engine, timezone: str
@@ -257,3 +263,31 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
                 x.astype(str).str.lower().replace(r'\.0+$', '', regex=True)
             ),
         }
+
+    def ensure_persistence_table(
+        self, engine: Engine, table_ref: DataReference, column_types: Dict[str, str]
+    ) -> None:
+        columns_sql = ',\n                    '.join(
+            f'{name} {self.TYPE_MAP[col_type]}'
+            for name, col_type in column_types.items()
+        )
+        create_table_sql = f"""
+            CREATE TABLE IF NOT EXISTS {table_ref.full_name} (
+                    {columns_sql}
+            )
+            ENGINE = MergeTree()
+            ORDER BY tuple()
+        """
+        with engine.begin() as conn:
+            conn.execute(text(create_table_sql))
+
+    def insert_persistence_record(
+        self, engine: Engine, table_ref: DataReference, record: Dict
+    ) -> None:
+        columns_sql = ', '.join(record.keys())
+        values_sql = ', '.join(f':{col}' for col in record.keys())
+        insert_sql = (
+            f'INSERT INTO {table_ref.full_name} ({columns_sql}) VALUES ({values_sql})'
+        )
+        with engine.begin() as conn:
+            conn.execute(text(insert_sql), record)

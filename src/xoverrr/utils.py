@@ -1,6 +1,7 @@
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple, defaultdict
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
