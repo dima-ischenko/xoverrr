@@ -12,7 +12,7 @@ from .base import BaseDatabaseAdapter, Engine
 
 
 class OracleAdapter(BaseDatabaseAdapter):
-    TYPE_MAP = {
+    PERSIST_TYPE_MAP = {
         'string': 'VARCHAR2(4000)',
         'text': 'CLOB',
         'float': 'BINARY_DOUBLE',
@@ -546,7 +546,7 @@ class OracleAdapter(BaseDatabaseAdapter):
         self, engine: Engine, table_ref: DataReference, column_types: Dict[str, str]
     ) -> None:
         columns_sql = ',\n                    '.join(
-            f'{name} {self.TYPE_MAP[col_type]}'
+            f'{name} {self.PERSIST_TYPE_MAP[col_type]}'
             for name, col_type in column_types.items()
         )
         create_table_sql = f"""

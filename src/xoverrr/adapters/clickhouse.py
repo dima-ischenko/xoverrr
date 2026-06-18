@@ -13,7 +13,7 @@ from .base import BaseDatabaseAdapter, Engine
 
 class ClickHouseAdapter(BaseDatabaseAdapter):
     """ClickHouse adapter with parameterized queries"""
-    TYPE_MAP = {
+    PERSIST_TYPE_MAP = {
         'string': 'Nullable(String)',
         'text': 'Nullable(String)',
         'float': 'Nullable(Float64)',
@@ -268,7 +268,7 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
         self, engine: Engine, table_ref: DataReference, column_types: Dict[str, str]
     ) -> None:
         columns_sql = ',\n                    '.join(
-            f'{name} {self.TYPE_MAP[col_type]}'
+            f'{name} {self.PERSIST_TYPE_MAP[col_type]}'
             for name, col_type in column_types.items()
         )
         create_table_sql = f"""

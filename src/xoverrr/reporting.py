@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
-from .constants import DATETIME_FORMAT
+from .constants import DATETIME_FORMAT, REPORT_OUTPUT_FORMAT_JSON, REPORT_OUTPUT_FORMATS, REPORT_OUTPUT_FORMAT_TEXT
 from .utils import ComparisonStats, ComparisonDiffDetails
 
 
@@ -24,7 +24,7 @@ class ComparisonResult:
     into a single serializable object suitable for dashboards and APIs.
     """
     timestamp: str
-    comparison_type: str  # 'sample', 'count', 'custom_query'
+    comparison_type: str  # COMPARISON_TYPE_SAMPLE, COMPARISON_TYPE_COUNT, ...
     status: str
     comparison_name: Optional[str] = None
     comparison_tags: Optional[Dict[str, Any]] = None
@@ -128,6 +128,63 @@ class ComparisonResult:
             ensure_ascii=ensure_ascii,
             default=str
         )
+
+
+def validate_report_output_format(report_output_format: str) -> None:
+    normalized_format = (
+        report_output_format or REPORT_OUTPUT_FORMAT_JSON
+    ).lower()
+    if normalized_format not in REPORT_OUTPUT_FORMATS:
+        raise ValueError(
+            "report_output_format must be either "
+            f"'{REPORT_OUTPUT_FORMAT_JSON}' or "
+            f"'{REPORT_OUTPUT_FORMAT_TEXT}'"
+        )
+
+
+def build_comparison_result(
+    *,
+    timezone: str,
+    status: str,
+    report: Optional[str],
+    stats: Optional[ComparisonStats],
+    details: Optional[ComparisonDiffDetails],
+    comparison_type: str,
+    comparison_name: Optional[str] = None,
+    comparison_tags: Optional[Dict[str, Any]] = None,
+    source_table: Optional[str] = None,
+    target_table: Optional[str] = None,
+    source_query: Optional[str] = None,
+    source_params: Optional[Dict] = None,
+    target_query: Optional[str] = None,
+    target_params: Optional[Dict] = None,
+) -> ComparisonResult:
+    return ComparisonResult(
+        timestamp=pd.Timestamp.now().strftime(DATETIME_FORMAT),
+        comparison_type=comparison_type,
+        status=status,
+        comparison_name=comparison_name,
+        comparison_tags=comparison_tags,
+        report=report,
+        source_table=source_table,
+        target_table=target_table,
+        timezone=timezone,
+        stats=stats,
+        details=details,
+        source_query=source_query,
+        source_params=source_params,
+        target_query=target_query,
+        target_params=target_params,
+    )
+
+
+def format_comparison_result(
+    result: ComparisonResult,
+    report_output_format: str = REPORT_OUTPUT_FORMAT_JSON,
+) -> Optional[str]:
+    if report_output_format == REPORT_OUTPUT_FORMAT_JSON:
+        return result.to_json()
+    return result.report
 
 
 def generate_sample_report(

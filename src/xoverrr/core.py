@@ -12,14 +12,24 @@ from .adapters.postgres import PostgresAdapter
 from .exceptions import DQCompareException, MetadataError
 from .logger import app_logger
 from .models import DataReference, DBMSType, ObjectType
-from .persistence import ComparisonResultPersister
+from .persistence import (
+    ComparisonResultPersister,
+    PersistResultOptions,
+    parse_persist_result_option,
+)
 from .utils import (ComparisonDiffDetails, ComparisonStats,
                     build_comparison_stats, clean_recently_changed_data,
                     compare_dataframes, cross_fill_missing_dates,
                     generate_comparison_count_report,
                     generate_comparison_sample_report, normalize_column_names,
                     prepare_dataframe, validate_dataframe_size)
-from .reporting import generate_sample_report, generate_count_report, ComparisonResult
+from .reporting import (
+    build_comparison_result,
+    format_comparison_result,
+    generate_count_report,
+    generate_sample_report,
+    validate_report_output_format,
+)
 
 
 class DataQualityComparator:
@@ -102,16 +112,12 @@ class DataQualityComparator:
         persist_result: Union[bool, DataReference] = False,
         comparison_name: Optional[str] = None,
         comparison_tags: Optional[Dict] = None,
-        report_output_format: str = 'json',
+        report_output_format: str = ct.REPORT_OUTPUT_FORMAT_JSON,
     ) -> Tuple[str, Optional[ComparisonStats], Optional[ComparisonDiffDetails]]:
 
         self._validate_inputs(source_table, target_table)
-        self._validate_report_output_options(
-            report_output_format=report_output_format,
-        )
-        persist_enabled, persist_result_ref = self._resolve_persist_options(
-            persist_result
-        )
+        validate_report_output_format(report_output_format)
+        persist_options = parse_persist_result_option(persist_result)
 
         start_date, end_date = date_range or (None, None)
 
@@ -129,18 +135,17 @@ class DataQualityComparator:
                 max_examples,
             )
 
-            report = self._persist_outputs(
+            report = self._finalize_comparison(
                 status=status,
                 report=report,
                 stats=stats,
                 details=details,
-                comparison_type='count',
+                comparison_type=ct.COMPARISON_TYPE_COUNT,
                 comparison_name=comparison_name,
                 comparison_tags=comparison_tags,
                 source_table=source_table.full_name,
                 target_table=target_table.full_name,
-                persist_result=persist_enabled,
-                persist_result_ref=persist_result_ref,
+                persist_options=persist_options,
                 report_output_format=report_output_format,
             )
             self._update_stats(status, source_table)
@@ -149,18 +154,17 @@ class DataQualityComparator:
         except Exception as e:
             app_logger.exception(f'Count comparison failed: {str(e)}')
             status = ct.COMPARISON_FAILED
-            report = self._persist_outputs(
+            report = self._finalize_comparison(
                 status=status,
                 report=None,
                 stats=None,
                 details=None,
-                comparison_type='count',
+                comparison_type=ct.COMPARISON_TYPE_COUNT,
                 comparison_name=comparison_name,
                 comparison_tags=comparison_tags,
                 source_table=source_table.full_name,
                 target_table=target_table.full_name,
-                persist_result=persist_enabled,
-                persist_result_ref=persist_result_ref,
+                persist_options=persist_options,
                 report_output_format=report_output_format,
             )
             self._update_stats(status, source_table)
@@ -183,7 +187,7 @@ class DataQualityComparator:
         persist_result: Union[bool, DataReference] = False,
         comparison_name: Optional[str] = None,
         comparison_tags: Optional[Dict] = None,
-        report_output_format: str = 'json',
+        report_output_format: str = ct.REPORT_OUTPUT_FORMAT_JSON,
     ) -> Tuple[str, str, Optional[ComparisonStats], Optional[ComparisonDiffDetails]]:
         """
         Compare data from custom queries with specified key columns
@@ -205,12 +209,8 @@ class DataQualityComparator:
                 Maximum number of discrepancy examples per column
         """
         self._validate_inputs(source_table, target_table)
-        self._validate_report_output_options(
-            report_output_format=report_output_format,
-        )
-        persist_enabled, persist_result_ref = self._resolve_persist_options(
-            persist_result
-        )
+        validate_report_output_format(report_output_format)
+        persist_options = parse_persist_result_option(persist_result)
 
         exclude_hours = exclude_recent_hours or self.default_exclude_recent_hours
 
@@ -242,18 +242,17 @@ class DataQualityComparator:
                 max_examples,
             )
 
-            report = self._persist_outputs(
+            report = self._finalize_comparison(
                 status=status,
                 report=report,
                 stats=stats,
                 details=details,
-                comparison_type='sample',
+                comparison_type=ct.COMPARISON_TYPE_SAMPLE,
                 comparison_name=comparison_name,
                 comparison_tags=comparison_tags,
                 source_table=source_table.full_name,
                 target_table=target_table.full_name,
-                persist_result=persist_enabled,
-                persist_result_ref=persist_result_ref,
+                persist_options=persist_options,
                 report_output_format=report_output_format,
             )
             self._update_stats(status, source_table)
@@ -262,18 +261,17 @@ class DataQualityComparator:
         except Exception as e:
             app_logger.exception(f'Sample comparison failed: {str(e)}')
             status = ct.COMPARISON_FAILED
-            report = self._persist_outputs(
+            report = self._finalize_comparison(
                 status=status,
                 report=None,
                 stats=None,
                 details=None,
-                comparison_type='sample',
+                comparison_type=ct.COMPARISON_TYPE_SAMPLE,
                 comparison_name=comparison_name,
                 comparison_tags=comparison_tags,
                 source_table=source_table.full_name,
                 target_table=target_table.full_name,
-                persist_result=persist_enabled,
-                persist_result_ref=persist_result_ref,
+                persist_options=persist_options,
                 report_output_format=report_output_format,
             )
             self._update_stats(status, source_table)
@@ -577,7 +575,7 @@ class DataQualityComparator:
         persist_result: Union[bool, DataReference] = False,
         comparison_name: Optional[str] = None,
         comparison_tags: Optional[Dict] = None,
-        report_output_format: str = 'json',
+        report_output_format: str = ct.REPORT_OUTPUT_FORMAT_JSON,
     ) -> Tuple[str, str, Optional[ComparisonStats], Optional[ComparisonDiffDetails]]:
         """
         Compare data from custom queries with specified key columns
@@ -603,12 +601,8 @@ class DataQualityComparator:
         source_engine = self.source_engine
         target_engine = self.target_engine
         timezone = self.timezone
-        self._validate_report_output_options(
-            report_output_format=report_output_format,
-        )
-        persist_enabled, persist_result_ref = self._resolve_persist_options(
-            persist_result
-        )
+        validate_report_output_format(report_output_format)
+        persist_options = parse_persist_result_option(persist_result)
 
         try:
             self.comparison_stats['compared'] += 1
@@ -686,12 +680,12 @@ class DataQualityComparator:
                     else ct.COMPARISON_SUCCESS
                 )
 
-            report = self._persist_outputs(
+            report = self._finalize_comparison(
                 status=status,
                 report=report,
                 stats=stats,
                 details=details,
-                comparison_type='custom_query',
+                comparison_type=ct.COMPARISON_TYPE_CUSTOM_QUERY,
                 comparison_name=comparison_name,
                 comparison_tags=comparison_tags,
                 source_table=None,
@@ -700,8 +694,7 @@ class DataQualityComparator:
                 source_params=source_params,
                 target_query=target_query,
                 target_params=target_params,
-                persist_result=persist_enabled,
-                persist_result_ref=persist_result_ref,
+                persist_options=persist_options,
                 report_output_format=report_output_format,
             )
             self._update_stats(status, None)
@@ -710,12 +703,12 @@ class DataQualityComparator:
         except Exception as e:
             app_logger.exception('Custom query comparison failed')
             status = ct.COMPARISON_FAILED
-            report = self._persist_outputs(
+            report = self._finalize_comparison(
                 status=status,
                 report=None,
                 stats=None,
                 details=None,
-                comparison_type='custom_query',
+                comparison_type=ct.COMPARISON_TYPE_CUSTOM_QUERY,
                 comparison_name=comparison_name,
                 comparison_tags=comparison_tags,
                 source_table=None,
@@ -724,37 +717,22 @@ class DataQualityComparator:
                 source_params=source_params,
                 target_query=target_query,
                 target_params=target_params,
-                persist_result=persist_enabled,
-                persist_result_ref=persist_result_ref,
+                persist_options=persist_options,
                 report_output_format=report_output_format,
             )
             self._update_stats(status, None)
             return status, report, None, None
 
-    def _validate_report_output_options(
+    def _finalize_comparison(
         self,
-        report_output_format: str,
-    ) -> None:
-        normalized_format = (report_output_format or 'json').lower()
-        if normalized_format not in {'json', 'text'}:
-            raise ValueError(
-                "report_output_format must be either 'json' or 'text'"
-            )
-
-    def _resolve_persist_options(
-        self, persist_result: Union[bool, DataReference]
-    ) -> Tuple[bool, Optional[DataReference]]:
-        if isinstance(persist_result, DataReference):
-            return True, persist_result
-        return bool(persist_result), None
-
-    def _persist_outputs(
-        self,
+        *,
         status: str,
         report: Optional[str],
         stats: Optional[ComparisonStats],
         details: Optional[ComparisonDiffDetails],
         comparison_type: str,
+        persist_options: PersistResultOptions,
+        report_output_format: str,
         comparison_name: Optional[str] = None,
         comparison_tags: Optional[Dict] = None,
         source_table: Optional[str] = None,
@@ -763,35 +741,29 @@ class DataQualityComparator:
         source_params: Optional[Dict] = None,
         target_query: Optional[str] = None,
         target_params: Optional[Dict] = None,
-        persist_result: bool = False,
-        persist_result_ref: Optional[DataReference] = None,
-        report_output_format: str = 'json',
     ) -> Optional[str]:
-        result = ComparisonResult(
-            timestamp=pd.Timestamp.now().strftime(ct.DATETIME_FORMAT),
-            comparison_type=comparison_type,
-            status=status,
-            comparison_name=comparison_name,
-            comparison_tags=comparison_tags,
-            report=report,
-            source_table=source_table,
-            target_table=target_table,
+        result = build_comparison_result(
             timezone=self.timezone,
+            status=status,
+            report=report,
             stats=stats,
             details=details,
+            comparison_type=comparison_type,
+            comparison_name=comparison_name,
+            comparison_tags=comparison_tags,
+            source_table=source_table,
+            target_table=target_table,
             source_query=source_query,
             source_params=source_params,
             target_query=target_query,
             target_params=target_params,
         )
         self.result_persister.persist(
-            result=result,
-            persist_result=persist_result,
-            persist_result_ref=persist_result_ref,
+            result,
+            persist_result=persist_options.enabled,
+            persist_result_ref=persist_options.table_ref,
         )
-        if report_output_format == 'json':
-            return result.to_json()
-        return result.report
+        return format_comparison_result(result, report_output_format)
 
     def _resolve_custom_query_chunks(
         self,

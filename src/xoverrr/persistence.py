@@ -1,8 +1,8 @@
 import json
-from typing import Dict, Optional
+from dataclasses import dataclass
+from typing import Dict, Optional, Union
 
 from sqlalchemy.engine import Engine
-
 from .adapters.clickhouse import ClickHouseAdapter
 from .adapters.oracle import OracleAdapter
 from .adapters.postgres import PostgresAdapter
@@ -15,6 +15,23 @@ def _to_json_string(value) -> Optional[str]:
     if value is None:
         return None
     return json.dumps(value, ensure_ascii=False, default=str)
+
+
+@dataclass(frozen=True)
+class PersistResultOptions:
+    """Normalized ``persist_result`` argument from comparison methods."""
+
+    enabled: bool
+    table_ref: Optional[DataReference] = None
+
+
+def parse_persist_result_option(
+    persist_result: Union[bool, DataReference],
+) -> PersistResultOptions:
+    """Parse ``persist_result``: ``True``/``False`` or a custom ``DataReference`` table."""
+    if isinstance(persist_result, DataReference):
+        return PersistResultOptions(enabled=True, table_ref=persist_result)
+    return PersistResultOptions(enabled=bool(persist_result))
 
 
 class ComparisonResultPersister:
