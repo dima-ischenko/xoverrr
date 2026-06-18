@@ -13,7 +13,7 @@ from .base import BaseDatabaseAdapter, Engine
 
 
 class PostgresAdapter(BaseDatabaseAdapter):
-    TYPE_MAP = {
+    PERSIST_TYPE_MAP = {
         'string': 'TEXT',
         'text': 'TEXT',
         'float': 'DOUBLE PRECISION',
@@ -351,7 +351,7 @@ class PostgresAdapter(BaseDatabaseAdapter):
             create_schema_sql = None
 
         columns_sql = ',\n                    '.join(
-            f'{name} {self.TYPE_MAP[col_type]}'
+            f'{name} {self.PERSIST_TYPE_MAP[col_type]}'
             for name, col_type in column_types.items()
         )
         create_table_sql = f"""
