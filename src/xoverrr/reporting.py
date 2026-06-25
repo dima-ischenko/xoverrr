@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 import pandas as pd
 
 from .constants import DATETIME_FORMAT, REPORT_OUTPUT_FORMAT_JSON, REPORT_OUTPUT_FORMATS, REPORT_OUTPUT_FORMAT_TEXT
-from .utils import ComparisonStats, ComparisonDiffDetails
+from .utils import ComparisonDiffDetails, ComparisonStats, format_report_collection
 
 
 @dataclass
@@ -262,15 +262,14 @@ def generate_sample_report(
     lines.append(f'  Final data quality score: {stats.final_score:.5f}')
 
     # Key examples
-    lines.append(f'  Source-only key examples: {details.source_only_keys_examples}')
-    lines.append(f'  Target-only key examples: {details.target_only_keys_examples}')
-    lines.append(f'  Duplicated source key examples: {details.dup_source_keys_examples}')
-    lines.append(f'  Duplicated target key examples: {details.dup_target_keys_examples}')
+    lines.append(f'  Source-only key examples: {format_report_collection(details.source_only_keys_examples)}')
+    lines.append(f'  Target-only key examples: {format_report_collection(details.target_only_keys_examples)}')
+    lines.append(f'  Duplicated source key examples: {format_report_collection(details.dup_source_keys_examples)}')
+    lines.append(f'  Duplicated target key examples: {format_report_collection(details.dup_target_keys_examples)}')
 
-    # Column info
-    lines.append(f'  Common attribute columns: {", ".join(details.common_attribute_columns)}')
-    lines.append(f'  Skipped source columns: {", ".join(details.skipped_source_columns)}')
-    lines.append(f'  Skipped target columns: {", ".join(details.skipped_target_columns)}')
+    lines.append(f'  Common attribute columns: {format_report_collection(details.common_attribute_columns)}')
+    lines.append(f'  Skipped source columns: {format_report_collection(details.skipped_source_columns)}')
+    lines.append(f'  Skipped target columns: {format_report_collection(details.skipped_target_columns)}')
 
     # Column differences
     if stats.max_diff_percentage_cols > 0 and not details.mismatches_per_column.empty:

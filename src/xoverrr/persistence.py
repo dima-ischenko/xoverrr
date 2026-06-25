@@ -32,7 +32,6 @@ BASE_PERSIST_COLUMN_TYPES = {
     'target_query': PERSIST_COL_TEXT,
     'target_params_json': PERSIST_COL_TEXT,
     'report': PERSIST_COL_TEXT,
-    'payload_json': PERSIST_COL_TEXT,
 }
 
 
@@ -59,6 +58,14 @@ def _to_json_string(value) -> Optional[str]:
     return json.dumps(value, ensure_ascii=False, default=str)
 
 
+def _normalize_details_for_persist(details: Optional[Dict]) -> Dict:
+    normalized = dict(details or {})
+    for key in DETAILS_JSON_FIELDS:
+        if normalized.get(key) is None:
+            normalized[key] = []
+    return normalized
+
+
 def _extract_base_persist_value(payload: Dict, column: str):
     if column == 'comparison_tags_json':
         return _to_json_string(payload.get('comparison_tags'))
@@ -66,8 +73,6 @@ def _extract_base_persist_value(payload: Dict, column: str):
         return _to_json_string(payload.get('source_params'))
     if column == 'target_params_json':
         return _to_json_string(payload.get('target_params'))
-    if column == 'payload_json':
-        return _to_json_string(payload)
     if column.endswith('_json'):
         return _to_json_string(payload.get(column.removesuffix('_json')))
     return payload.get(column)
@@ -122,8 +127,8 @@ class ComparisonResultPersister:
         self, result: ComparisonResult, persist_result_ref: Optional[DataReference]
     ) -> None:
         try:
-            payload = result.to_dict()
-            record = self._build_db_record(payload)
+            full_payload = result.to_dict()
+            record = self._build_db_record(full_payload)
             table_ref = self._resolve_table_target(persist_result_ref)
             adapter = self._get_adapter_for_engine(self.results_engine)
             adapter.ensure_persistence_table(
@@ -137,12 +142,12 @@ class ComparisonResultPersister:
                 f'Unable to persist comparison result to storage engine: {exc}'
             )
 
-    def _build_db_record(self, payload: Dict) -> Dict:
-        stats = payload.get('stats') or {}
-        details = payload.get('details') or {}
+    def _build_db_record(self, full_payload: Dict) -> Dict:
+        stats = full_payload.get('stats') or {}
+        details = _normalize_details_for_persist(full_payload.get('details'))
 
         record = {
-            column: _extract_base_persist_value(payload, column)
+            column: _extract_base_persist_value(full_payload, column)
             for column in BASE_PERSIST_COLUMN_TYPES
         }
 

@@ -124,10 +124,9 @@ def test_persist_writes_to_results_engine():
     assert stored.iloc[0]['details_common_attribute_columns_json'] == json.dumps(
         ['id', 'name'], ensure_ascii=False
     )
-
-    payload = json.loads(stored.iloc[0]['payload_json'])
-    assert payload['report'] == 'COUNT REPORT'
-    assert payload['source_table'] == 'public.a'
+    assert stored.iloc[0]['source_table'] == 'public.a'
+    assert 'payload_json' not in stored.columns
+    assert stored.iloc[0]['details_dup_source_keys_examples_json'] == '[]'
 
 
 def test_validate_report_output_format_rejects_unknown_format():

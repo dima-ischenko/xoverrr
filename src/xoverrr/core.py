@@ -1007,10 +1007,10 @@ class DataQualityComparator:
                 if discrepancy_examples_rows
                 else pd.DataFrame()
             ),
-            dup_source_keys_examples=tuple(dup_source_examples) or None,
-            dup_target_keys_examples=tuple(dup_target_examples) or None,
-            source_only_keys_examples=tuple(source_only_examples) or None,
-            target_only_keys_examples=tuple(target_only_examples) or None,
+            dup_source_keys_examples=tuple(dup_source_examples),
+            dup_target_keys_examples=tuple(dup_target_examples),
+            source_only_keys_examples=tuple(source_only_examples),
+            target_only_keys_examples=tuple(target_only_examples),
             discrepant_data_examples=(
                 pd.concat(discrepant_chunks, ignore_index=True)
                 if discrepant_chunks
@@ -1337,10 +1337,10 @@ class DataQualityComparator:
         details = ComparisonDiffDetails(
             mismatches_per_column=mismatches_per_column,
             discrepancies_per_col_examples=discrepancies_per_col_examples,
-            dup_source_keys_examples=tuple(dup_source_examples) or None,
-            dup_target_keys_examples=tuple(dup_target_examples) or None,
-            source_only_keys_examples=tuple(source_only_examples) or None,
-            target_only_keys_examples=tuple(target_only_examples) or None,
+            dup_source_keys_examples=tuple(dup_source_examples),
+            dup_target_keys_examples=tuple(dup_target_examples),
+            source_only_keys_examples=tuple(source_only_examples),
+            target_only_keys_examples=tuple(target_only_examples),
             discrepant_data_examples=discrepant_data_examples,
             common_attribute_columns=common_cols,
             skipped_source_columns=source_only_cols,

@@ -10,6 +10,21 @@ from .constants import DATETIME_FORMAT, DEFAULT_MAX_EXAMPLES, NULL_REPLACEMENT
 from .logger import app_logger
 
 
+def format_report_collection(value) -> str:
+    """Format optional collections for human-readable report lines."""
+    if value is None:
+        return ''
+    if isinstance(value, (set, frozenset)):
+        if not value:
+            return ''
+        return ', '.join(str(item) for item in sorted(value, key=str))
+    if isinstance(value, (tuple, list)):
+        if not value:
+            return ''
+        return ', '.join(str(item) for item in value)
+    return str(value)
+
+
 def build_comparison_stats(
     total_source_rows: int,
     total_target_rows: int,
@@ -499,17 +514,17 @@ def generate_comparison_sample_report(
     rl.append(f'  Final discrepancies score: {stats.final_diff_score:.5f}')
     rl.append(f'  Final data quality score: {stats.final_score:.5f}')
 
-    rl.append(f'  Source-only key examples: {details.source_only_keys_examples}')
-    rl.append(f'  Target-only key examples: {details.target_only_keys_examples}')
+    rl.append(f'  Source-only key examples: {format_report_collection(details.source_only_keys_examples)}')
+    rl.append(f'  Target-only key examples: {format_report_collection(details.target_only_keys_examples)}')
 
-    rl.append(f'  Duplicated source key examples: {details.dup_source_keys_examples}')
-    rl.append(f'  Duplicated target key examples: {details.dup_target_keys_examples}')
+    rl.append(f'  Duplicated source key examples: {format_report_collection(details.dup_source_keys_examples)}')
+    rl.append(f'  Duplicated target key examples: {format_report_collection(details.dup_target_keys_examples)}')
 
     rl.append(
-        f'  Common attribute columns: {", ".join(details.common_attribute_columns)}'
+        f'  Common attribute columns: {format_report_collection(details.common_attribute_columns)}'
     )
-    rl.append(f'  Skipped source columns: {", ".join(details.skipped_source_columns)}')
-    rl.append(f'  Skipped target columns: {", ".join(details.skipped_target_columns)}')
+    rl.append(f'  Skipped source columns: {format_report_collection(details.skipped_source_columns)}')
+    rl.append(f'  Skipped target columns: {format_report_collection(details.skipped_target_columns)}')
 
     if stats.max_diff_percentage_cols > 0 and not details.mismatches_per_column.empty:
         rl.append(f'\nCOLUMN DIFFERENCES:')
@@ -782,10 +797,8 @@ def cross_fill_missing_dates(df1, df2, date_column='dt', value_column='cnt'):
 def format_keys(keys, max_examples):
     if keys:
         keys = {next(iter(x)) if len(x) == 1 else x for x in list(keys)[:max_examples]}
-        keys = keys if keys != set() else None
-        return keys
-    else:
-        return None
+        return keys if keys != set() else ()
+    return ()
 
 
 def get_dataframe_size_gb(df: pd.DataFrame) -> float:
