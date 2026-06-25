@@ -1,4 +1,5 @@
 import json
+import dataclasses
 from dataclasses import dataclass
 from typing import Dict, Optional, Union
 
@@ -9,12 +10,67 @@ from .adapters.postgres import PostgresAdapter
 from .logger import app_logger
 from .models import DBMSType, DataReference
 from .reporting import ComparisonResult
+from .utils import ComparisonDiffDetails, ComparisonStats
+
+# Portable logical column types mapped to DB-specific DDL in adapter PERSIST_TYPE_MAP.
+PERSIST_COL_STRING = 'string'
+PERSIST_COL_TEXT = 'text'
+PERSIST_COL_INT = 'int'
+PERSIST_COL_FLOAT = 'float'
+
+BASE_PERSIST_COLUMN_TYPES = {
+    'timestamp': PERSIST_COL_STRING,
+    'comparison_type': PERSIST_COL_STRING,
+    'status': PERSIST_COL_STRING,
+    'comparison_name': PERSIST_COL_STRING,
+    'comparison_tags_json': PERSIST_COL_TEXT,
+    'source_table': PERSIST_COL_STRING,
+    'target_table': PERSIST_COL_STRING,
+    'timezone': PERSIST_COL_STRING,
+    'source_query': PERSIST_COL_TEXT,
+    'source_params_json': PERSIST_COL_TEXT,
+    'target_query': PERSIST_COL_TEXT,
+    'target_params_json': PERSIST_COL_TEXT,
+    'report': PERSIST_COL_TEXT,
+    'payload_json': PERSIST_COL_TEXT,
+}
+
+
+def _stats_persist_fields(field_type: type) -> list[str]:
+    return [
+        field.name
+        for field in dataclasses.fields(ComparisonStats)
+        if field.type is field_type
+    ]
+
+
+def _details_persist_fields() -> list[str]:
+    return [field.name for field in dataclasses.fields(ComparisonDiffDetails)]
+
+
+STATS_INTEGER_FIELDS = _stats_persist_fields(int)
+STATS_FLOAT_FIELDS = _stats_persist_fields(float)
+DETAILS_JSON_FIELDS = _details_persist_fields()
 
 
 def _to_json_string(value) -> Optional[str]:
     if value is None:
         return None
     return json.dumps(value, ensure_ascii=False, default=str)
+
+
+def _extract_base_persist_value(payload: Dict, column: str):
+    if column == 'comparison_tags_json':
+        return _to_json_string(payload.get('comparison_tags'))
+    if column == 'source_params_json':
+        return _to_json_string(payload.get('source_params'))
+    if column == 'target_params_json':
+        return _to_json_string(payload.get('target_params'))
+    if column == 'payload_json':
+        return _to_json_string(payload)
+    if column.endswith('_json'):
+        return _to_json_string(payload.get(column.removesuffix('_json')))
+    return payload.get(column)
 
 
 @dataclass(frozen=True)
@@ -36,40 +92,6 @@ def parse_persist_result_option(
 
 class ComparisonResultPersister:
     """Persist comparison output to file and/or SQL table."""
-
-    STATS_INTEGER_FIELDS = [
-        'total_source_rows',
-        'total_target_rows',
-        'dup_source_rows',
-        'dup_target_rows',
-        'only_source_rows',
-        'only_target_rows',
-        'common_pk_rows',
-        'total_matched_rows',
-    ]
-    STATS_FLOAT_FIELDS = [
-        'dup_source_percentage_rows',
-        'dup_target_percentage_rows',
-        'source_only_percentage_rows',
-        'target_only_percentage_rows',
-        'total_diff_percentage_rows',
-        'max_diff_percentage_cols',
-        'median_diff_percentage_cols',
-        'final_diff_score',
-        'final_score',
-    ]
-    DETAILS_JSON_FIELDS = [
-        'mismatches_per_column',
-        'discrepancies_per_col_examples',
-        'dup_source_keys_examples',
-        'dup_target_keys_examples',
-        'source_only_keys_examples',
-        'target_only_keys_examples',
-        'discrepant_data_examples',
-        'common_attribute_columns',
-        'skipped_source_columns',
-        'skipped_target_columns',
-    ]
 
     def __init__(
         self,
@@ -120,59 +142,26 @@ class ComparisonResultPersister:
         details = payload.get('details') or {}
 
         record = {
-            'timestamp': payload.get('timestamp'),
-            'comparison_type': payload.get('comparison_type'),
-            'status': payload.get('status'),
-            'comparison_name': payload.get('comparison_name'),
-            'comparison_tags_json': _to_json_string(payload.get('comparison_tags')),
-            'source_table': payload.get('source_table'),
-            'target_table': payload.get('target_table'),
-            'timezone': payload.get('timezone'),
-            'source_query': payload.get('source_query'),
-            'source_params_json': _to_json_string(payload.get('source_params')),
-            'target_query': payload.get('target_query'),
-            'target_params_json': _to_json_string(payload.get('target_params')),
-            'report': payload.get('report'),
-            'payload_json': _to_json_string(payload),
-            'final_data_quality_score': stats.get('final_score'),
-            'final_diff_score': stats.get('final_diff_score'),
+            column: _extract_base_persist_value(payload, column)
+            for column in BASE_PERSIST_COLUMN_TYPES
         }
 
-        for key in self.STATS_INTEGER_FIELDS + self.STATS_FLOAT_FIELDS:
-            value = stats.get(key)
-            record[f'stats_{key}'] = value
+        for key in STATS_INTEGER_FIELDS + STATS_FLOAT_FIELDS:
+            record[f'stats_{key}'] = stats.get(key)
 
-        for key in self.DETAILS_JSON_FIELDS:
-            value = details.get(key)
-            record[f'details_{key}_json'] = _to_json_string(value)
+        for key in DETAILS_JSON_FIELDS:
+            record[f'details_{key}_json'] = _to_json_string(details.get(key))
 
         return record
 
     def _build_column_types(self) -> Dict[str, str]:
-        column_types = {
-            'timestamp': 'string',
-            'comparison_type': 'string',
-            'status': 'string',
-            'comparison_name': 'string',
-            'comparison_tags_json': 'text',
-            'source_table': 'string',
-            'target_table': 'string',
-            'timezone': 'string',
-            'source_query': 'text',
-            'source_params_json': 'text',
-            'target_query': 'text',
-            'target_params_json': 'text',
-            'report': 'text',
-            'payload_json': 'text',
-            'final_data_quality_score': 'float',
-            'final_diff_score': 'float',
-        }
-        for field in self.STATS_INTEGER_FIELDS:
-            column_types[f'stats_{field}'] = 'int'
-        for field in self.STATS_FLOAT_FIELDS:
-            column_types[f'stats_{field}'] = 'float'
-        for field in self.DETAILS_JSON_FIELDS:
-            column_types[f'details_{field}_json'] = 'text'
+        column_types = dict(BASE_PERSIST_COLUMN_TYPES)
+        for field in STATS_INTEGER_FIELDS:
+            column_types[f'stats_{field}'] = PERSIST_COL_INT
+        for field in STATS_FLOAT_FIELDS:
+            column_types[f'stats_{field}'] = PERSIST_COL_FLOAT
+        for field in DETAILS_JSON_FIELDS:
+            column_types[f'details_{field}_json'] = PERSIST_COL_TEXT
         return column_types
 
     def _resolve_table_target(

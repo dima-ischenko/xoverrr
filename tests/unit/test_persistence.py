@@ -117,7 +117,6 @@ def test_persist_writes_to_results_engine():
     assert len(stored) == 1
     assert stored.iloc[0]['comparison_type'] == ct.COMPARISON_TYPE_COUNT
     assert stored.iloc[0]['status'] == 'failed'
-    assert stored.iloc[0]['final_data_quality_score'] == 100.0
     assert stored.iloc[0]['report'] == 'COUNT REPORT'
     assert stored.iloc[0]['stats_total_source_rows'] == 10
     assert stored.iloc[0]['stats_total_target_rows'] == 10
