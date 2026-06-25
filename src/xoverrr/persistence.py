@@ -1,5 +1,6 @@
 import json
 import dataclasses
+import uuid
 from dataclasses import dataclass
 from typing import Dict, Optional, Union
 
@@ -12,6 +13,24 @@ from .models import DBMSType, DataReference
 from .reporting import ComparisonResult
 from .utils import ComparisonDiffDetails, ComparisonStats
 
+PERSIST_PRIMARY_KEY = 'run_id'
+RUN_ID_LENGTH = 16
+
+
+def validate_run_id(run_id: Optional[str]) -> str:
+    """Ensure run_id is present and normalized for persistence/logging."""
+    if run_id is None:
+        raise ValueError('run_id must be a non-empty string')
+    normalized = str(run_id).strip()
+    if not normalized:
+        raise ValueError('run_id must be a non-empty string')
+    return normalized
+
+
+def build_run_id() -> str:
+    """Build a random non-empty run identifier for a comparison run."""
+    return uuid.uuid4().hex[:RUN_ID_LENGTH]
+
 # Portable logical column types mapped to DB-specific DDL in adapter PERSIST_TYPE_MAP.
 PERSIST_COL_STRING = 'string'
 PERSIST_COL_TEXT = 'text'
@@ -19,6 +38,7 @@ PERSIST_COL_INT = 'int'
 PERSIST_COL_FLOAT = 'float'
 
 BASE_PERSIST_COLUMN_TYPES = {
+    'run_id': PERSIST_COL_STRING,
     'timestamp': PERSIST_COL_STRING,
     'comparison_type': PERSIST_COL_STRING,
     'status': PERSIST_COL_STRING,
@@ -128,11 +148,14 @@ class ComparisonResultPersister:
     ) -> None:
         try:
             full_payload = result.to_dict()
-            record = self._build_db_record(full_payload)
+            record = self._build_db_record(result, full_payload)
             table_ref = self._resolve_table_target(persist_result_ref)
             adapter = self._get_adapter_for_engine(self.results_engine)
             adapter.ensure_persistence_table(
-                self.results_engine, table_ref, self._build_column_types()
+                self.results_engine,
+                table_ref,
+                self._build_column_types(),
+                primary_key=PERSIST_PRIMARY_KEY,
             )
             adapter.insert_persistence_record(self.results_engine, table_ref, record)
             table_name = persist_result_ref.full_name if persist_result_ref else self.results_table
@@ -142,14 +165,18 @@ class ComparisonResultPersister:
                 f'Unable to persist comparison result to storage engine: {exc}'
             )
 
-    def _build_db_record(self, full_payload: Dict) -> Dict:
+    def _build_db_record(
+        self, result: ComparisonResult, full_payload: Dict
+    ) -> Dict:
         stats = full_payload.get('stats') or {}
         details = _normalize_details_for_persist(full_payload.get('details'))
 
         record = {
             column: _extract_base_persist_value(full_payload, column)
             for column in BASE_PERSIST_COLUMN_TYPES
+            if column != 'run_id'
         }
+        record['run_id'] = validate_run_id(result.run_id)
 
         for key in STATS_INTEGER_FIELDS + STATS_FLOAT_FIELDS:
             record[f'stats_{key}'] = stats.get(key)

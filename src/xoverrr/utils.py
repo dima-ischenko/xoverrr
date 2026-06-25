@@ -25,6 +25,14 @@ def format_report_collection(value) -> str:
     return str(value)
 
 
+def append_report_run_header(
+    lines: List[str], run_id: str, run_started_at: str
+) -> None:
+    lines.append('=' * 80)
+    lines.append(run_started_at)
+    lines.append(f'run_id: {run_id}')
+
+
 def build_comparison_stats(
     total_source_rows: int,
     total_target_rows: int,
@@ -461,6 +469,8 @@ def generate_comparison_sample_report(
     stats: ComparisonStats,
     details: ComparisonDiffDetails,
     timezone: str,
+    run_id: str,
+    run_started_at: str,
     source_query: str = None,
     source_params: Dict = None,
     target_query: str = None,
@@ -469,9 +479,7 @@ def generate_comparison_sample_report(
 ) -> None:
     """Generate comparison report (logger output looks uuugly)"""
     rl = []
-    rl.append('=' * 80)
-    current_datetime = datetime.now()
-    rl.append(current_datetime.strftime(DATETIME_FORMAT))
+    append_report_run_header(rl, run_id, run_started_at)
     rl.append(f'DATA SAMPLE COMPARISON REPORT: ')
     if source_table and target_table:  # empty for custom query
         rl.append(f'{source_table}')
@@ -573,6 +581,8 @@ def generate_comparison_count_report(
     result_diff_in_counters: int,
     result_equal_in_counters: int,
     timezone: str,
+    run_id: str,
+    run_started_at: str,
     source_query: str = None,
     source_params: Dict = None,
     target_query: str = None,
@@ -581,9 +591,7 @@ def generate_comparison_count_report(
 ) -> None:
     """Generates comparison report (logger output looks uuugly)"""
     rl = []
-    rl.append('=' * 80)
-    current_datetime = datetime.now()
-    rl.append(current_datetime.strftime(DATETIME_FORMAT))
+    append_report_run_header(rl, run_id, run_started_at)
     rl.append(f'COUNT COMPARISON REPORT:')
     rl.append(f'{source_table}')
     rl.append(f'VS')

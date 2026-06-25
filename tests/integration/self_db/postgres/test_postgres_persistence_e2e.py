@@ -63,7 +63,6 @@ class TestPostgresPersistenceE2E:
             custom_primary_key=['id'],
             tolerance_percentage=0.0,
             persist_result=DataReference(results_table),
-            comparison_name='postgres_orders_daily',
             comparison_tags={'adapter': 'postgres', 'kind': 'self_db'},
             report_output_format='json',
         )

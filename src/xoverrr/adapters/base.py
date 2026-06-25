@@ -139,7 +139,11 @@ class BaseDatabaseAdapter(ABC):
 
     @abstractmethod
     def ensure_persistence_table(
-        self, engine: Engine, table_ref: DataReference, column_types: Dict[str, str]
+        self,
+        engine: Engine,
+        table_ref: DataReference,
+        column_types: Dict[str, str],
+        primary_key: Optional[str] = None,
     ) -> None:
         """Create persistence table using explicit DDL if needed."""
         pass

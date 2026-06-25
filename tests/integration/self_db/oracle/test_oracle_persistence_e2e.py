@@ -63,7 +63,6 @@ class TestOraclePersistenceE2E:
             custom_primary_key=['id'],
             tolerance_percentage=0.0,
             persist_result=DataReference(results_table),
-            comparison_name='oracle_orders_daily',
             comparison_tags={'adapter': 'oracle', 'kind': 'self_db'},
             report_output_format='json',
         )

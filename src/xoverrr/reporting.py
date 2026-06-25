@@ -5,6 +5,7 @@ Provides functions to format comparison statistics and details into
 human-readable reports and structured data formats (JSON, dict).
 """
 
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -12,7 +13,7 @@ from typing import Any, Dict, List, Optional
 import pandas as pd
 
 from .constants import DATETIME_FORMAT, REPORT_OUTPUT_FORMAT_JSON, REPORT_OUTPUT_FORMATS, REPORT_OUTPUT_FORMAT_TEXT
-from .utils import ComparisonDiffDetails, ComparisonStats, format_report_collection
+from .utils import ComparisonDiffDetails, ComparisonStats, append_report_run_header, format_report_collection
 
 
 @dataclass
@@ -24,6 +25,7 @@ class ComparisonResult:
     into a single serializable object suitable for dashboards and APIs.
     """
     timestamp: str
+    run_id: str
     comparison_type: str  # COMPARISON_TYPE_SAMPLE, COMPARISON_TYPE_COUNT, ...
     status: str
     comparison_name: Optional[str] = None
@@ -38,6 +40,11 @@ class ComparisonResult:
     source_params: Optional[Dict] = None
     target_query: Optional[str] = None
     target_params: Optional[Dict] = None
+
+    def __post_init__(self):
+        from .persistence import validate_run_id
+
+        object.__setattr__(self, 'run_id', validate_run_id(self.run_id))
     
     def to_dict(self) -> Dict[str, Any]:
         """
@@ -144,6 +151,8 @@ def validate_report_output_format(report_output_format: str) -> None:
 
 def build_comparison_result(
     *,
+    run_id: str,
+    timestamp: str,
     timezone: str,
     status: str,
     report: Optional[str],
@@ -160,7 +169,8 @@ def build_comparison_result(
     target_params: Optional[Dict] = None,
 ) -> ComparisonResult:
     return ComparisonResult(
-        timestamp=pd.Timestamp.now().strftime(DATETIME_FORMAT),
+        timestamp=timestamp,
+        run_id=run_id,
         comparison_type=comparison_type,
         status=status,
         comparison_name=comparison_name,
@@ -193,6 +203,8 @@ def generate_sample_report(
     stats: ComparisonStats,
     details: ComparisonDiffDetails,
     timezone: str,
+    run_id: str,
+    run_started_at: str,
     source_query: Optional[str] = None,
     source_params: Optional[Dict] = None,
     target_query: Optional[str] = None,
@@ -216,9 +228,7 @@ def generate_sample_report(
         Formatted text report
     """
     lines = []
-    lines.append('=' * 80)
-    current_datetime = datetime.now()
-    lines.append(current_datetime.strftime(DATETIME_FORMAT))
+    append_report_run_header(lines, run_id, run_started_at)
     lines.append('DATA SAMPLE COMPARISON REPORT:')
     
     if source_table and target_table:
@@ -311,6 +321,8 @@ def generate_count_report(
     diff_count: int,
     equal_count: int,
     timezone: str,
+    run_id: str,
+    run_started_at: str,
     source_query: Optional[str] = None,
     source_params: Optional[Dict] = None,
     target_query: Optional[str] = None,
@@ -339,9 +351,7 @@ def generate_count_report(
         Formatted text report
     """
     lines = []
-    lines.append('=' * 80)
-    current_datetime = datetime.now()
-    lines.append(current_datetime.strftime(DATETIME_FORMAT))
+    append_report_run_header(lines, run_id, run_started_at)
     lines.append('COUNT COMPARISON REPORT:')
     lines.append(f'{source_table}')
     lines.append('VS')

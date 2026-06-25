@@ -6,13 +6,21 @@ from sqlalchemy import create_engine
 
 from xoverrr import constants as ct
 from xoverrr.models import DataReference
-from xoverrr.persistence import ComparisonResultPersister, parse_persist_result_option
+from xoverrr.persistence import (
+    ComparisonResultPersister,
+    build_run_id,
+    parse_persist_result_option,
+    validate_run_id,
+)
 from xoverrr.reporting import (
     build_comparison_result,
     format_comparison_result,
     validate_report_output_format,
 )
 from xoverrr.utils import ComparisonDiffDetails, ComparisonStats
+
+RUN_TIMESTAMP = '2026-01-01 00:00:00'
+RUN_ID = 'internal-run-id'
 
 
 def _build_stats() -> ComparisonStats:
@@ -54,12 +62,15 @@ def _build_details() -> ComparisonDiffDetails:
 
 def test_format_comparison_result_returns_json_report():
     result = build_comparison_result(
+        run_id=RUN_ID,
+        timestamp=RUN_TIMESTAMP,
         timezone='UTC',
         status='success',
         report='FULL TEXT REPORT',
         stats=_build_stats(),
         details=_build_details(),
         comparison_type=ct.COMPARISON_TYPE_SAMPLE,
+        comparison_name='unit_test_compare',
         source_table='public.source_table',
         target_table='public.target_table',
     )
@@ -69,6 +80,7 @@ def test_format_comparison_result_returns_json_report():
     )
 
     payload = json.loads(report)
+    assert 'run_id' not in payload
     assert payload['comparison_type'] == ct.COMPARISON_TYPE_SAMPLE
     assert payload['status'] == 'success'
     assert payload['report'] == 'FULL TEXT REPORT'
@@ -77,6 +89,8 @@ def test_format_comparison_result_returns_json_report():
 
 def test_format_comparison_result_returns_text_report():
     result = build_comparison_result(
+        run_id=RUN_ID,
+        timestamp=RUN_TIMESTAMP,
         timezone='UTC',
         status='success',
         report='FULL TEXT REPORT',
@@ -101,6 +115,8 @@ def test_persist_writes_to_results_engine():
         results_table='dq_results',
     )
     result = build_comparison_result(
+        run_id=RUN_ID,
+        timestamp=RUN_TIMESTAMP,
         timezone='UTC',
         status='failed',
         report='COUNT REPORT',
@@ -115,6 +131,7 @@ def test_persist_writes_to_results_engine():
 
     stored = pd.read_sql('select * from dq_results', results_engine)
     assert len(stored) == 1
+    assert stored.iloc[0]['run_id'] == RUN_ID
     assert stored.iloc[0]['comparison_type'] == ct.COMPARISON_TYPE_COUNT
     assert stored.iloc[0]['status'] == 'failed'
     assert stored.iloc[0]['report'] == 'COUNT REPORT'
@@ -132,6 +149,36 @@ def test_persist_writes_to_results_engine():
 def test_validate_report_output_format_rejects_unknown_format():
     with pytest.raises(ValueError, match='report_output_format'):
         validate_report_output_format('xml')
+
+
+def test_build_run_id_is_always_non_empty_and_unique():
+    run_id = build_run_id()
+    assert run_id
+    assert len(run_id) == 16
+    assert run_id != build_run_id()
+
+
+def test_validate_run_id_rejects_empty_values():
+    with pytest.raises(ValueError, match='run_id'):
+        validate_run_id('')
+    with pytest.raises(ValueError, match='run_id'):
+        validate_run_id('   ')
+    with pytest.raises(ValueError, match='run_id'):
+        validate_run_id(None)
+
+
+def test_clickhouse_persist_primary_key_column_is_not_nullable():
+    from xoverrr.adapters.clickhouse import ClickHouseAdapter
+
+    adapter = ClickHouseAdapter()
+    assert (
+        adapter._format_persist_column('run_id', 'string', 'run_id')
+        == 'run_id String'
+    )
+    assert (
+        adapter._format_persist_column('status', 'string', 'run_id')
+        == 'status Nullable(String)'
+    )
 
 
 def test_parse_persist_result_option():
@@ -157,6 +204,8 @@ def test_persist_with_datareference_target_and_tags():
         results_table='dq_results_default',
     )
     result = build_comparison_result(
+        run_id=RUN_ID,
+        timestamp=RUN_TIMESTAMP,
         timezone='UTC',
         status='success',
         report='TAGGED REPORT',
@@ -179,6 +228,7 @@ def test_persist_with_datareference_target_and_tags():
         'select * from dq_results_custom', results_engine
     )
     assert len(stored) == 1
+    assert stored.iloc[0]['run_id'] == RUN_ID
     assert stored.iloc[0]['comparison_name'] == 'orders_daily_compare'
     assert json.loads(stored.iloc[0]['comparison_tags_json']) == {
         'env': 'dev',

@@ -1,7 +1,7 @@
 from .constants import (COMPARISON_FAILED, COMPARISON_SKIPPED,
                         COMPARISON_SUCCESS)
 from .core import DataQualityComparator, DataReference
-from .reporting import ComparisonResult, generate_sample_report, generate_count_report
+from .reporting import ComparisonResult, generate_count_report, generate_sample_report
 from .utils import ComparisonStats, ComparisonDiffDetails
 
 __all__ = [

@@ -343,7 +343,11 @@ class PostgresAdapter(BaseDatabaseAdapter):
         }
 
     def ensure_persistence_table(
-        self, engine: Engine, table_ref: DataReference, column_types: Dict[str, str]
+        self,
+        engine: Engine,
+        table_ref: DataReference,
+        column_types: Dict[str, str],
+        primary_key: Optional[str] = None,
     ) -> None:
         if table_ref.schema:
             create_schema_sql = f'CREATE SCHEMA IF NOT EXISTS {table_ref.schema}'
@@ -351,7 +355,7 @@ class PostgresAdapter(BaseDatabaseAdapter):
             create_schema_sql = None
 
         columns_sql = ',\n                    '.join(
-            f'{name} {self.PERSIST_TYPE_MAP[col_type]}'
+            self._format_persist_column(name, col_type, primary_key)
             for name, col_type in column_types.items()
         )
         create_table_sql = f"""
@@ -363,6 +367,14 @@ class PostgresAdapter(BaseDatabaseAdapter):
             if create_schema_sql:
                 conn.execute(text(create_schema_sql))
             conn.execute(text(create_table_sql))
+
+    def _format_persist_column(
+        self, name: str, col_type: str, primary_key: Optional[str]
+    ) -> str:
+        sql_type = self.PERSIST_TYPE_MAP[col_type]
+        if name == primary_key:
+            return f'{name} {sql_type} PRIMARY KEY'
+        return f'{name} {sql_type}'
 
     def insert_persistence_record(
         self, engine: Engine, table_ref: DataReference, record: Dict
