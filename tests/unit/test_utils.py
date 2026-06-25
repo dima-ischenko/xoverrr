@@ -6,7 +6,7 @@ import pytest
 
 from xoverrr.utils import (ComparisonDiffDetails, ComparisonStats,
                            clean_recently_changed_data, compare_dataframes,
-                           cross_fill_missing_dates,
+                           cross_fill_missing_dates, format_report_collection,
                            get_dataframe_size_gb, prepare_dataframe,
                            validate_dataframe_size)
 
@@ -517,6 +517,14 @@ class TestUtils:
         assert stats.final_diff_score == pytest.approx(
             expected_score, rel=1e-5
         )  # Reduced precision
+
+
+def test_format_report_collection_empty_values():
+    assert format_report_collection(None) == ''
+    assert format_report_collection(()) == ''
+    assert format_report_collection([]) == ''
+    assert format_report_collection({1, 2}) == '1, 2'
+    assert format_report_collection(['id', 'value']) == 'id, value'
 
 
 @pytest.fixture
