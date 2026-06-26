@@ -29,3 +29,6 @@ REPORT_OUTPUT_FORMATS = frozenset({
     REPORT_OUTPUT_FORMAT_JSON,
     REPORT_OUTPUT_FORMAT_TEXT,
 })
+
+# Float precision used in text reports and persisted stats columns.
+STATS_REPORT_FLOAT_DECIMALS = 5

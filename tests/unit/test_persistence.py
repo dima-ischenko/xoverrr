@@ -143,7 +143,41 @@ def test_persist_writes_to_results_engine():
     )
     assert stored.iloc[0]['source_table'] == 'public.a'
     assert 'payload_json' not in stored.columns
+    assert 'source_params_json' not in stored.columns
+    assert 'target_params_json' not in stored.columns
     assert stored.iloc[0]['details_dup_source_keys_examples_json'] == '[]'
+
+
+def test_persist_rounds_stats_floats_to_report_precision():
+    results_engine = create_engine('sqlite:///:memory:')
+    persister = ComparisonResultPersister(
+        results_engine=results_engine,
+        results_table='dq_results_rounded',
+    )
+    stats = _build_stats()
+    stats.final_score = 83.33333333333333
+    stats.final_diff_score = 16.666666666666668
+    stats.total_diff_percentage_rows = 33.333333333333336
+
+    result = build_comparison_result(
+        run_id=RUN_ID,
+        timestamp=RUN_TIMESTAMP,
+        timezone='UTC',
+        status=ct.COMPARISON_FAILED,
+        report='FAILED REPORT',
+        stats=stats,
+        details=_build_details(),
+        comparison_type=ct.COMPARISON_TYPE_SAMPLE,
+        source_table='public.a',
+        target_table='public.b',
+    )
+
+    persister.persist(result, persist_result=True)
+
+    stored = pd.read_sql('select * from dq_results_rounded', results_engine)
+    assert stored.iloc[0]['stats_final_score'] == 83.33333
+    assert stored.iloc[0]['stats_final_diff_score'] == 16.66667
+    assert stored.iloc[0]['stats_total_diff_percentage_rows'] == 33.33333
 
 
 def test_validate_report_output_format_rejects_unknown_format():

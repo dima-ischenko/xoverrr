@@ -11,10 +11,17 @@ from .adapters.postgres import PostgresAdapter
 from .logger import app_logger
 from .models import DBMSType, DataReference
 from .reporting import ComparisonResult
+from .constants import STATS_REPORT_FLOAT_DECIMALS
 from .utils import ComparisonDiffDetails, ComparisonStats
 
 PERSIST_PRIMARY_KEY = 'run_id'
 RUN_ID_LENGTH = 16
+
+
+def _round_stats_float_for_persist(value) -> Optional[float]:
+    if value is None:
+        return None
+    return round(float(value), STATS_REPORT_FLOAT_DECIMALS)
 
 
 def validate_run_id(run_id: Optional[str]) -> str:
@@ -48,9 +55,7 @@ BASE_PERSIST_COLUMN_TYPES = {
     'target_table': PERSIST_COL_STRING,
     'timezone': PERSIST_COL_STRING,
     'source_query': PERSIST_COL_TEXT,
-    'source_params_json': PERSIST_COL_TEXT,
     'target_query': PERSIST_COL_TEXT,
-    'target_params_json': PERSIST_COL_TEXT,
     'report': PERSIST_COL_TEXT,
 }
 
@@ -86,13 +91,41 @@ def _normalize_details_for_persist(details: Optional[Dict]) -> Dict:
     return normalized
 
 
+def _format_sql_literal(value) -> str:
+    if value is None:
+        return 'NULL'
+    if isinstance(value, bool):
+        return 'TRUE' if value else 'FALSE'
+    if isinstance(value, (int, float)):
+        return str(value)
+    return "'" + str(value).replace("'", "''") + "'"
+
+
+def _render_query_with_params(
+    query: Optional[str], params: Optional[Dict]
+) -> Optional[str]:
+    if not query:
+        return None
+    if not params:
+        return query
+
+    rendered = query
+    for key in sorted(params, key=len, reverse=True):
+        rendered = rendered.replace(f':{key}', _format_sql_literal(params[key]))
+    return rendered
+
+
 def _extract_base_persist_value(payload: Dict, column: str):
     if column == 'comparison_tags_json':
         return _to_json_string(payload.get('comparison_tags'))
-    if column == 'source_params_json':
-        return _to_json_string(payload.get('source_params'))
-    if column == 'target_params_json':
-        return _to_json_string(payload.get('target_params'))
+    if column == 'source_query':
+        return _render_query_with_params(
+            payload.get('source_query'), payload.get('source_params')
+        )
+    if column == 'target_query':
+        return _render_query_with_params(
+            payload.get('target_query'), payload.get('target_params')
+        )
     if column.endswith('_json'):
         return _to_json_string(payload.get(column.removesuffix('_json')))
     return payload.get(column)
@@ -178,8 +211,11 @@ class ComparisonResultPersister:
         }
         record['run_id'] = validate_run_id(result.run_id)
 
-        for key in STATS_INTEGER_FIELDS + STATS_FLOAT_FIELDS:
+        for key in STATS_INTEGER_FIELDS:
             record[f'stats_{key}'] = stats.get(key)
+
+        for key in STATS_FLOAT_FIELDS:
+            record[f'stats_{key}'] = _round_stats_float_for_persist(stats.get(key))
 
         for key in DETAILS_JSON_FIELDS:
             record[f'details_{key}_json'] = _to_json_string(details.get(key))
