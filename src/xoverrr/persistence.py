@@ -46,7 +46,7 @@ PERSIST_COL_FLOAT = 'float'
 
 BASE_PERSIST_COLUMN_TYPES = {
     'run_id': PERSIST_COL_STRING,
-    'timestamp': PERSIST_COL_STRING,
+    'run_timestamp': PERSIST_COL_STRING,
     'comparison_type': PERSIST_COL_STRING,
     'status': PERSIST_COL_STRING,
     'comparison_name': PERSIST_COL_STRING,
@@ -116,6 +116,8 @@ def _render_query_with_params(
 
 
 def _extract_base_persist_value(payload: Dict, column: str):
+    if column == 'run_timestamp':
+        return payload.get('timestamp')
     if column == 'comparison_tags_json':
         return _to_json_string(payload.get('comparison_tags'))
     if column == 'source_query':

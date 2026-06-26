@@ -143,6 +143,9 @@ def test_persist_writes_to_results_engine():
     )
     assert stored.iloc[0]['source_table'] == 'public.a'
     assert 'payload_json' not in stored.columns
+    assert 'timestamp' not in stored.columns
+    assert 'run_timestamp' in stored.columns
+    assert stored.iloc[0]['run_timestamp'] == RUN_TIMESTAMP
     assert 'source_params_json' not in stored.columns
     assert 'target_params_json' not in stored.columns
     assert stored.iloc[0]['details_dup_source_keys_examples_json'] == '[]'
