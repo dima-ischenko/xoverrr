@@ -12,12 +12,27 @@ from .adapters.postgres import PostgresAdapter
 from .exceptions import DQCompareException, MetadataError
 from .logger import app_logger
 from .models import DataReference, DBMSType, ObjectType
+from .persistence import (
+    ComparisonResultPersister,
+    ComparisonRunTimings,
+    PersistResultOptions,
+    build_run_id,
+    parse_persist_result_option,
+)
 from .utils import (ComparisonDiffDetails, ComparisonStats,
                     build_comparison_stats, clean_recently_changed_data,
                     compare_dataframes, cross_fill_missing_dates,
                     generate_comparison_count_report,
                     generate_comparison_sample_report, normalize_column_names,
                     prepare_dataframe, validate_dataframe_size)
+from .reporting import (
+    build_comparison_result,
+    format_comparison_result,
+    generate_count_report,
+    generate_sample_report,
+    validate_report_output_format,
+)
+from .version import __version__
 
 
 class DataQualityComparator:
@@ -31,6 +46,7 @@ class DataQualityComparator:
         target_engine: Engine,
         default_exclude_recent_hours: Optional[int] = 24,
         timezone: str = ct.DEFAULT_TZ,
+        results_engine: Optional[Engine] = None,
     ):
         self.source_engine = source_engine
         self.target_engine = target_engine
@@ -38,6 +54,10 @@ class DataQualityComparator:
         self.target_db_type = DBMSType.from_engine(target_engine)
         self.default_exclude_recent_hours = default_exclude_recent_hours
         self.timezone = timezone
+        self.results_engine = results_engine
+        self.result_persister = ComparisonResultPersister(
+            results_engine=results_engine,
+        )
 
         self.adapters = {
             DBMSType.ORACLE: OracleAdapter(),
@@ -45,12 +65,15 @@ class DataQualityComparator:
             DBMSType.CLICKHOUSE: ClickHouseAdapter(),
         }
         self._reset_stats()
-        from . import __version__
-
+        self._report_context = {
+            'library_version': __version__,
+            'source_db_type': self.source_db_type.name.lower(),
+            'target_db_type': self.target_db_type.name.lower(),
+        }
         app_logger.info('start')
-        app_logger.info(f'Version: v{__version__}')
-        app_logger.info(f'Source DB: {self.source_db_type.name}')
-        app_logger.info(f'Target DB: {self.target_db_type.name}')
+        app_logger.info(f'Version: v{self._report_context["library_version"]}')
+        app_logger.info(f'Source DB: {self._report_context["source_db_type"]}')
+        app_logger.info(f'Target DB: {self._report_context["target_db_type"]}')
 
     def reset_stats(self):
         self._reset_stats()
@@ -87,14 +110,23 @@ class DataQualityComparator:
         self,
         source_table: DataReference,
         target_table: DataReference,
+        comparison_name: Optional[str] = None,
         date_column: Optional[str] = None,
         date_range: Optional[Tuple[str, str]] = None,
         chunk_size_days: Optional[int] = None,
         tolerance_percentage: float = 0.0,
         max_examples: Optional[int] = ct.DEFAULT_MAX_EXAMPLES,
+        persist_result: Union[bool, DataReference] = False,
+        comparison_tags: Optional[Dict] = None,
+        report_output_format: str = ct.REPORT_OUTPUT_FORMAT_JSON,
     ) -> Tuple[str, Optional[ComparisonStats], Optional[ComparisonDiffDetails]]:
 
         self._validate_inputs(source_table, target_table)
+        validate_report_output_format(report_output_format)
+        persist_options = parse_persist_result_option(persist_result)
+        run_id, run_started_at = self._start_comparison_run(
+            ct.COMPARISON_TYPE_COUNT, comparison_name
+        )
 
         start_date, end_date = date_range or (None, None)
 
@@ -110,21 +142,50 @@ class DataQualityComparator:
                 chunk_size_days,
                 tolerance_percentage,
                 max_examples,
+                run_id=run_id,
+                run_started_at=run_started_at,
             )
 
+            report = self._finalize_comparison(
+                status=status,
+                report=report,
+                stats=stats,
+                details=details,
+                comparison_type=ct.COMPARISON_TYPE_COUNT,
+                comparison_name=comparison_name,
+                comparison_tags=comparison_tags,
+                source_table=source_table.full_name,
+                target_table=target_table.full_name,
+                persist_options=persist_options,
+                report_output_format=report_output_format,
+            )
             self._update_stats(status, source_table)
             return status, report, stats, details
 
         except Exception as e:
             app_logger.exception(f'Count comparison failed: {str(e)}')
             status = ct.COMPARISON_FAILED
+            report = self._finalize_comparison(
+                status=status,
+                report=None,
+                stats=None,
+                details=None,
+                comparison_type=ct.COMPARISON_TYPE_COUNT,
+                comparison_name=comparison_name,
+                comparison_tags=comparison_tags,
+                source_table=source_table.full_name,
+                target_table=target_table.full_name,
+                persist_options=persist_options,
+                report_output_format=report_output_format,
+            )
             self._update_stats(status, source_table)
-            return status, None, None, None
+            return status, report, None, None
 
     def compare_sample(
         self,
         source_table: DataReference,
         target_table: DataReference,
+        comparison_name: Optional[str] = None,
         date_column: Optional[str] = None,
         update_column: Optional[str] = None,
         date_range: Optional[Tuple[str, str]] = None,
@@ -135,6 +196,9 @@ class DataQualityComparator:
         tolerance_percentage: float = 0.0,
         exclude_recent_hours: Optional[int] = None,
         max_examples: Optional[int] = ct.DEFAULT_MAX_EXAMPLES,
+        persist_result: Union[bool, DataReference] = False,
+        comparison_tags: Optional[Dict] = None,
+        report_output_format: str = ct.REPORT_OUTPUT_FORMAT_JSON,
     ) -> Tuple[str, str, Optional[ComparisonStats], Optional[ComparisonDiffDetails]]:
         """
         Compare data from custom queries with specified key columns
@@ -156,6 +220,11 @@ class DataQualityComparator:
                 Maximum number of discrepancy examples per column
         """
         self._validate_inputs(source_table, target_table)
+        validate_report_output_format(report_output_format)
+        persist_options = parse_persist_result_option(persist_result)
+        run_id, run_started_at = self._start_comparison_run(
+            ct.COMPARISON_TYPE_SAMPLE, comparison_name
+        )
 
         exclude_hours = exclude_recent_hours or self.default_exclude_recent_hours
 
@@ -185,16 +254,59 @@ class DataQualityComparator:
                 tolerance_percentage,
                 exclude_hours,
                 max_examples,
+                run_id=run_id,
+                run_started_at=run_started_at,
             )
 
+            report = self._finalize_comparison(
+                status=status,
+                report=report,
+                stats=stats,
+                details=details,
+                comparison_type=ct.COMPARISON_TYPE_SAMPLE,
+                comparison_name=comparison_name,
+                comparison_tags=comparison_tags,
+                source_table=source_table.full_name,
+                target_table=target_table.full_name,
+                persist_options=persist_options,
+                report_output_format=report_output_format,
+            )
             self._update_stats(status, source_table)
             return status, report, stats, details
 
         except Exception as e:
             app_logger.exception(f'Sample comparison failed: {str(e)}')
             status = ct.COMPARISON_FAILED
+            report = self._finalize_comparison(
+                status=status,
+                report=None,
+                stats=None,
+                details=None,
+                comparison_type=ct.COMPARISON_TYPE_SAMPLE,
+                comparison_name=comparison_name,
+                comparison_tags=comparison_tags,
+                source_table=source_table.full_name,
+                target_table=target_table.full_name,
+                persist_options=persist_options,
+                report_output_format=report_output_format,
+            )
             self._update_stats(status, source_table)
-            return status, None, None, None
+            return status, report, None, None
+
+    def _start_comparison_run(
+        self, comparison_type: str, comparison_name: Optional[str]
+    ) -> Tuple[str, str]:
+        run_started_at = pd.Timestamp.now().strftime(ct.DATETIME_FORMAT)
+        run_id = build_run_id()
+        app_logger.info(
+            f'Comparison run started: run_id={run_id} '
+            f'comparison_name={comparison_name} comparison_type={comparison_type}'
+        )
+        self._active_run_id = run_id
+        self._active_run_started_at = run_started_at
+        self._active_comparison_name = comparison_name
+        self._run_timings = ComparisonRunTimings(run_started_at=run_started_at)
+        return run_id, run_started_at
 
     def _compare_counts(
         self,
@@ -206,6 +318,8 @@ class DataQualityComparator:
         chunk_size_days: Optional[int],
         tolerance_percentage: float,
         max_examples: int,
+        run_id: str,
+        run_started_at: str,
     ) -> Tuple[str, str, Optional[ComparisonStats], Optional[ComparisonDiffDetails]]:
 
         try:
@@ -243,7 +357,10 @@ class DataQualityComparator:
                     self.timezone,
                 )
                 chunk_source = self._execute_query(
-                    (source_query, source_params), self.source_engine, self.timezone
+                    (source_query, source_params),
+                    self.source_engine,
+                    self.timezone,
+                    query_side='source',
                 )
                 source_chunks.append(chunk_source)
 
@@ -256,7 +373,10 @@ class DataQualityComparator:
                     self.timezone,
                 )
                 chunk_target = self._execute_query(
-                    (target_query, target_params), self.target_engine, self.timezone
+                    (target_query, target_params),
+                    self.target_engine,
+                    self.timezone,
+                    query_side='target',
                 )
                 target_chunks.append(chunk_target)
 
@@ -287,7 +407,7 @@ class DataQualityComparator:
                     * result_diff_in_counters
                     / (result_diff_in_counters + result_equal_in_counters)
                 )
-                stats, details = compare_dataframes(
+                stats, details = self._compare_dataframes_timed(
                     source_df=source_counts_filled,
                     target_df=target_counts_filled,
                     key_columns=['dt'],
@@ -300,7 +420,7 @@ class DataQualityComparator:
                     else ct.COMPARISON_SUCCESS
                 )
 
-                report = generate_comparison_count_report(
+                report = generate_count_report(
                     source_table.full_name,
                     target_table.full_name,
                     stats,
@@ -311,10 +431,13 @@ class DataQualityComparator:
                     result_diff_in_counters,
                     result_equal_in_counters,
                     self.timezone,
+                    run_id,
+                    run_started_at,
                     source_query,
                     source_params,
                     target_query,
                     target_params,
+                    **self._report_context,
                 )
 
                 return status, report, stats, details
@@ -338,6 +461,8 @@ class DataQualityComparator:
         tolerance_percentage: float,
         exclude_recent_hours: Optional[int],
         max_examples: Optional[int],
+        run_id: str,
+        run_started_at: str,
     ) -> Tuple[str, str, Optional[ComparisonStats], Optional[ComparisonDiffDetails]]:
 
         try:
@@ -474,6 +599,8 @@ class DataQualityComparator:
                 exclude_recent_hours=exclude_recent_hours,
                 tolerance_percentage=tolerance_percentage,
                 max_examples=max_examples,
+                run_id=run_id,
+                run_started_at=run_started_at,
             )
 
         except Exception as e:
@@ -487,10 +614,14 @@ class DataQualityComparator:
         target_query: str,
         target_params: Tuple[str, Dict],
         custom_primary_key: List[str],
+        comparison_name: Optional[str] = None,
         chunk_size_days: Optional[int] = None,
         exclude_columns: Optional[List[str]] = None,
         tolerance_percentage: float = 0.0,
         max_examples: Optional[int] = ct.DEFAULT_MAX_EXAMPLES,
+        persist_result: Union[bool, DataReference] = False,
+        comparison_tags: Optional[Dict] = None,
+        report_output_format: str = ct.REPORT_OUTPUT_FORMAT_JSON,
     ) -> Tuple[str, str, Optional[ComparisonStats], Optional[ComparisonDiffDetails]]:
         """
         Compare data from custom queries with specified key columns
@@ -516,6 +647,11 @@ class DataQualityComparator:
         source_engine = self.source_engine
         target_engine = self.target_engine
         timezone = self.timezone
+        validate_report_output_format(report_output_format)
+        persist_options = parse_persist_result_option(persist_result)
+        run_id, run_started_at = self._start_comparison_run(
+            ct.COMPARISON_TYPE_CUSTOM_QUERY, comparison_name
+        )
 
         try:
             self.comparison_stats['compared'] += 1
@@ -581,11 +717,14 @@ class DataQualityComparator:
                     stats,
                     details,
                     self.timezone,
+                    run_id,
+                    run_started_at,
                     source_query,
                     source_params,
                     target_query,
                     target_params,
-                    date_chunks=date_chunks
+                    date_chunks=date_chunks,
+                    **self._report_context,
                 )
                 status = (
                     ct.COMPARISON_FAILED
@@ -593,14 +732,99 @@ class DataQualityComparator:
                     else ct.COMPARISON_SUCCESS
                 )
 
+            report = self._finalize_comparison(
+                status=status,
+                report=report,
+                stats=stats,
+                details=details,
+                comparison_type=ct.COMPARISON_TYPE_CUSTOM_QUERY,
+                comparison_name=comparison_name,
+                comparison_tags=comparison_tags,
+                source_table=None,
+                target_table=None,
+                source_query=source_query,
+                source_params=source_params,
+                target_query=target_query,
+                target_params=target_params,
+                persist_options=persist_options,
+                report_output_format=report_output_format,
+            )
             self._update_stats(status, None)
             return status, report, stats, details
 
         except Exception as e:
             app_logger.exception('Custom query comparison failed')
             status = ct.COMPARISON_FAILED
+            report = self._finalize_comparison(
+                status=status,
+                report=None,
+                stats=None,
+                details=None,
+                comparison_type=ct.COMPARISON_TYPE_CUSTOM_QUERY,
+                comparison_name=comparison_name,
+                comparison_tags=comparison_tags,
+                source_table=None,
+                target_table=None,
+                source_query=source_query,
+                source_params=source_params,
+                target_query=target_query,
+                target_params=target_params,
+                persist_options=persist_options,
+                report_output_format=report_output_format,
+            )
             self._update_stats(status, None)
-            return status, None, None, None
+            return status, report, None, None
+
+    def _finalize_comparison(
+        self,
+        *,
+        status: str,
+        report: Optional[str],
+        stats: Optional[ComparisonStats],
+        details: Optional[ComparisonDiffDetails],
+        comparison_type: str,
+        persist_options: PersistResultOptions,
+        report_output_format: str,
+        comparison_name: Optional[str] = None,
+        comparison_tags: Optional[Dict] = None,
+        source_table: Optional[str] = None,
+        target_table: Optional[str] = None,
+        source_query: Optional[str] = None,
+        source_params: Optional[Dict] = None,
+        target_query: Optional[str] = None,
+        target_params: Optional[Dict] = None,
+    ) -> Optional[str]:
+        if not getattr(self, '_active_run_id', None):
+            raise RuntimeError('comparison run was not started; run_id is missing')
+        self._run_timings.finish_run()
+        result = build_comparison_result(
+            run_id=self._active_run_id,
+            timestamp=self._active_run_started_at,
+            timezone=self.timezone,
+            status=status,
+            report=report,
+            stats=stats,
+            details=details,
+            comparison_type=comparison_type,
+            comparison_name=self._active_comparison_name,
+            comparison_tags=comparison_tags,
+            source_table=source_table,
+            target_table=target_table,
+            source_query=source_query,
+            source_params=source_params,
+            target_query=target_query,
+            target_params=target_params,
+            timings=self._run_timings,
+        )
+        self.result_persister.persist(
+            result,
+            persist_result=persist_options.enabled,
+            persist_result_ref=persist_options.table_ref,
+        )
+        app_logger.info(
+            f'Comparison run finished: run_id={self._active_run_id} status={status}'
+        )
+        return format_comparison_result(result, report_output_format)
 
     def _resolve_custom_query_chunks(
         self,
@@ -664,10 +888,10 @@ class DataQualityComparator:
         timezone: str,
     ) -> Tuple[Optional[ComparisonStats], Optional[ComparisonDiffDetails]]:
         source_data = self._execute_query(
-            (source_query, source_params), source_engine, timezone
+            (source_query, source_params), source_engine, timezone, query_side='source'
         )
         target_data = self._execute_query(
-            (target_query, target_params), target_engine, timezone
+            (target_query, target_params), target_engine, timezone, query_side='target'
         )
 
         source_data = source_adapter.convert_types(
@@ -691,7 +915,7 @@ class DataQualityComparator:
             source_data_filtered, target_data_filtered = clean_recently_changed_data(
                 source_data_filtered, target_data_filtered, custom_primary_key
             )
-        return compare_dataframes(
+        return self._compare_dataframes_timed(
             source_data_filtered,
             target_data_filtered,
             custom_primary_key,
@@ -844,10 +1068,10 @@ class DataQualityComparator:
                 if discrepancy_examples_rows
                 else pd.DataFrame()
             ),
-            dup_source_keys_examples=tuple(dup_source_examples) or None,
-            dup_target_keys_examples=tuple(dup_target_examples) or None,
-            source_only_keys_examples=tuple(source_only_examples) or None,
-            target_only_keys_examples=tuple(target_only_examples) or None,
+            dup_source_keys_examples=tuple(dup_source_examples),
+            dup_target_keys_examples=tuple(dup_target_examples),
+            source_only_keys_examples=tuple(source_only_examples),
+            target_only_keys_examples=tuple(target_only_examples),
             discrepant_data_examples=(
                 pd.concat(discrepant_chunks, ignore_index=True)
                 if discrepant_chunks
@@ -910,6 +1134,7 @@ class DataQualityComparator:
         start_date: Optional[str],
         end_date: Optional[str],
         exclude_recent_hours: Optional[int],
+        query_side: str,
     ) -> Tuple[pd.DataFrame, str, Dict]:
         """Retrieve and prepare table data"""
         db_type = DBMSType.from_engine(engine)
@@ -928,7 +1153,9 @@ class DataQualityComparator:
             self.timezone,
         )
 
-        df = self._execute_query((query, params), engine, self.timezone)
+        df = self._execute_query(
+            (query, params), engine, self.timezone, query_side=query_side
+        )
 
         # Apply type conversions
         df = adapter.convert_types(df, columns_meta, self.timezone)
@@ -998,6 +1225,8 @@ class DataQualityComparator:
         exclude_recent_hours: Optional[int],
         tolerance_percentage: float,
         max_examples: Optional[int],
+        run_id: str,
+        run_started_at: str,
     ) -> Tuple[str, str, Optional[ComparisonStats], Optional[ComparisonDiffDetails]]:
         examples_limit = max_examples or ct.DEFAULT_MAX_EXAMPLES
 
@@ -1038,6 +1267,7 @@ class DataQualityComparator:
                 chunk_start,
                 chunk_end,
                 exclude_recent_hours,
+                query_side='source',
             )
             target_data, target_query, target_params = self._get_table_data(
                 self.target_engine,
@@ -1049,6 +1279,7 @@ class DataQualityComparator:
                 chunk_start,
                 chunk_end,
                 exclude_recent_hours,
+                query_side='target',
             )
 
             total_source_rows_raw += len(source_data)
@@ -1067,7 +1298,7 @@ class DataQualityComparator:
             if source_data.empty and target_data.empty:
                 continue
 
-            chunk_stats, chunk_details = compare_dataframes(
+            chunk_stats, chunk_details = self._compare_dataframes_timed(
                 source_data, target_data, key_columns, examples_limit
             )
             if not chunk_stats:
@@ -1174,10 +1405,10 @@ class DataQualityComparator:
         details = ComparisonDiffDetails(
             mismatches_per_column=mismatches_per_column,
             discrepancies_per_col_examples=discrepancies_per_col_examples,
-            dup_source_keys_examples=tuple(dup_source_examples) or None,
-            dup_target_keys_examples=tuple(dup_target_examples) or None,
-            source_only_keys_examples=tuple(source_only_examples) or None,
-            target_only_keys_examples=tuple(target_only_examples) or None,
+            dup_source_keys_examples=tuple(dup_source_examples),
+            dup_target_keys_examples=tuple(dup_target_examples),
+            source_only_keys_examples=tuple(source_only_examples),
+            target_only_keys_examples=tuple(target_only_examples),
             discrepant_data_examples=discrepant_data_examples,
             common_attribute_columns=common_cols,
             skipped_source_columns=source_only_cols,
@@ -1190,11 +1421,14 @@ class DataQualityComparator:
             stats,
             details,
             self.timezone,
+            run_id,
+            run_started_at,
             source_query,
             source_params,
             target_query,
             target_params,
             date_chunks=date_chunks,
+            **self._report_context,
         )
         status = (
             ct.COMPARISON_FAILED
@@ -1213,15 +1447,40 @@ class DataQualityComparator:
                 break
             target_set.add(item)
 
+    def _compare_dataframes_timed(
+        self,
+        source_df: pd.DataFrame,
+        target_df: pd.DataFrame,
+        key_columns: List[str],
+        max_examples: Optional[int],
+    ):
+        self._run_timings.mark_dataset_compare_start()
+        try:
+            return compare_dataframes(
+                source_df, target_df, key_columns, max_examples
+            )
+        finally:
+            self._run_timings.mark_dataset_compare_end()
+
     def _execute_query(
-        self, query: Union[str, Tuple[str, Dict]], engine: Engine, timezone: str = None
+        self,
+        query: Union[str, Tuple[str, Dict]],
+        engine: Engine,
+        timezone: str = None,
+        query_side: Optional[str] = None,
     ) -> pd.DataFrame:
-        """Execute SQL query using appropriate adapter"""
-        db_type = DBMSType.from_engine(engine)
-        adapter = self._get_adapter(db_type)
-        df = adapter._execute_query(query, engine, timezone)
-        validate_dataframe_size(df, ct.DEFAULT_MAX_SAMPLE_SIZE_GB)
-        return df
+        """Execute SQL query using appropriate adapter."""
+        if query_side:
+            self._run_timings.mark_query_start(query_side)
+        try:
+            db_type = DBMSType.from_engine(engine)
+            adapter = self._get_adapter(db_type)
+            df = adapter._execute_query(query, engine, timezone)
+            validate_dataframe_size(df, ct.DEFAULT_MAX_SAMPLE_SIZE_GB)
+            return df
+        finally:
+            if query_side:
+                self._run_timings.mark_query_end(query_side)
 
     def _analyze_columns_meta(
         self, source_columns_meta: pd.DataFrame, target_columns_meta: pd.DataFrame

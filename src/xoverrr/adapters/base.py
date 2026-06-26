@@ -137,6 +137,24 @@ class BaseDatabaseAdapter(ABC):
         """Get type conversion rules for specific DBMS"""
         pass
 
+    @abstractmethod
+    def ensure_persistence_table(
+        self,
+        engine: Engine,
+        table_ref: DataReference,
+        column_types: Dict[str, str],
+        primary_key: Optional[str] = None,
+    ) -> None:
+        """Create persistence table using explicit DDL if needed."""
+        pass
+
+    @abstractmethod
+    def insert_persistence_record(
+        self, engine: Engine, table_ref: DataReference, record: Dict
+    ) -> None:
+        """Insert one persistence record using explicit SQL."""
+        pass
+
     def _apply_type_conversion(
         self, df: pd.DataFrame, metadata: pd.DataFrame, type_rules: Dict[str, Callable]
     ) -> pd.DataFrame:

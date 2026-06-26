@@ -16,3 +16,19 @@ DEFAULT_TZ = 'UTC'
 COMPARISON_SUCCESS = 'success'
 COMPARISON_FAILED = 'failed'
 COMPARISON_SKIPPED = 'skipped'
+
+# Comparison types
+COMPARISON_TYPE_COUNT = 'count'
+COMPARISON_TYPE_SAMPLE = 'sample'
+COMPARISON_TYPE_CUSTOM_QUERY = 'custom_query'
+
+# Report output formats
+REPORT_OUTPUT_FORMAT_JSON = 'json'
+REPORT_OUTPUT_FORMAT_TEXT = 'text'
+REPORT_OUTPUT_FORMATS = frozenset({
+    REPORT_OUTPUT_FORMAT_JSON,
+    REPORT_OUTPUT_FORMAT_TEXT,
+})
+
+# Float precision used in text reports and persisted stats columns.
+STATS_REPORT_FLOAT_DECIMALS = 5

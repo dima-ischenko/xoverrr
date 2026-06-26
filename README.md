@@ -13,12 +13,14 @@ from datetime import date, timedelta
 # 1. Create database connections
 source_engine = create_engine('postgresql://user:pass@localhost:5432/source_db')
 target_engine = create_engine('oracle+oracledb://user:pass@localhost:1521/target_db')
+results_engine = create_engine('postgresql://user:pass@localhost:5432/dq_audit')
 
 # 2. Initialize comparator
 comparator = DataQualityComparator(
     source_engine=source_engine,
     target_engine=target_engine,
-    timezone='Europe/Athens'
+    timezone='Europe/Athens',
+    results_engine=results_engine,                   # optional third engine
 )
 
 # 3. Define tables to compare
@@ -41,7 +43,11 @@ status, report, stats, details = comparator.compare_sample(
     exclude_columns=["audit_log", "temp_field"],
     tolerance_percentage=0.5,
     exclude_recent_hours=3,
-    max_examples=5
+    max_examples=5,
+    persist_result=DataReference("dq_results", "test"), # persist target as DataReference
+    comparison_name="employees_daily",
+    comparison_tags={"env": "prod", "domain": "hr"},
+    report_output_format='json',                        # 'json' or 'text'
 )
 
 # 6. Check results
@@ -67,14 +73,21 @@ else:
   * Automatic exclusion of columns with mismatched names
 - **Optimization**: Two samples of 1 million rows × 10 columns (each ~330 MB) compared in ~3 s (Intel Core i5 / 16 GB RAM)
 - **Detailed reporting**: In‑depth column‑level discrepancy analysis with example records (column view / record view)
+- **Persistent transparency**: Optional result persistence to a third SQLAlchemy engine for dashboards and end‑user audit
+- **Portable persistence engine**: `results_engine` can point to any supported DB backend (Oracle, PostgreSQL/Greenplum, ClickHouse)
 - **Flexible configuration**: Column exclusion/inclusion, tolerance thresholds, custom primary‑key specification
 - **Unit tests**: Coverage for comparison methods, functional and performance validation
-- **Integrations tests**: contains integration tests for xoverrr using real databases started via Docker
+- **Integration tests**: contains integration tests for xoverrr using real databases started via Docker
 
 ## Example Report
+Text report (`report_output_format='text'`). Each run gets an internal `run_id` (also written to logs and the persistence table when enabled; not included in public JSON from `ComparisonResult.to_dict()`).
 ```
 ================================================================================
 2025-11-24 20:09:40
+run_id: a3f2c8b91d4e5678
+version: *.*.*
+source db type: postgresql
+target db type: oracle
 DATA SAMPLE COMPARISON REPORT:
 hr.employees
 VS
@@ -119,10 +132,10 @@ SUMMARY:
   Mismatched rows %: 1.90476
   Final discrepancies score: 0.95238
   Final data quality score: 99.04762
-  Source-only key examples: None
-  Target-only key examples: None
-  Duplicated source key examples: None
-  Duplicated target key examples: None
+  Source-only key examples:
+  Target-only key examples:
+  Duplicated source key examples:
+  Duplicated target key examples:
   Common attribute columns: first_name, last_name, salary, department_id
   Skipped source columns: audit_log, temp_field
   Skipped target columns:
@@ -207,6 +220,10 @@ status, report, stats, details = comparator.compare_sample(
 - `tolerance_percentage` – acceptable discrepancy threshold (0.0–100.0)
 - `exclude_recent_hours` – exclude data modified within the last N hours
 - `max_examples` – maximum number of discrepancy examples included in the report
+- `persist_result` – `False` (no DB persistence), `True` (persist to default table `xoverrr_comparison_results`), or `DataReference(name, schema)` to persist into an explicit target table per compare call
+- `comparison_name` – optional dashboard-friendly comparison name (for grouping/runs)
+- `comparison_tags` – optional dict with tags/labels for dashboard filtering (env, domain, pipeline, owner, etc.)
+- `report_output_format` – controls returned `report` value; default `'json'` (`'text'` for plain report string)
 
 ### 2. Count‑Based Comparison (`compare_counts`)
 Efficient for large‑volume comparisons over extended date ranges, identifying missing rows or duplicates.
@@ -230,6 +247,10 @@ status, report, stats, details = comparator.compare_counts(
 - `chunk_size_days` – optional chunk size (in days) for iterative processing across the date range
 - `tolerance_percentage` – acceptable discrepancy threshold
 - `max_examples` – maximum number of daily discrepancy examples included in the report
+- `persist_result` – `False` (no DB persistence), `True` (persist to default table `xoverrr_comparison_results`), or `DataReference(name, schema)` to persist into an explicit target table per compare call
+- `comparison_name` – optional dashboard-friendly comparison name (for grouping/runs)
+- `comparison_tags` – optional dict with tags/labels for dashboard filtering (env, domain, pipeline, owner, etc.)
+- `report_output_format` – controls returned `report` value; default `'json'` (`'text'` for plain report string)
 
 ### 3. Custom‑Query Comparison (`compare_custom_query`)
 Compares data from arbitrary SQL queries. Suitable for complex scenarios.
@@ -279,6 +300,10 @@ status, report, stats, details = comparator.compare_custom_query(
 - `exclude_columns` – columns to omit from comparison
 - `tolerance_percentage` – acceptable discrepancy threshold
 - `max_examples` – maximum number of discrepancy examples included in the report
+- `persist_result` – `False` (no DB persistence), `True` (persist to default table `xoverrr_comparison_results`), or `DataReference(name, schema)` to persist into an explicit target table per compare call
+- `comparison_name` – optional dashboard-friendly comparison name (for grouping/runs)
+- `comparison_tags` – optional dict with tags/labels for dashboard filtering (env, domain, pipeline, owner, etc.)
+- `report_output_format` – controls returned `report` value; default `'json'` (`'text'` for plain report string)
 - To automatically exclude recently changed records, add the following expression to your SELECT clause in `compare_custom_query`:
   ```sql
   case when updated_at > (sysdate - 3/24) then 'y' end as xrecently_changed
@@ -302,7 +327,7 @@ status, report, stats, details = comparator.compare_custom_query(
 **Return Values:**
 All methods return a tuple:
 - `status` – comparison status (`COMPARISON_SUCCESS` / `COMPARISON_FAILED` / `COMPARISON_SKIPPED`)
-- `report` – textual report detailing discrepancies
+- `report` – report output controlled by `report_output_format` (`text` report string or full `json` payload string)
 - `stats` – `ComparisonStats` dataclass instance containing comparison statistics
 - `details` – `ComparisonDiffDetails` dataclass instance with discrepancy examples and details
 
@@ -312,12 +337,17 @@ All methods return a tuple:
 - **COMPARISON_SKIPPED**: No data available for comparison (both tables empty).
 
 ### Structured Logging
-Logs include timing information and structured context:
+Each comparison run is tagged with an internal `run_id`. Logs include run lifecycle, timing, and structured context:
 ```
+2024-01-15 10:30:45 - INFO - xoverrr.core - Comparison run started: run_id=a3f2c8b91d4e5678 comparison_name=employees_daily comparison_type=sample
 2024-01-15 10:30:45 - INFO - xoverrr.core._compare_samples - Query executed in 2.34s
 2024-01-15 10:30:46 - INFO - xoverrr.core._compare_samples - Source: 150000 rows, Target: 149950 rows
 2024-01-15 10:30:47 - INFO - xoverrr.utils.compare_dataframes - Comparison completed in 1.2s
+2024-01-15 10:30:47 - INFO - xoverrr.core - Comparison run finished: run_id=a3f2c8b91d4e5678 status=COMPARISON_SUCCESS
 ```
+
+### Result Persistence
+When `results_engine` is set on `DataQualityComparator` and `persist_result=True` (or a custom `DataReference`), one row is written per run. The table is created automatically if missing; primary key is `run_id`. Persisted columns include status, comparison metadata, stats fields, details JSON columns, and the text `report`.
 
 ### Tolerance Percentage
 - **tolerance_percentage**: Acceptable discrepancy threshold (0.0–100.0).

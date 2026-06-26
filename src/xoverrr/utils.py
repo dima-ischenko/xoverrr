@@ -1,12 +1,47 @@
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple, defaultdict
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 
 from .constants import DATETIME_FORMAT, DEFAULT_MAX_EXAMPLES, NULL_REPLACEMENT
 from .logger import app_logger
+
+
+def format_report_collection(value) -> str:
+    """Format optional collections for human-readable report lines."""
+    if value is None:
+        return ''
+    if isinstance(value, (set, frozenset)):
+        if not value:
+            return ''
+        return ', '.join(str(item) for item in sorted(value, key=str))
+    if isinstance(value, (tuple, list)):
+        if not value:
+            return ''
+        return ', '.join(str(item) for item in value)
+    return str(value)
+
+
+def append_report_run_header(
+    lines: List[str],
+    run_id: str,
+    run_started_at: str,
+    library_version: Optional[str] = None,
+    source_db_type: Optional[str] = None,
+    target_db_type: Optional[str] = None,
+) -> None:
+    lines.append('=' * 80)
+    lines.append(run_started_at)
+    lines.append(f'run_id: {run_id}')
+    if library_version is not None:
+        lines.append(f'lib version: {library_version}')
+    if source_db_type is not None:
+        lines.append(f'source db type: {source_db_type}')
+    if target_db_type is not None:
+        lines.append(f'target db type: {target_db_type}')
 
 
 def build_comparison_stats(
@@ -445,17 +480,27 @@ def generate_comparison_sample_report(
     stats: ComparisonStats,
     details: ComparisonDiffDetails,
     timezone: str,
+    run_id: str,
+    run_started_at: str,
     source_query: str = None,
     source_params: Dict = None,
     target_query: str = None,
     target_params: Dict = None,
     date_chunks: Optional[List[Tuple[str, str]]] = None,
+    library_version: Optional[str] = None,
+    source_db_type: Optional[str] = None,
+    target_db_type: Optional[str] = None,
 ) -> None:
     """Generate comparison report (logger output looks uuugly)"""
     rl = []
-    rl.append('=' * 80)
-    current_datetime = datetime.now()
-    rl.append(current_datetime.strftime(DATETIME_FORMAT))
+    append_report_run_header(
+        rl,
+        run_id,
+        run_started_at,
+        library_version=library_version,
+        source_db_type=source_db_type,
+        target_db_type=target_db_type,
+    )
     rl.append(f'DATA SAMPLE COMPARISON REPORT: ')
     if source_table and target_table:  # empty for custom query
         rl.append(f'{source_table}')
@@ -498,17 +543,17 @@ def generate_comparison_sample_report(
     rl.append(f'  Final discrepancies score: {stats.final_diff_score:.5f}')
     rl.append(f'  Final data quality score: {stats.final_score:.5f}')
 
-    rl.append(f'  Source-only key examples: {details.source_only_keys_examples}')
-    rl.append(f'  Target-only key examples: {details.target_only_keys_examples}')
+    rl.append(f'  Source-only key examples: {format_report_collection(details.source_only_keys_examples)}')
+    rl.append(f'  Target-only key examples: {format_report_collection(details.target_only_keys_examples)}')
 
-    rl.append(f'  Duplicated source key examples: {details.dup_source_keys_examples}')
-    rl.append(f'  Duplicated target key examples: {details.dup_target_keys_examples}')
+    rl.append(f'  Duplicated source key examples: {format_report_collection(details.dup_source_keys_examples)}')
+    rl.append(f'  Duplicated target key examples: {format_report_collection(details.dup_target_keys_examples)}')
 
     rl.append(
-        f'  Common attribute columns: {", ".join(details.common_attribute_columns)}'
+        f'  Common attribute columns: {format_report_collection(details.common_attribute_columns)}'
     )
-    rl.append(f'  Skipped source columns: {", ".join(details.skipped_source_columns)}')
-    rl.append(f'  Skipped target columns: {", ".join(details.skipped_target_columns)}')
+    rl.append(f'  Skipped source columns: {format_report_collection(details.skipped_source_columns)}')
+    rl.append(f'  Skipped target columns: {format_report_collection(details.skipped_target_columns)}')
 
     if stats.max_diff_percentage_cols > 0 and not details.mismatches_per_column.empty:
         rl.append(f'\nCOLUMN DIFFERENCES:')
@@ -557,17 +602,27 @@ def generate_comparison_count_report(
     result_diff_in_counters: int,
     result_equal_in_counters: int,
     timezone: str,
+    run_id: str,
+    run_started_at: str,
     source_query: str = None,
     source_params: Dict = None,
     target_query: str = None,
     target_params: Dict = None,
     date_chunks: Optional[List[Tuple[str, str]]] = None,
+    library_version: Optional[str] = None,
+    source_db_type: Optional[str] = None,
+    target_db_type: Optional[str] = None,
 ) -> None:
     """Generates comparison report (logger output looks uuugly)"""
     rl = []
-    rl.append('=' * 80)
-    current_datetime = datetime.now()
-    rl.append(current_datetime.strftime(DATETIME_FORMAT))
+    append_report_run_header(
+        rl,
+        run_id,
+        run_started_at,
+        library_version=library_version,
+        source_db_type=source_db_type,
+        target_db_type=target_db_type,
+    )
     rl.append(f'COUNT COMPARISON REPORT:')
     rl.append(f'{source_table}')
     rl.append(f'VS')
@@ -781,10 +836,8 @@ def cross_fill_missing_dates(df1, df2, date_column='dt', value_column='cnt'):
 def format_keys(keys, max_examples):
     if keys:
         keys = {next(iter(x)) if len(x) == 1 else x for x in list(keys)[:max_examples]}
-        keys = keys if keys != set() else None
-        return keys
-    else:
-        return None
+        return keys if keys != set() else ()
+    return ()
 
 
 def get_dataframe_size_gb(df: pd.DataFrame) -> float:
