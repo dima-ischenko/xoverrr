@@ -85,7 +85,7 @@ Text report (`report_output_format='text'`). Each run gets an internal `run_id` 
 ================================================================================
 2025-11-24 20:09:40
 run_id: a3f2c8b91d4e5678
-version: 1.2.3
+version: *.*.*
 source db type: postgresql
 target db type: oracle
 DATA SAMPLE COMPARISON REPORT:
