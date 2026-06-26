@@ -17,4 +17,4 @@ __all__ = [
     'COMPARISON_SKIPPED',
 ]
 
-__version__ = '1.2.2'
+from .version import __version__

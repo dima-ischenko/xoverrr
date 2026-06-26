@@ -209,6 +209,9 @@ def generate_sample_report(
     source_params: Optional[Dict] = None,
     target_query: Optional[str] = None,
     target_params: Optional[Dict] = None,
+    library_version: Optional[str] = None,
+    source_db_type: Optional[str] = None,
+    target_db_type: Optional[str] = None,
 ) -> str:
     """
     Generate a human-readable text report for sample comparison.
@@ -228,7 +231,14 @@ def generate_sample_report(
         Formatted text report
     """
     lines = []
-    append_report_run_header(lines, run_id, run_started_at)
+    append_report_run_header(
+        lines,
+        run_id,
+        run_started_at,
+        library_version=library_version,
+        source_db_type=source_db_type,
+        target_db_type=target_db_type,
+    )
     lines.append('DATA SAMPLE COMPARISON REPORT:')
     
     if source_table and target_table:
@@ -327,6 +337,9 @@ def generate_count_report(
     source_params: Optional[Dict] = None,
     target_query: Optional[str] = None,
     target_params: Optional[Dict] = None,
+    library_version: Optional[str] = None,
+    source_db_type: Optional[str] = None,
+    target_db_type: Optional[str] = None,
 ) -> str:
     """
     Generate a human-readable text report for count-based comparison.
@@ -351,7 +364,14 @@ def generate_count_report(
         Formatted text report
     """
     lines = []
-    append_report_run_header(lines, run_id, run_started_at)
+    append_report_run_header(
+        lines,
+        run_id,
+        run_started_at,
+        library_version=library_version,
+        source_db_type=source_db_type,
+        target_db_type=target_db_type,
+    )
     lines.append('COUNT COMPARISON REPORT:')
     lines.append(f'{source_table}')
     lines.append('VS')

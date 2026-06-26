@@ -26,11 +26,22 @@ def format_report_collection(value) -> str:
 
 
 def append_report_run_header(
-    lines: List[str], run_id: str, run_started_at: str
+    lines: List[str],
+    run_id: str,
+    run_started_at: str,
+    library_version: Optional[str] = None,
+    source_db_type: Optional[str] = None,
+    target_db_type: Optional[str] = None,
 ) -> None:
     lines.append('=' * 80)
     lines.append(run_started_at)
     lines.append(f'run_id: {run_id}')
+    if library_version is not None:
+        lines.append(f'lib version: {library_version}')
+    if source_db_type is not None:
+        lines.append(f'source db type: {source_db_type}')
+    if target_db_type is not None:
+        lines.append(f'target db type: {target_db_type}')
 
 
 def build_comparison_stats(
@@ -476,10 +487,20 @@ def generate_comparison_sample_report(
     target_query: str = None,
     target_params: Dict = None,
     date_chunks: Optional[List[Tuple[str, str]]] = None,
+    library_version: Optional[str] = None,
+    source_db_type: Optional[str] = None,
+    target_db_type: Optional[str] = None,
 ) -> None:
     """Generate comparison report (logger output looks uuugly)"""
     rl = []
-    append_report_run_header(rl, run_id, run_started_at)
+    append_report_run_header(
+        rl,
+        run_id,
+        run_started_at,
+        library_version=library_version,
+        source_db_type=source_db_type,
+        target_db_type=target_db_type,
+    )
     rl.append(f'DATA SAMPLE COMPARISON REPORT: ')
     if source_table and target_table:  # empty for custom query
         rl.append(f'{source_table}')
@@ -588,10 +609,20 @@ def generate_comparison_count_report(
     target_query: str = None,
     target_params: Dict = None,
     date_chunks: Optional[List[Tuple[str, str]]] = None,
+    library_version: Optional[str] = None,
+    source_db_type: Optional[str] = None,
+    target_db_type: Optional[str] = None,
 ) -> None:
     """Generates comparison report (logger output looks uuugly)"""
     rl = []
-    append_report_run_header(rl, run_id, run_started_at)
+    append_report_run_header(
+        rl,
+        run_id,
+        run_started_at,
+        library_version=library_version,
+        source_db_type=source_db_type,
+        target_db_type=target_db_type,
+    )
     rl.append(f'COUNT COMPARISON REPORT:')
     rl.append(f'{source_table}')
     rl.append(f'VS')

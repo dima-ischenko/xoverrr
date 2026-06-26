@@ -31,6 +31,7 @@ from .reporting import (
     generate_sample_report,
     validate_report_output_format,
 )
+from .version import __version__
 
 
 class DataQualityComparator:
@@ -63,12 +64,15 @@ class DataQualityComparator:
             DBMSType.CLICKHOUSE: ClickHouseAdapter(),
         }
         self._reset_stats()
-        from . import __version__
-
+        self._report_context = {
+            'library_version': __version__,
+            'source_db_type': self.source_db_type.name.lower(),
+            'target_db_type': self.target_db_type.name.lower(),
+        }
         app_logger.info('start')
-        app_logger.info(f'Version: v{__version__}')
-        app_logger.info(f'Source DB: {self.source_db_type.name}')
-        app_logger.info(f'Target DB: {self.target_db_type.name}')
+        app_logger.info(f'Version: v{self._report_context["library_version"]}')
+        app_logger.info(f'Source DB: {self._report_context["source_db_type"]}')
+        app_logger.info(f'Target DB: {self._report_context["target_db_type"]}')
 
     def reset_stats(self):
         self._reset_stats()
@@ -425,6 +429,7 @@ class DataQualityComparator:
                     source_params,
                     target_query,
                     target_params,
+                    **self._report_context,
                 )
 
                 return status, report, stats, details
@@ -710,7 +715,8 @@ class DataQualityComparator:
                     source_params,
                     target_query,
                     target_params,
-                    date_chunks=date_chunks
+                    date_chunks=date_chunks,
+                    **self._report_context,
                 )
                 status = (
                     ct.COMPARISON_FAILED
@@ -1407,6 +1413,7 @@ class DataQualityComparator:
             target_query,
             target_params,
             date_chunks=date_chunks,
+            **self._report_context,
         )
         status = (
             ct.COMPARISON_FAILED
