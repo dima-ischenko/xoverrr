@@ -2,12 +2,14 @@ import json
 import dataclasses
 import uuid
 from dataclasses import dataclass
-from typing import Dict, Optional, Union
+from typing import Dict, Literal, Optional, Union
 
+import pandas as pd
 from sqlalchemy.engine import Engine
 from .adapters.clickhouse import ClickHouseAdapter
 from .adapters.oracle import OracleAdapter
 from .adapters.postgres import PostgresAdapter
+from .constants import DATETIME_FORMAT
 from .logger import app_logger
 from .models import DBMSType, DataReference
 from .reporting import ComparisonResult
@@ -16,6 +18,18 @@ from .utils import ComparisonDiffDetails, ComparisonStats
 
 PERSIST_PRIMARY_KEY = 'run_id'
 RUN_ID_LENGTH = 16
+QuerySide = Literal['source', 'target']
+
+TIMING_PERSIST_FIELDS = (
+    'run_started_at',
+    'run_finished_at',
+    'source_query_started_at',
+    'source_query_finished_at',
+    'target_query_started_at',
+    'target_query_finished_at',
+    'dataset_compare_started_at',
+    'dataset_compare_finished_at',
+)
 
 
 def _round_stats_float_for_persist(value) -> Optional[float]:
@@ -38,6 +52,43 @@ def build_run_id() -> str:
     """Build a random non-empty run identifier for a comparison run."""
     return uuid.uuid4().hex[:RUN_ID_LENGTH]
 
+
+@dataclass
+class ComparisonRunTimings:
+    """Wall-clock timestamps for a single comparison run (DATETIME_FORMAT strings)."""
+
+    run_started_at: Optional[str] = None
+    run_finished_at: Optional[str] = None
+    source_query_started_at: Optional[str] = None
+    source_query_finished_at: Optional[str] = None
+    target_query_started_at: Optional[str] = None
+    target_query_finished_at: Optional[str] = None
+    dataset_compare_started_at: Optional[str] = None
+    dataset_compare_finished_at: Optional[str] = None
+
+    @staticmethod
+    def now() -> str:
+        return pd.Timestamp.now().strftime(DATETIME_FORMAT)
+
+    def mark_query_start(self, side: QuerySide) -> None:
+        started_attr = f'{side}_query_started_at'
+        if getattr(self, started_attr) is None:
+            setattr(self, started_attr, self.now())
+
+    def mark_query_end(self, side: QuerySide) -> None:
+        setattr(self, f'{side}_query_finished_at', self.now())
+
+    def mark_dataset_compare_start(self) -> None:
+        if self.dataset_compare_started_at is None:
+            self.dataset_compare_started_at = self.now()
+
+    def mark_dataset_compare_end(self) -> None:
+        self.dataset_compare_finished_at = self.now()
+
+    def finish_run(self) -> None:
+        self.run_finished_at = self.now()
+
+
 # Portable logical column types mapped to DB-specific DDL in adapter PERSIST_TYPE_MAP.
 PERSIST_COL_STRING = 'string'
 PERSIST_COL_TEXT = 'text'
@@ -46,7 +97,7 @@ PERSIST_COL_FLOAT = 'float'
 
 BASE_PERSIST_COLUMN_TYPES = {
     'run_id': PERSIST_COL_STRING,
-    'run_timestamp': PERSIST_COL_STRING,
+    **{field: PERSIST_COL_STRING for field in TIMING_PERSIST_FIELDS},
     'comparison_type': PERSIST_COL_STRING,
     'status': PERSIST_COL_STRING,
     'comparison_name': PERSIST_COL_STRING,
@@ -116,8 +167,6 @@ def _render_query_with_params(
 
 
 def _extract_base_persist_value(payload: Dict, column: str):
-    if column == 'run_timestamp':
-        return payload.get('timestamp')
     if column == 'comparison_tags_json':
         return _to_json_string(payload.get('comparison_tags'))
     if column == 'source_query':
@@ -209,9 +258,14 @@ class ComparisonResultPersister:
         record = {
             column: _extract_base_persist_value(full_payload, column)
             for column in BASE_PERSIST_COLUMN_TYPES
-            if column != 'run_id'
+            if column not in ('run_id', *TIMING_PERSIST_FIELDS)
         }
         record['run_id'] = validate_run_id(result.run_id)
+        if result.timings:
+            for field in TIMING_PERSIST_FIELDS:
+                record[field] = getattr(result.timings, field)
+        elif result.timestamp:
+            record['run_started_at'] = result.timestamp
 
         for key in STATS_INTEGER_FIELDS:
             record[f'stats_{key}'] = stats.get(key)

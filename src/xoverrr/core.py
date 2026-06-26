@@ -14,6 +14,7 @@ from .logger import app_logger
 from .models import DataReference, DBMSType, ObjectType
 from .persistence import (
     ComparisonResultPersister,
+    ComparisonRunTimings,
     PersistResultOptions,
     build_run_id,
     parse_persist_result_option,
@@ -304,6 +305,7 @@ class DataQualityComparator:
         self._active_run_id = run_id
         self._active_run_started_at = run_started_at
         self._active_comparison_name = comparison_name
+        self._run_timings = ComparisonRunTimings(run_started_at=run_started_at)
         return run_id, run_started_at
 
     def _compare_counts(
@@ -355,7 +357,10 @@ class DataQualityComparator:
                     self.timezone,
                 )
                 chunk_source = self._execute_query(
-                    (source_query, source_params), self.source_engine, self.timezone
+                    (source_query, source_params),
+                    self.source_engine,
+                    self.timezone,
+                    query_side='source',
                 )
                 source_chunks.append(chunk_source)
 
@@ -368,7 +373,10 @@ class DataQualityComparator:
                     self.timezone,
                 )
                 chunk_target = self._execute_query(
-                    (target_query, target_params), self.target_engine, self.timezone
+                    (target_query, target_params),
+                    self.target_engine,
+                    self.timezone,
+                    query_side='target',
                 )
                 target_chunks.append(chunk_target)
 
@@ -399,7 +407,7 @@ class DataQualityComparator:
                     * result_diff_in_counters
                     / (result_diff_in_counters + result_equal_in_counters)
                 )
-                stats, details = compare_dataframes(
+                stats, details = self._compare_dataframes_timed(
                     source_df=source_counts_filled,
                     target_df=target_counts_filled,
                     key_columns=['dt'],
@@ -788,6 +796,7 @@ class DataQualityComparator:
     ) -> Optional[str]:
         if not getattr(self, '_active_run_id', None):
             raise RuntimeError('comparison run was not started; run_id is missing')
+        self._run_timings.finish_run()
         result = build_comparison_result(
             run_id=self._active_run_id,
             timestamp=self._active_run_started_at,
@@ -805,6 +814,7 @@ class DataQualityComparator:
             source_params=source_params,
             target_query=target_query,
             target_params=target_params,
+            timings=self._run_timings,
         )
         self.result_persister.persist(
             result,
@@ -878,10 +888,10 @@ class DataQualityComparator:
         timezone: str,
     ) -> Tuple[Optional[ComparisonStats], Optional[ComparisonDiffDetails]]:
         source_data = self._execute_query(
-            (source_query, source_params), source_engine, timezone
+            (source_query, source_params), source_engine, timezone, query_side='source'
         )
         target_data = self._execute_query(
-            (target_query, target_params), target_engine, timezone
+            (target_query, target_params), target_engine, timezone, query_side='target'
         )
 
         source_data = source_adapter.convert_types(
@@ -905,7 +915,7 @@ class DataQualityComparator:
             source_data_filtered, target_data_filtered = clean_recently_changed_data(
                 source_data_filtered, target_data_filtered, custom_primary_key
             )
-        return compare_dataframes(
+        return self._compare_dataframes_timed(
             source_data_filtered,
             target_data_filtered,
             custom_primary_key,
@@ -1124,6 +1134,7 @@ class DataQualityComparator:
         start_date: Optional[str],
         end_date: Optional[str],
         exclude_recent_hours: Optional[int],
+        query_side: str,
     ) -> Tuple[pd.DataFrame, str, Dict]:
         """Retrieve and prepare table data"""
         db_type = DBMSType.from_engine(engine)
@@ -1142,7 +1153,9 @@ class DataQualityComparator:
             self.timezone,
         )
 
-        df = self._execute_query((query, params), engine, self.timezone)
+        df = self._execute_query(
+            (query, params), engine, self.timezone, query_side=query_side
+        )
 
         # Apply type conversions
         df = adapter.convert_types(df, columns_meta, self.timezone)
@@ -1254,6 +1267,7 @@ class DataQualityComparator:
                 chunk_start,
                 chunk_end,
                 exclude_recent_hours,
+                query_side='source',
             )
             target_data, target_query, target_params = self._get_table_data(
                 self.target_engine,
@@ -1265,6 +1279,7 @@ class DataQualityComparator:
                 chunk_start,
                 chunk_end,
                 exclude_recent_hours,
+                query_side='target',
             )
 
             total_source_rows_raw += len(source_data)
@@ -1283,7 +1298,7 @@ class DataQualityComparator:
             if source_data.empty and target_data.empty:
                 continue
 
-            chunk_stats, chunk_details = compare_dataframes(
+            chunk_stats, chunk_details = self._compare_dataframes_timed(
                 source_data, target_data, key_columns, examples_limit
             )
             if not chunk_stats:
@@ -1432,15 +1447,40 @@ class DataQualityComparator:
                 break
             target_set.add(item)
 
+    def _compare_dataframes_timed(
+        self,
+        source_df: pd.DataFrame,
+        target_df: pd.DataFrame,
+        key_columns: List[str],
+        max_examples: Optional[int],
+    ):
+        self._run_timings.mark_dataset_compare_start()
+        try:
+            return compare_dataframes(
+                source_df, target_df, key_columns, max_examples
+            )
+        finally:
+            self._run_timings.mark_dataset_compare_end()
+
     def _execute_query(
-        self, query: Union[str, Tuple[str, Dict]], engine: Engine, timezone: str = None
+        self,
+        query: Union[str, Tuple[str, Dict]],
+        engine: Engine,
+        timezone: str = None,
+        query_side: Optional[str] = None,
     ) -> pd.DataFrame:
-        """Execute SQL query using appropriate adapter"""
-        db_type = DBMSType.from_engine(engine)
-        adapter = self._get_adapter(db_type)
-        df = adapter._execute_query(query, engine, timezone)
-        validate_dataframe_size(df, ct.DEFAULT_MAX_SAMPLE_SIZE_GB)
-        return df
+        """Execute SQL query using appropriate adapter."""
+        if query_side:
+            self._run_timings.mark_query_start(query_side)
+        try:
+            db_type = DBMSType.from_engine(engine)
+            adapter = self._get_adapter(db_type)
+            df = adapter._execute_query(query, engine, timezone)
+            validate_dataframe_size(df, ct.DEFAULT_MAX_SAMPLE_SIZE_GB)
+            return df
+        finally:
+            if query_side:
+                self._run_timings.mark_query_end(query_side)
 
     def _analyze_columns_meta(
         self, source_columns_meta: pd.DataFrame, target_columns_meta: pd.DataFrame

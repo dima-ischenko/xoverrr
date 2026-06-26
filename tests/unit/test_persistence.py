@@ -8,6 +8,7 @@ from xoverrr import constants as ct
 from xoverrr.models import DataReference
 from xoverrr.persistence import (
     ComparisonResultPersister,
+    ComparisonRunTimings,
     build_run_id,
     parse_persist_result_option,
     validate_run_id,
@@ -19,8 +20,22 @@ from xoverrr.reporting import (
 )
 from xoverrr.utils import ComparisonDiffDetails, ComparisonStats
 
-RUN_TIMESTAMP = '2026-01-01 00:00:00'
+RUN_STARTED_AT = '2026-01-01 00:00:00'
+RUN_FINISHED_AT = '2026-01-01 00:00:05'
 RUN_ID = 'internal-run-id'
+
+
+def _build_timings() -> ComparisonRunTimings:
+    return ComparisonRunTimings(
+        run_started_at=RUN_STARTED_AT,
+        run_finished_at=RUN_FINISHED_AT,
+        source_query_started_at='2026-01-01 00:00:01',
+        source_query_finished_at='2026-01-01 00:00:02',
+        target_query_started_at='2026-01-01 00:00:02',
+        target_query_finished_at='2026-01-01 00:00:03',
+        dataset_compare_started_at='2026-01-01 00:00:03',
+        dataset_compare_finished_at='2026-01-01 00:00:04',
+    )
 
 
 def _build_stats() -> ComparisonStats:
@@ -63,7 +78,7 @@ def _build_details() -> ComparisonDiffDetails:
 def test_format_comparison_result_returns_json_report():
     result = build_comparison_result(
         run_id=RUN_ID,
-        timestamp=RUN_TIMESTAMP,
+        timestamp=RUN_STARTED_AT,
         timezone='UTC',
         status='success',
         report='FULL TEXT REPORT',
@@ -90,7 +105,7 @@ def test_format_comparison_result_returns_json_report():
 def test_format_comparison_result_returns_text_report():
     result = build_comparison_result(
         run_id=RUN_ID,
-        timestamp=RUN_TIMESTAMP,
+        timestamp=RUN_STARTED_AT,
         timezone='UTC',
         status='success',
         report='FULL TEXT REPORT',
@@ -116,7 +131,7 @@ def test_persist_writes_to_results_engine():
     )
     result = build_comparison_result(
         run_id=RUN_ID,
-        timestamp=RUN_TIMESTAMP,
+        timestamp=RUN_STARTED_AT,
         timezone='UTC',
         status='failed',
         report='COUNT REPORT',
@@ -144,8 +159,9 @@ def test_persist_writes_to_results_engine():
     assert stored.iloc[0]['source_table'] == 'public.a'
     assert 'payload_json' not in stored.columns
     assert 'timestamp' not in stored.columns
-    assert 'run_timestamp' in stored.columns
-    assert stored.iloc[0]['run_timestamp'] == RUN_TIMESTAMP
+    assert 'run_timestamp' not in stored.columns
+    assert stored.iloc[0]['run_started_at'] == RUN_STARTED_AT
+    assert stored.iloc[0]['run_finished_at'] is None
     assert 'source_params_json' not in stored.columns
     assert 'target_params_json' not in stored.columns
     assert stored.iloc[0]['details_dup_source_keys_examples_json'] == '[]'
@@ -164,7 +180,7 @@ def test_persist_rounds_stats_floats_to_report_precision():
 
     result = build_comparison_result(
         run_id=RUN_ID,
-        timestamp=RUN_TIMESTAMP,
+        timestamp=RUN_STARTED_AT,
         timezone='UTC',
         status=ct.COMPARISON_FAILED,
         report='FAILED REPORT',
@@ -181,6 +197,40 @@ def test_persist_rounds_stats_floats_to_report_precision():
     assert stored.iloc[0]['stats_final_score'] == 83.33333
     assert stored.iloc[0]['stats_final_diff_score'] == 16.66667
     assert stored.iloc[0]['stats_total_diff_percentage_rows'] == 33.33333
+
+
+def test_persist_writes_timing_columns():
+    results_engine = create_engine('sqlite:///:memory:')
+    persister = ComparisonResultPersister(
+        results_engine=results_engine,
+        results_table='dq_results_timings',
+    )
+    result = build_comparison_result(
+        run_id=RUN_ID,
+        timestamp=RUN_STARTED_AT,
+        timezone='UTC',
+        status='success',
+        report='TIMED REPORT',
+        stats=_build_stats(),
+        details=_build_details(),
+        comparison_type=ct.COMPARISON_TYPE_SAMPLE,
+        source_table='public.a',
+        target_table='public.b',
+        timings=_build_timings(),
+    )
+
+    persister.persist(result, persist_result=True)
+
+    stored = pd.read_sql('select * from dq_results_timings', results_engine)
+    row = stored.iloc[0]
+    assert row['run_started_at'] == RUN_STARTED_AT
+    assert row['run_finished_at'] == RUN_FINISHED_AT
+    assert row['source_query_started_at'] == '2026-01-01 00:00:01'
+    assert row['source_query_finished_at'] == '2026-01-01 00:00:02'
+    assert row['target_query_started_at'] == '2026-01-01 00:00:02'
+    assert row['target_query_finished_at'] == '2026-01-01 00:00:03'
+    assert row['dataset_compare_started_at'] == '2026-01-01 00:00:03'
+    assert row['dataset_compare_finished_at'] == '2026-01-01 00:00:04'
 
 
 def test_validate_report_output_format_rejects_unknown_format():
@@ -242,7 +292,7 @@ def test_persist_with_datareference_target_and_tags():
     )
     result = build_comparison_result(
         run_id=RUN_ID,
-        timestamp=RUN_TIMESTAMP,
+        timestamp=RUN_STARTED_AT,
         timezone='UTC',
         status='success',
         report='TAGGED REPORT',

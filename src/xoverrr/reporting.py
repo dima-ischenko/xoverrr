@@ -5,15 +5,20 @@ Provides functions to format comparison statistics and details into
 human-readable reports and structured data formats (JSON, dict).
 """
 
+from __future__ import annotations
+
 import json
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 import pandas as pd
 
 from .constants import DATETIME_FORMAT, REPORT_OUTPUT_FORMAT_JSON, REPORT_OUTPUT_FORMATS, REPORT_OUTPUT_FORMAT_TEXT
 from .utils import ComparisonDiffDetails, ComparisonStats, append_report_run_header, format_report_collection
+
+if TYPE_CHECKING:
+    from .persistence import ComparisonRunTimings
 
 
 @dataclass
@@ -40,6 +45,7 @@ class ComparisonResult:
     source_params: Optional[Dict] = None
     target_query: Optional[str] = None
     target_params: Optional[Dict] = None
+    timings: Optional[ComparisonRunTimings] = None
 
     def __post_init__(self):
         from .persistence import validate_run_id
@@ -167,6 +173,7 @@ def build_comparison_result(
     source_params: Optional[Dict] = None,
     target_query: Optional[str] = None,
     target_params: Optional[Dict] = None,
+    timings: Optional[ComparisonRunTimings] = None,
 ) -> ComparisonResult:
     return ComparisonResult(
         timestamp=timestamp,
@@ -185,6 +192,7 @@ def build_comparison_result(
         source_params=source_params,
         target_query=target_query,
         target_params=target_params,
+        timings=timings,
     )
 
 
