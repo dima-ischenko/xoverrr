@@ -118,7 +118,7 @@ class DataQualityComparator:
         max_examples: Optional[int] = ct.DEFAULT_MAX_EXAMPLES,
         persist_result: Union[bool, DataReference] = False,
         comparison_tags: Optional[Dict] = None,
-        report_output_format: str = ct.REPORT_OUTPUT_FORMAT_JSON,
+        report_output_format: str = ct.REPORT_OUTPUT_FORMAT_TEXT,
     ) -> Tuple[str, Optional[ComparisonStats], Optional[ComparisonDiffDetails]]:
 
         self._validate_inputs(source_table, target_table)
@@ -198,7 +198,7 @@ class DataQualityComparator:
         max_examples: Optional[int] = ct.DEFAULT_MAX_EXAMPLES,
         persist_result: Union[bool, DataReference] = False,
         comparison_tags: Optional[Dict] = None,
-        report_output_format: str = ct.REPORT_OUTPUT_FORMAT_JSON,
+        report_output_format: str = ct.REPORT_OUTPUT_FORMAT_TEXT,
     ) -> Tuple[str, str, Optional[ComparisonStats], Optional[ComparisonDiffDetails]]:
         """
         Compare data from custom queries with specified key columns
@@ -621,7 +621,7 @@ class DataQualityComparator:
         max_examples: Optional[int] = ct.DEFAULT_MAX_EXAMPLES,
         persist_result: Union[bool, DataReference] = False,
         comparison_tags: Optional[Dict] = None,
-        report_output_format: str = ct.REPORT_OUTPUT_FORMAT_JSON,
+        report_output_format: str = ct.REPORT_OUTPUT_FORMAT_TEXT,
     ) -> Tuple[str, str, Optional[ComparisonStats], Optional[ComparisonDiffDetails]]:
         """
         Compare data from custom queries with specified key columns
