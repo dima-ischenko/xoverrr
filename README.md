@@ -223,7 +223,7 @@ status, report, stats, details = comparator.compare_sample(
 - `persist_result` – `False` (no DB persistence), `True` (persist to default table `xoverrr_comparison_results`), or `DataReference(name, schema)` to persist into an explicit target table per compare call
 - `comparison_name` – optional dashboard-friendly comparison name (for grouping/runs)
 - `comparison_tags` – optional dict with tags/labels for dashboard filtering (env, domain, pipeline, owner, etc.)
-- `report_output_format` – controls returned `report` value; default `'json'` (`'text'` for plain report string)
+- `report_output_format` – controls returned `report` value; default `'text'` (`'json'` for structured format)
 
 ### 2. Count‑Based Comparison (`compare_counts`)
 Efficient for large‑volume comparisons over extended date ranges, identifying missing rows or duplicates.
@@ -250,7 +250,7 @@ status, report, stats, details = comparator.compare_counts(
 - `persist_result` – `False` (no DB persistence), `True` (persist to default table `xoverrr_comparison_results`), or `DataReference(name, schema)` to persist into an explicit target table per compare call
 - `comparison_name` – optional dashboard-friendly comparison name (for grouping/runs)
 - `comparison_tags` – optional dict with tags/labels for dashboard filtering (env, domain, pipeline, owner, etc.)
-- `report_output_format` – controls returned `report` value; default `'json'` (`'text'` for plain report string)
+- `report_output_format` – controls returned `report` value; default `'text'` (`'json'` for structured format)
 
 ### 3. Custom‑Query Comparison (`compare_custom_query`)
 Compares data from arbitrary SQL queries. Suitable for complex scenarios.
@@ -303,7 +303,7 @@ status, report, stats, details = comparator.compare_custom_query(
 - `persist_result` – `False` (no DB persistence), `True` (persist to default table `xoverrr_comparison_results`), or `DataReference(name, schema)` to persist into an explicit target table per compare call
 - `comparison_name` – optional dashboard-friendly comparison name (for grouping/runs)
 - `comparison_tags` – optional dict with tags/labels for dashboard filtering (env, domain, pipeline, owner, etc.)
-- `report_output_format` – controls returned `report` value; default `'json'` (`'text'` for plain report string)
+- `report_output_format` – controls returned `report` value; default `'text'` (`'json'` for structured format)
 - To automatically exclude recently changed records, add the following expression to your SELECT clause in `compare_custom_query`:
   ```sql
   case when updated_at > (sysdate - 3/24) then 'y' end as xrecently_changed
