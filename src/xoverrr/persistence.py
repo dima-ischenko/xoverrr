@@ -90,21 +90,29 @@ class ComparisonRunTimings:
 
 
 # Portable logical column types mapped to DB-specific DDL in adapter PERSIST_TYPE_MAP.
+PERSIST_COL_SHORT_STRING = 'short_string'
 PERSIST_COL_STRING = 'string'
+PERSIST_COL_NAME = 'name'
+PERSIST_COL_TABLE_REF = 'table_ref'
+PERSIST_COL_TZ_NAME = 'tz_name'
+PERSIST_COL_DATETIME = 'datetime'
 PERSIST_COL_TEXT = 'text'
 PERSIST_COL_INT = 'int'
 PERSIST_COL_FLOAT = 'float'
 
+# Persisted column name (avoids reserved TIMEZONE keyword in Oracle).
+PERSIST_TIMEZONE_COLUMN = 'comparison_timezone'
+
 BASE_PERSIST_COLUMN_TYPES = {
-    'run_id': PERSIST_COL_STRING,
-    **{field: PERSIST_COL_STRING for field in TIMING_PERSIST_FIELDS},
+    'run_id': PERSIST_COL_SHORT_STRING,
+    **{field: PERSIST_COL_DATETIME for field in TIMING_PERSIST_FIELDS},
     'comparison_type': PERSIST_COL_STRING,
     'status': PERSIST_COL_STRING,
-    'comparison_name': PERSIST_COL_STRING,
+    'comparison_name': PERSIST_COL_NAME,
     'comparison_tags_json': PERSIST_COL_TEXT,
-    'source_table': PERSIST_COL_STRING,
-    'target_table': PERSIST_COL_STRING,
-    'timezone': PERSIST_COL_STRING,
+    'source_table': PERSIST_COL_TABLE_REF,
+    'target_table': PERSIST_COL_TABLE_REF,
+    PERSIST_TIMEZONE_COLUMN: PERSIST_COL_TZ_NAME,
     'source_query': PERSIST_COL_TEXT,
     'target_query': PERSIST_COL_TEXT,
     'report': PERSIST_COL_TEXT,
@@ -166,7 +174,22 @@ def _render_query_with_params(
     return rendered
 
 
+def _coerce_persist_record(record: Dict, column_types: Dict[str, str]) -> Dict:
+    """Convert logical persist values to DB-driver-friendly Python types."""
+    coerced = dict(record)
+    for column, col_type in column_types.items():
+        if col_type != PERSIST_COL_DATETIME:
+            continue
+        value = coerced.get(column)
+        if value is None or not isinstance(value, str):
+            continue
+        coerced[column] = pd.Timestamp(value).to_pydatetime()
+    return coerced
+
+
 def _extract_base_persist_value(payload: Dict, column: str):
+    if column == PERSIST_TIMEZONE_COLUMN:
+        return payload.get('timezone')
     if column == 'comparison_tags_json':
         return _to_json_string(payload.get('comparison_tags'))
     if column == 'source_query':
@@ -235,12 +258,14 @@ class ComparisonResultPersister:
             record = self._build_db_record(result, full_payload)
             table_ref = self._resolve_table_target(persist_result_ref)
             adapter = self._get_adapter_for_engine(self.results_engine)
+            column_types = self._build_column_types()
             adapter.ensure_persistence_table(
                 self.results_engine,
                 table_ref,
-                self._build_column_types(),
+                column_types,
                 primary_key=PERSIST_PRIMARY_KEY,
             )
+            record = _coerce_persist_record(record, column_types)
             adapter.insert_persistence_record(self.results_engine, table_ref, record)
             table_name = persist_result_ref.full_name if persist_result_ref else self.results_table
             app_logger.info(f'Comparison result persisted to {table_name}')

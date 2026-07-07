@@ -259,13 +259,60 @@ def test_clickhouse_persist_primary_key_column_is_not_nullable():
 
     adapter = ClickHouseAdapter()
     assert (
-        adapter._format_persist_column('run_id', 'string', 'run_id')
+        adapter._format_persist_column('run_id', 'short_string', 'run_id')
         == 'run_id String'
     )
     assert (
         adapter._format_persist_column('status', 'string', 'run_id')
         == 'status Nullable(String)'
     )
+    assert (
+        adapter._format_persist_column('run_started_at', 'datetime', 'run_id')
+        == 'run_started_at Nullable(DateTime)'
+    )
+
+
+def test_oracle_persist_type_map_uses_native_types():
+    from xoverrr.adapters.oracle import OracleAdapter
+
+    adapter = OracleAdapter()
+    assert adapter.PERSIST_TYPE_MAP['datetime'] == 'TIMESTAMP'
+    assert adapter.PERSIST_TYPE_MAP['float'] == 'NUMBER'
+    assert adapter.PERSIST_TYPE_MAP['table_ref'] == 'VARCHAR2(256)'
+    assert (
+        adapter._format_persist_column('run_started_at', 'datetime', 'run_id')
+        == 'run_started_at TIMESTAMP'
+    )
+    assert (
+        adapter._format_persist_column('stats_final_score', 'float', 'run_id')
+        == 'stats_final_score NUMBER'
+    )
+
+
+def test_persist_uses_comparison_timezone_column():
+    results_engine = create_engine('sqlite:///:memory:')
+    persister = ComparisonResultPersister(
+        results_engine=results_engine,
+        results_table='dq_results_tz',
+    )
+    result = build_comparison_result(
+        run_id=RUN_ID,
+        timestamp=RUN_STARTED_AT,
+        timezone='Europe/Athens',
+        status='success',
+        report='TZ REPORT',
+        stats=_build_stats(),
+        details=_build_details(),
+        comparison_type=ct.COMPARISON_TYPE_SAMPLE,
+        source_table='public.a',
+        target_table='public.b',
+    )
+
+    persister.persist(result, persist_result=True)
+
+    stored = pd.read_sql('select * from dq_results_tz', results_engine)
+    assert 'timezone' not in stored.columns
+    assert stored.iloc[0]['comparison_timezone'] == 'Europe/Athens'
 
 
 def test_parse_persist_result_option():
