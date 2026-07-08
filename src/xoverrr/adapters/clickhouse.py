@@ -14,13 +14,23 @@ from .base import BaseDatabaseAdapter, Engine
 class ClickHouseAdapter(BaseDatabaseAdapter):
     """ClickHouse adapter with parameterized queries"""
     PERSIST_TYPE_MAP = {
+        'short_string': 'Nullable(String)',
         'string': 'Nullable(String)',
+        'name': 'Nullable(String)',
+        'table_ref': 'Nullable(String)',
+        'tz_name': 'Nullable(String)',
+        'datetime': 'Nullable(DateTime)',
         'text': 'Nullable(String)',
         'float': 'Nullable(Float64)',
         'int': 'Nullable(Int64)',
     }
     PERSIST_NOT_NULL_TYPE_MAP = {
+        'short_string': 'String',
         'string': 'String',
+        'name': 'String',
+        'table_ref': 'String',
+        'tz_name': 'String',
+        'datetime': 'DateTime',
         'text': 'String',
         'float': 'Float64',
         'int': 'Int64',

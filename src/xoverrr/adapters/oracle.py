@@ -13,9 +13,14 @@ from .base import BaseDatabaseAdapter, Engine
 
 class OracleAdapter(BaseDatabaseAdapter):
     PERSIST_TYPE_MAP = {
-        'string': 'VARCHAR2(4000)',
+        'short_string': 'VARCHAR2(32)',
+        'string': 'VARCHAR2(64)',
+        'name': 'VARCHAR2(512)',
+        'table_ref': 'VARCHAR2(256)',
+        'tz_name': 'VARCHAR2(128)',
+        'datetime': 'TIMESTAMP',
         'text': 'CLOB',
-        'float': 'BINARY_DOUBLE',
+        'float': 'NUMBER',
         'int': 'NUMBER(19)',
     }
 

@@ -14,7 +14,12 @@ from .base import BaseDatabaseAdapter, Engine
 
 class PostgresAdapter(BaseDatabaseAdapter):
     PERSIST_TYPE_MAP = {
-        'string': 'TEXT',
+        'short_string': 'VARCHAR(32)',
+        'string': 'VARCHAR(64)',
+        'name': 'VARCHAR(512)',
+        'table_ref': 'VARCHAR(256)',
+        'tz_name': 'VARCHAR(128)',
+        'datetime': 'TIMESTAMP',
         'text': 'TEXT',
         'float': 'DOUBLE PRECISION',
         'int': 'BIGINT',

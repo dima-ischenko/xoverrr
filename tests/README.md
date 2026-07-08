@@ -65,7 +65,7 @@ rm -rf venv/
 From the project root directory (with virtual environment activated):
 
 ```bash
-# Run all integration tests
+# Run all unit tests
 python -m pytest tests/unit -v
 
 # Run specific test file
