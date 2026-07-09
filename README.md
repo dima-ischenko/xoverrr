@@ -63,9 +63,10 @@ else:
 - **Multi‑DBMS support**: Oracle, PostgreSQL (+ Greenplum), ClickHouse (extensible via adapter layer) — tables and views.
 - **Universal connections**: Provide SQLAlchemy Engine objects for source and target databases.
 - **Comparison strategies**:
-  * Data sample comparison
-  * Count‑based comparison with daily aggregates
-  * Fully custom (raw) SQL‑query comparison
+  * Data sample comparison (`compare_sample`)
+  * Count-based comparison with daily aggregates (`compare_counts`)
+  * Custom-query comparison (`compare_custom_query`)
+  * Sniff query — source-only SQL checks (`sniff_query`)
 - **Smart analysis**:
   * Excludes “fresh” data to mitigate replication lag
   * Auto‑detection of primary keys and column types from DBMS metadata (PK must be found on at least one side, or may be supplied manually)
@@ -296,21 +297,63 @@ status, report, stats, details = comparator.compare_custom_query(
 - `source_query`, `target_query` – parameterised SQL queries for the source and target
 - `source_params`, `target_params` – query parameters
 - `custom_primary_key` – mandatory list of column names constituting the primary key
-- `chunk_size_days` – optional chunk size (in days) for iterative processing when source and target params include `start_date` and `end_date`
-- `exclude_columns` – columns to omit from comparison
+- `chunk_size_days` – optional chunk size (in days) for iterative processing when params include `start_date` and `end_date`
+- `exclude_columns` – columns to omit from comparison or failed-row examples
 - `tolerance_percentage` – acceptable discrepancy threshold
 - `max_examples` – maximum number of discrepancy examples included in the report
 - `persist_result` – `False` (no DB persistence), `True` (persist to default table `xoverrr_comparison_results`), or `DataReference(name, schema)` to persist into an explicit target table per compare call
 - `comparison_name` – optional dashboard-friendly comparison name (for grouping/runs)
 - `comparison_tags` – optional dict with tags/labels for dashboard filtering (env, domain, pipeline, owner, etc.)
 - `report_output_format` – controls returned `report` value; default `'text'` (`'json'` for structured format)
-- To automatically exclude recently changed records, add the following expression to your SELECT clause in `compare_custom_query`:
+- To automatically exclude recently changed records in cross-side mode, add:
   ```sql
   case when updated_at > (sysdate - 3/24) then 'y' end as xrecently_changed
   ```
 
+### 4. Sniff Query (`sniff_query`)
+Sniffs out data issues using a single source query. Rows are flagged with `y`/`n` (same convention as `xrecently_changed`); `y` means something smells off.
+
+**Row-level check** — include `xsniff_issue` per row:
+```python
+status, report, stats, details = comparator.sniff_query(
+    source_query="""
+        SELECT
+            order_id,
+            amount,
+            CASE
+                WHEN amount > 0 AND customer_id IS NOT NULL THEN 'n'
+                ELSE 'y'
+            END AS xsniff_issue
+        FROM sales.orders
+        WHERE created_at >= :start_date
+    """,
+    source_params={'start_date': '2024-01-01'},
+    tolerance_percentage=1.0,
+)
+```
+
+**Scalar pass/fail** — single `xsniff_issue` value:
+```python
+status, report, stats, details = comparator.sniff_query(
+    source_query="""
+        SELECT CASE
+            WHEN EXISTS (SELECT 1 FROM sales.orders WHERE amount <= 0) THEN 'y'
+            ELSE 'n'
+        END AS xsniff_issue
+    """,
+    tolerance_percentage=0.0,
+)
+```
+
+**Metrics** (`ComparisonStats`):
+- `stats.total_source_rows` – checked rows
+- `stats.total_matched_rows` – passed rows
+- `stats.only_source_rows` – failed rows (`y`)
+- `stats.final_diff_score` – failed rows %
+- Pass/fail: `final_diff_score > tolerance_percentage` → `COMPARISON_FAILED`
+
 ### Chunked Processing (`chunk_size_days`)
-- Available in all methods: `compare_sample`, `compare_counts`, `compare_custom_query`.
+- Available in all methods: `compare_sample`, `compare_counts`, `compare_custom_query`, `sniff_query`.
 - Splits the requested period into N-day windows and compares chunk-by-chunk, then aggregates final metrics and examples.
 - Useful for long ranges or large tables to reduce peak query/dataframe size.
 - For `compare_custom_query`, chunking is applied only when both `source_params` and `target_params` contain `start_date` and `end_date`.
@@ -318,6 +361,7 @@ status, report, stats, details = comparator.compare_custom_query(
 **Automatic Primary‑Key Detection:**
 - For `compare_sample`, if `custom_primary_key` is not supplied, the system automatically infers the PK from metadata.
 - For `compare_custom_query`, `custom_primary_key` is mandatory.
+- For `sniff_query`, no primary key is required.
 
 **Performance Considerations:**
 - DataFrame size validation (hard limit: 3 GB per sample)

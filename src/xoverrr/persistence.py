@@ -174,16 +174,27 @@ def _render_query_with_params(
     return rendered
 
 
-def _coerce_persist_record(record: Dict, column_types: Dict[str, str]) -> Dict:
+def _coerce_persist_record(
+    record: Dict,
+    column_types: Dict[str, str],
+    engine: Optional[Engine] = None,
+) -> Dict:
     """Convert logical persist values to DB-driver-friendly Python types."""
     coerced = dict(record)
+    keep_datetime_as_string = (
+        engine is not None and engine.dialect.name == 'sqlite'
+    )
     for column, col_type in column_types.items():
         if col_type != PERSIST_COL_DATETIME:
             continue
         value = coerced.get(column)
         if value is None or not isinstance(value, str):
             continue
-        coerced[column] = pd.Timestamp(value).to_pydatetime()
+        timestamp = pd.Timestamp(value)
+        if keep_datetime_as_string:
+            coerced[column] = timestamp.strftime(DATETIME_FORMAT)
+        else:
+            coerced[column] = timestamp.to_pydatetime()
     return coerced
 
 
@@ -265,7 +276,9 @@ class ComparisonResultPersister:
                 column_types,
                 primary_key=PERSIST_PRIMARY_KEY,
             )
-            record = _coerce_persist_record(record, column_types)
+            record = _coerce_persist_record(
+                record, column_types, engine=self.results_engine
+            )
             adapter.insert_persistence_record(self.results_engine, table_ref, record)
             table_name = persist_result_ref.full_name if persist_result_ref else self.results_table
             app_logger.info(f'Comparison result persisted to {table_name}')

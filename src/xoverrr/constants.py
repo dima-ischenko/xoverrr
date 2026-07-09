@@ -21,6 +21,19 @@ COMPARISON_SKIPPED = 'skipped'
 COMPARISON_TYPE_COUNT = 'count'
 COMPARISON_TYPE_SAMPLE = 'sample'
 COMPARISON_TYPE_CUSTOM_QUERY = 'custom_query'
+COMPARISON_TYPE_SNIFF_QUERY = 'sniff_query'
+
+# Shared y/n flag convention for x-prefixed comparison columns.
+FLAG_VALUE_YES = 'y'
+FLAG_VALUE_NO = 'n'
+
+# Recently changed exclusion column (compare_sample / compare_custom_query).
+XRECENTLY_CHANGED_COLUMN = 'xrecently_changed'
+
+# Issue flag column for sniff_query (row-level or scalar pass/fail).
+XSNIFF_ISSUE_COLUMN = 'xsniff_issue'
+XSNIFF_ISSUE_VALUE_YES = FLAG_VALUE_YES
+XSNIFF_ISSUE_VALUE_NO = FLAG_VALUE_NO
 
 # Report output formats
 REPORT_OUTPUT_FORMAT_JSON = 'json'

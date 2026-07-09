@@ -5,7 +5,7 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 import pandas as pd
 from sqlalchemy import text
 
-from ..constants import DATETIME_FORMAT
+from ..constants import DATETIME_FORMAT, FLAG_VALUE_YES, XRECENTLY_CHANGED_COLUMN
 from ..exceptions import MetadataError, QueryExecutionError
 from ..logger import app_logger
 from ..models import DataReference, ObjectType
@@ -306,7 +306,10 @@ class PostgresAdapter(BaseDatabaseAdapter):
         if update_column and exclude_recent_hours:
             exclude_recent_hours = exclude_recent_hours
 
-            condition = f"""case when {update_column} > (now() - INTERVAL ':exclude_recent_hours hours') then 'y' end as xrecently_changed"""
+            condition = (
+                f"case when {update_column} > (now() - INTERVAL ':exclude_recent_hours hours') "
+                f"then '{FLAG_VALUE_YES}' end as {XRECENTLY_CHANGED_COLUMN}"
+            )
             params = {'exclude_recent_hours': exclude_recent_hours}
             return condition, params
 
