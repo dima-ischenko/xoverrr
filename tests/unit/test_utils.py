@@ -4,6 +4,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from xoverrr.constants import (
+    FLAG_VALUE_NO,
+    FLAG_VALUE_YES,
+    XRECENTLY_CHANGED_COLUMN,
+)
 from xoverrr.utils import (ComparisonDiffDetails, ComparisonStats,
                            clean_recently_changed_data, compare_dataframes,
                            cross_fill_missing_dates, format_report_collection,
@@ -260,7 +265,12 @@ class TestUtils:
             {
                 'id': [1, 2, 3, 4],
                 'value': ['A', 'B', 'C', 'D'],
-                'xrecently_changed': ['y', 'n', 'y', 'n'],
+                XRECENTLY_CHANGED_COLUMN: [
+                    FLAG_VALUE_YES,
+                    FLAG_VALUE_NO,
+                    FLAG_VALUE_YES,
+                    FLAG_VALUE_NO,
+                ],
             }
         )
 
@@ -268,17 +278,21 @@ class TestUtils:
             {
                 'id': [1, 2, 3, 5],
                 'value': ['A', 'B', 'X', 'E'],
-                'xrecently_changed': ['n', 'y', 'n', 'n'],
+                XRECENTLY_CHANGED_COLUMN: [
+                    FLAG_VALUE_NO,
+                    FLAG_VALUE_YES,
+                    FLAG_VALUE_NO,
+                    FLAG_VALUE_NO,
+                ],
             }
         )
 
         df1_clean, df2_clean = clean_recently_changed_data(df1, df2, ['id'])
 
-        # IDs with 'y' in either dataframe should be removed
-        assert 2 not in df1_clean['id'].values  # 'y' in df2
-        assert 3 not in df1_clean['id'].values  # 'y' in df1
-        assert 1 not in df1_clean['id'].values  # 'y' in df1
-        assert 'xrecently_changed' not in df1_clean.columns
+        assert 2 not in df1_clean['id'].values
+        assert 3 not in df1_clean['id'].values
+        assert 1 not in df1_clean['id'].values
+        assert XRECENTLY_CHANGED_COLUMN not in df1_clean.columns
 
     def test_compare_dataframes_different_keys(self):
         """Test comparison with different primary keys"""

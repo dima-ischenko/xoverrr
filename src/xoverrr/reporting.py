@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 import pandas as pd
 
-from .constants import DATETIME_FORMAT, REPORT_OUTPUT_FORMAT_JSON, REPORT_OUTPUT_FORMATS, REPORT_OUTPUT_FORMAT_TEXT
+from .constants import DATETIME_FORMAT, REPORT_OUTPUT_FORMAT_JSON, REPORT_OUTPUT_FORMATS, REPORT_OUTPUT_FORMAT_TEXT, XSNIFF_ISSUE_COLUMN, XSNIFF_ISSUE_VALUE_YES
 from .utils import ComparisonDiffDetails, ComparisonStats, append_report_run_header, format_report_collection
 
 if TYPE_CHECKING:
@@ -220,6 +220,7 @@ def generate_sample_report(
     library_version: Optional[str] = None,
     source_db_type: Optional[str] = None,
     target_db_type: Optional[str] = None,
+    sniff_query_mode: bool = False,
 ) -> str:
     """
     Generate a human-readable text report for sample comparison.
@@ -247,60 +248,78 @@ def generate_sample_report(
         source_db_type=source_db_type,
         target_db_type=target_db_type,
     )
-    lines.append('DATA SAMPLE COMPARISON REPORT:')
-    
-    if source_table and target_table:
-        lines.append(f'{source_table}')
-        lines.append('VS')
-        lines.append(f'{target_table}')
+    if sniff_query_mode:
+        lines.append('SNIFF QUERY REPORT:')
+    else:
+        lines.append('DATA SAMPLE COMPARISON REPORT:')
+        if source_table and target_table:
+            lines.append(f'{source_table}')
+            lines.append('VS')
+            lines.append(f'{target_table}')
     
     lines.append('=' * 80)
 
-    if source_query and target_query:
+    if source_query and (target_query or sniff_query_mode):
         lines.append(f'timezone: {timezone}')
         lines.append(f'    {source_query}')
         if source_params:
             lines.append(f'    params: {source_params}')
-        lines.append('-' * 40)
-        lines.append(f'    {target_query}')
-        if target_params:
-            lines.append(f'    params: {target_params}')
+        if target_query:
+            lines.append('-' * 40)
+            lines.append(f'    {target_query}')
+            if target_params:
+                lines.append(f'    params: {target_params}')
 
     lines.append('-' * 40)
 
     # Summary statistics
     lines.append('\nSUMMARY:')
-    lines.append(f'  Source rows: {stats.total_source_rows}')
-    lines.append(f'  Target rows: {stats.total_target_rows}')
-    lines.append(f'  Duplicated source rows: {stats.dup_source_rows}')
-    lines.append(f'  Duplicated target rows: {stats.dup_target_rows}')
-    lines.append(f'  Only source rows: {stats.only_source_rows}')
-    lines.append(f'  Only target rows: {stats.only_target_rows}')
-    lines.append(f'  Common rows (by primary key): {stats.common_pk_rows}')
-    lines.append(f'  Totally matched rows: {stats.total_matched_rows}')
-    lines.append('-' * 40)
-    
-    # Percentages
-    lines.append(f'  Source only rows %: {stats.source_only_percentage_rows:.5f}')
-    lines.append(f'  Target only rows %: {stats.target_only_percentage_rows:.5f}')
-    lines.append(f'  Duplicated source rows %: {stats.dup_source_percentage_rows:.5f}')
-    lines.append(f'  Duplicated target rows %: {stats.dup_target_percentage_rows:.5f}')
-    lines.append(f'  Mismatched rows %: {stats.total_diff_percentage_rows:.5f}')
-    lines.append(f'  Final discrepancies score: {stats.final_diff_score:.5f}')
-    lines.append(f'  Final data quality score: {stats.final_score:.5f}')
+    if sniff_query_mode:
+        issue_column = details.sniff_issue_column or XSNIFF_ISSUE_COLUMN
+        lines.append(f'  Issue column: {issue_column}')
+        lines.append(f"  Failed value: '{XSNIFF_ISSUE_VALUE_YES}'")
+        lines.append(f'  Checked rows: {stats.total_source_rows}')
+        lines.append(f'  Passed rows: {stats.total_matched_rows}')
+        lines.append(f'  Failed rows: {stats.only_source_rows}')
+        lines.append('-' * 40)
+        lines.append(f'  Failed rows %: {stats.source_only_percentage_rows:.5f}')
+        lines.append(f'  Final discrepancies score: {stats.final_diff_score:.5f}')
+        lines.append(f'  Final data quality score: {stats.final_score:.5f}')
+    else:
+        lines.append(f'  Source rows: {stats.total_source_rows}')
+        lines.append(f'  Target rows: {stats.total_target_rows}')
+        lines.append(f'  Duplicated source rows: {stats.dup_source_rows}')
+        lines.append(f'  Duplicated target rows: {stats.dup_target_rows}')
+        lines.append(f'  Only source rows: {stats.only_source_rows}')
+        lines.append(f'  Only target rows: {stats.only_target_rows}')
+        lines.append(f'  Common rows (by primary key): {stats.common_pk_rows}')
+        lines.append(f'  Totally matched rows: {stats.total_matched_rows}')
+        lines.append('-' * 40)
+        
+        # Percentages
+        lines.append(f'  Source only rows %: {stats.source_only_percentage_rows:.5f}')
+        lines.append(f'  Target only rows %: {stats.target_only_percentage_rows:.5f}')
+        lines.append(f'  Duplicated source rows %: {stats.dup_source_percentage_rows:.5f}')
+        lines.append(f'  Duplicated target rows %: {stats.dup_target_percentage_rows:.5f}')
+        lines.append(f'  Mismatched rows %: {stats.total_diff_percentage_rows:.5f}')
+        lines.append(f'  Final discrepancies score: {stats.final_diff_score:.5f}')
+        lines.append(f'  Final data quality score: {stats.final_score:.5f}')
 
-    # Key examples
-    lines.append(f'  Source-only key examples: {format_report_collection(details.source_only_keys_examples)}')
-    lines.append(f'  Target-only key examples: {format_report_collection(details.target_only_keys_examples)}')
-    lines.append(f'  Duplicated source key examples: {format_report_collection(details.dup_source_keys_examples)}')
-    lines.append(f'  Duplicated target key examples: {format_report_collection(details.dup_target_keys_examples)}')
+        # Key examples
+        lines.append(f'  Source-only key examples: {format_report_collection(details.source_only_keys_examples)}')
+        lines.append(f'  Target-only key examples: {format_report_collection(details.target_only_keys_examples)}')
+        lines.append(f'  Duplicated source key examples: {format_report_collection(details.dup_source_keys_examples)}')
+        lines.append(f'  Duplicated target key examples: {format_report_collection(details.dup_target_keys_examples)}')
 
-    lines.append(f'  Common attribute columns: {format_report_collection(details.common_attribute_columns)}')
-    lines.append(f'  Skipped source columns: {format_report_collection(details.skipped_source_columns)}')
-    lines.append(f'  Skipped target columns: {format_report_collection(details.skipped_target_columns)}')
+        lines.append(f'  Common attribute columns: {format_report_collection(details.common_attribute_columns)}')
+        lines.append(f'  Skipped source columns: {format_report_collection(details.skipped_source_columns)}')
+        lines.append(f'  Skipped target columns: {format_report_collection(details.skipped_target_columns)}')
 
     # Column differences
-    if stats.max_diff_percentage_cols > 0 and not details.mismatches_per_column.empty:
+    if sniff_query_mode and not details.mismatches_per_column.empty:
+        lines.append('\nSNIFF QUERY VALUE COUNTS:')
+        lines.append(details.mismatches_per_column.to_string(index=False))
+    elif stats.max_diff_percentage_cols > 0 and not details.mismatches_per_column.empty:
         lines.append('\nCOLUMN DIFFERENCES:')
         lines.append(f'  Discrepancies per column (max %): {stats.max_diff_percentage_cols:.5f}')
         lines.append('  Count of mismatches per column:\n')
@@ -314,8 +333,13 @@ def generate_sample_report(
 
     # Discrepant data examples
     if details.discrepant_data_examples is not None and not details.discrepant_data_examples.empty:
-        lines.append('\nDISCREPANT DATA (first pairs):')
-        lines.append('Sorted by primary key and dataset:\n')
+        lines.append(
+            '\nFAILED ROW EXAMPLES:'
+            if sniff_query_mode
+            else '\nDISCREPANT DATA (first pairs):'
+        )
+        if not sniff_query_mode:
+            lines.append('Sorted by primary key and dataset:\n')
         lines.append(
             details.discrepant_data_examples.to_string(
                 index=False, max_colwidth=64, justify='left'

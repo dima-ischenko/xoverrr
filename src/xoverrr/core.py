@@ -20,8 +20,10 @@ from .persistence import (
     parse_persist_result_option,
 )
 from .utils import (ComparisonDiffDetails, ComparisonStats,
-                    build_comparison_stats, clean_recently_changed_data,
+                    build_comparison_stats, build_sniff_issue_stats,
+                    clean_recently_changed_data,
                     compare_dataframes, cross_fill_missing_dates,
+                    evaluate_sniff_query_data,
                     generate_comparison_count_report,
                     generate_comparison_sample_report, normalize_column_names,
                     prepare_dataframe, validate_dataframe_size)
@@ -133,7 +135,7 @@ class DataQualityComparator:
         try:
             self.comparison_stats['compared'] += 1
 
-            status, report, stats, details = self._compare_counts(
+            status, draft_report, stats, details = self._compare_counts(
                 source_table,
                 target_table,
                 date_column,
@@ -148,7 +150,7 @@ class DataQualityComparator:
 
             report = self._finalize_comparison(
                 status=status,
-                report=report,
+                report=draft_report,
                 stats=stats,
                 details=details,
                 comparison_type=ct.COMPARISON_TYPE_COUNT,
@@ -240,7 +242,7 @@ class DataQualityComparator:
         try:
             self.comparison_stats['compared'] += 1
 
-            status, report, stats, details = self._compare_samples(
+            status, draft_report, stats, details = self._compare_samples(
                 source_table,
                 target_table,
                 date_column,
@@ -260,7 +262,7 @@ class DataQualityComparator:
 
             report = self._finalize_comparison(
                 status=status,
-                report=report,
+                report=draft_report,
                 stats=stats,
                 details=details,
                 comparison_type=ct.COMPARISON_TYPE_SAMPLE,
@@ -607,12 +609,147 @@ class DataQualityComparator:
             app_logger.error(f'Sample comparison failed: {str(e)}')
             raise
 
+    def sniff_query(
+        self,
+        source_query: str,
+        source_params: Optional[Dict] = None,
+        comparison_name: Optional[str] = None,
+        chunk_size_days: Optional[int] = None,
+        exclude_columns: Optional[List[str]] = None,
+        tolerance_percentage: float = 0.0,
+        max_examples: Optional[int] = ct.DEFAULT_MAX_EXAMPLES,
+        persist_result: Union[bool, DataReference] = False,
+        comparison_tags: Optional[Dict] = None,
+        report_output_format: str = ct.REPORT_OUTPUT_FORMAT_TEXT,
+    ) -> Tuple[str, str, Optional[ComparisonStats], Optional[ComparisonDiffDetails]]:
+        """
+        Sniff out data issues with a source-only SQL check.
+
+        Row-level and scalar pass/fail checks both use ``xsniff_issue``
+        (``y`` = failed).
+        """
+        source_engine = self.source_engine
+        timezone = self.timezone
+        source_params = source_params or {}
+        exclude_cols = normalize_column_names(exclude_columns or [])
+
+        validate_report_output_format(report_output_format)
+        persist_options = parse_persist_result_option(persist_result)
+        run_id, run_started_at = self._start_comparison_run(
+            ct.COMPARISON_TYPE_SNIFF_QUERY, comparison_name
+        )
+
+        try:
+            self.comparison_stats['compared'] += 1
+
+            app_logger.info('Getting metadata for sniff query')
+            source_metadata = self._get_metadata_cols_for_custom_query(
+                (source_query, source_params), source_engine
+            )
+            source_adapter = self._get_adapter(self.source_db_type)
+            source_chunks = self._resolve_source_check_query_chunks(
+                source_params, chunk_size_days
+            )
+
+            if len(source_chunks) == 1:
+                stats, details = self._execute_source_check_query_chunk(
+                    source_query=source_query,
+                    source_params=source_chunks[0],
+                    source_engine=source_engine,
+                    source_adapter=source_adapter,
+                    source_metadata=source_metadata,
+                    exclude_columns=exclude_cols,
+                    max_examples=max_examples,
+                    timezone=timezone,
+                )
+            else:
+                stats, details = self._compare_source_check_query_iterative(
+                    source_query=source_query,
+                    source_chunks=source_chunks,
+                    source_engine=source_engine,
+                    source_adapter=source_adapter,
+                    source_metadata=source_metadata,
+                    exclude_columns=exclude_cols,
+                    max_examples=max_examples,
+                    timezone=timezone,
+                )
+
+            date_chunks = [
+                (chunk.get('start_date'), chunk.get('end_date'))
+                for chunk in source_chunks
+                if chunk.get('start_date') is not None
+                and chunk.get('end_date') is not None
+            ] or None
+
+            if not stats:
+                status = ct.COMPARISON_SKIPPED
+                draft_report = None
+            else:
+                status = (
+                    ct.COMPARISON_FAILED
+                    if stats.final_diff_score > tolerance_percentage
+                    else ct.COMPARISON_SUCCESS
+                )
+                draft_report = generate_comparison_sample_report(
+                    None,
+                    None,
+                    stats,
+                    details,
+                    self.timezone,
+                    run_id,
+                    run_started_at,
+                    source_query,
+                    source_params,
+                    date_chunks=date_chunks,
+                    sniff_query_mode=True,
+                    **self._report_context,
+                )
+
+            report = self._finalize_comparison(
+                status=status,
+                report=draft_report,
+                stats=stats,
+                details=details,
+                comparison_type=ct.COMPARISON_TYPE_SNIFF_QUERY,
+                comparison_name=comparison_name,
+                comparison_tags=comparison_tags,
+                source_table=None,
+                target_table=None,
+                source_query=source_query,
+                source_params=source_params,
+                persist_options=persist_options,
+                report_output_format=report_output_format,
+            )
+            self._update_stats(status, None)
+            return status, report, stats, details
+
+        except Exception:
+            app_logger.exception('Sniff query failed')
+            status = ct.COMPARISON_FAILED
+            report = self._finalize_comparison(
+                status=status,
+                report=None,
+                stats=None,
+                details=None,
+                comparison_type=ct.COMPARISON_TYPE_SNIFF_QUERY,
+                comparison_name=comparison_name,
+                comparison_tags=comparison_tags,
+                source_table=None,
+                target_table=None,
+                source_query=source_query,
+                source_params=source_params,
+                persist_options=persist_options,
+                report_output_format=report_output_format,
+            )
+            self._update_stats(status, None)
+            return status, report, None, None
+
     def compare_custom_query(
         self,
         source_query: str,
-        source_params: Tuple[str, Dict],
+        source_params: Dict,
         target_query: str,
-        target_params: Tuple[str, Dict],
+        target_params: Dict,
         custom_primary_key: List[str],
         comparison_name: Optional[str] = None,
         chunk_size_days: Optional[int] = None,
@@ -624,29 +761,20 @@ class DataQualityComparator:
         report_output_format: str = ct.REPORT_OUTPUT_FORMAT_TEXT,
     ) -> Tuple[str, str, Optional[ComparisonStats], Optional[ComparisonDiffDetails]]:
         """
-        Compare data from custom queries with specified key columns
+        Compare data from custom queries with specified key columns.
 
-        Parameters:
-            source_query : Union[str, Tuple[str, Dict]]
-                Source query (can be string or tuple with query and params).
-            target_query : Union[str, Tuple[str, Dict]]
-                Target query (can be string or tuple with query and params).
-            custom_primary_key : List[str]
-                List of primary key columns for comparison.
-            exclude_columns : Optional[List[str]] = None
-                Columns to exclude from comparison.
-            tolerance_percentage : float
-                Tolerance percentage for discrepancies.
-            max_examples: int
-                Maximum number of discrepancy examples per column
-
-        Returns:
-        ----------
-            Tuple[str, Optional[ComparisonStats], Optional[ComparisonDiffDetails]]
+        For source-only issue checks, use :meth:`sniff_query`.
         """
         source_engine = self.source_engine
         target_engine = self.target_engine
         timezone = self.timezone
+        source_params = source_params or {}
+        target_params = target_params or {}
+        exclude_cols = normalize_column_names(exclude_columns or [])
+        custom_keys = normalize_column_names(custom_primary_key)
+        if not custom_keys:
+            raise ValueError('custom_primary_key is mandatory')
+
         validate_report_output_format(report_output_format)
         persist_options = parse_persist_result_option(persist_result)
         run_id, run_started_at = self._start_comparison_run(
@@ -656,7 +784,6 @@ class DataQualityComparator:
         try:
             self.comparison_stats['compared'] += 1
 
-            # Get metadata for both queries
             app_logger.info('Getting metadata for source query')
             source_metadata = self._get_metadata_cols_for_custom_query(
                 (source_query, source_params), source_engine
@@ -685,8 +812,8 @@ class DataQualityComparator:
                     target_adapter=target_adapter,
                     source_metadata=source_metadata,
                     target_metadata=target_metadata,
-                    custom_primary_key=custom_primary_key,
-                    exclude_columns=exclude_columns,
+                    custom_primary_key=custom_keys,
+                    exclude_columns=exclude_cols,
                     max_examples=max_examples,
                     timezone=timezone,
                 )
@@ -701,17 +828,22 @@ class DataQualityComparator:
                     target_adapter=target_adapter,
                     source_metadata=source_metadata,
                     target_metadata=target_metadata,
-                    custom_primary_key=custom_primary_key,
-                    exclude_columns=exclude_columns,
+                    custom_primary_key=custom_keys,
+                    exclude_columns=exclude_cols,
                     max_examples=max_examples,
                     timezone=timezone,
                 )
 
             if not stats:
                 status = ct.COMPARISON_SKIPPED
-                report = None
+                draft_report = None
             else:
-                report = generate_comparison_sample_report(
+                status = (
+                    ct.COMPARISON_FAILED
+                    if stats.final_diff_score > tolerance_percentage
+                    else ct.COMPARISON_SUCCESS
+                )
+                draft_report = generate_comparison_sample_report(
                     None,
                     None,
                     stats,
@@ -726,15 +858,10 @@ class DataQualityComparator:
                     date_chunks=date_chunks,
                     **self._report_context,
                 )
-                status = (
-                    ct.COMPARISON_FAILED
-                    if stats.final_diff_score > tolerance_percentage
-                    else ct.COMPARISON_SUCCESS
-                )
 
             report = self._finalize_comparison(
                 status=status,
-                report=report,
+                report=draft_report,
                 stats=stats,
                 details=details,
                 comparison_type=ct.COMPARISON_TYPE_CUSTOM_QUERY,
@@ -752,7 +879,7 @@ class DataQualityComparator:
             self._update_stats(status, None)
             return status, report, stats, details
 
-        except Exception as e:
+        except Exception:
             app_logger.exception('Custom query comparison failed')
             status = ct.COMPARISON_FAILED
             report = self._finalize_comparison(
@@ -870,6 +997,155 @@ class DataQualityComparator:
             chunk_ranges.append((source_chunk_params, target_chunk_params))
         return chunk_ranges
 
+    def _resolve_source_check_query_chunks(
+        self,
+        source_params: Dict,
+        chunk_size_days: Optional[int],
+    ) -> List[Dict]:
+        source_params = dict(source_params or {})
+        source_start = source_params.get('start_date')
+        source_end = source_params.get('end_date')
+
+        if not (
+            chunk_size_days
+            and source_start is not None
+            and source_end is not None
+        ):
+            return [source_params]
+
+        source_chunks = self._iter_date_chunks(
+            'date', source_start, source_end, chunk_size_days
+        )
+        chunk_params: List[Dict] = []
+        for start, end in source_chunks:
+            params = dict(source_params)
+            params['start_date'] = start
+            params['end_date'] = end
+            chunk_params.append(params)
+        return chunk_params
+
+    def _execute_source_check_query_chunk(
+        self,
+        source_query: str,
+        source_params: Dict,
+        source_engine: Engine,
+        source_adapter,
+        source_metadata: pd.DataFrame,
+        exclude_columns: Optional[List[str]],
+        max_examples: Optional[int],
+        timezone: str,
+    ) -> Tuple[Optional[ComparisonStats], Optional[ComparisonDiffDetails]]:
+        source_data = self._execute_query(
+            (source_query, source_params), source_engine, timezone, query_side='source'
+        )
+        source_data = source_adapter.convert_types(
+            source_data, source_metadata, timezone
+        )
+        if source_data.empty:
+            return build_sniff_issue_stats(0, 0, 0), ComparisonDiffDetails(
+                mismatches_per_column=pd.DataFrame(),
+                discrepancies_per_col_examples=pd.DataFrame(),
+                dup_source_keys_examples=tuple(),
+                dup_target_keys_examples=tuple(),
+                source_only_keys_examples=tuple(),
+                target_only_keys_examples=tuple(),
+                discrepant_data_examples=pd.DataFrame(),
+                common_attribute_columns=[],
+            )
+
+        self._run_timings.mark_dataset_compare_start()
+        try:
+            return evaluate_sniff_query_data(
+                source_data,
+                max_examples=max_examples or ct.DEFAULT_MAX_EXAMPLES,
+                exclude_columns=exclude_columns,
+            )
+        finally:
+            self._run_timings.mark_dataset_compare_end()
+
+    def _compare_source_check_query_iterative(
+        self,
+        source_query: str,
+        source_chunks: List[Dict],
+        source_engine: Engine,
+        source_adapter,
+        source_metadata: pd.DataFrame,
+        exclude_columns: Optional[List[str]],
+        max_examples: Optional[int],
+        timezone: str,
+    ) -> Tuple[Optional[ComparisonStats], Optional[ComparisonDiffDetails]]:
+        examples_limit = max_examples or ct.DEFAULT_MAX_EXAMPLES
+        total_rows = 0
+        good_rows = 0
+        bad_rows = 0
+        status_counter = defaultdict(int)
+        bad_examples: List[pd.DataFrame] = []
+        example_columns: List[str] = []
+        has_data = False
+
+        for source_chunk_params in source_chunks:
+            chunk_stats, chunk_details = self._execute_source_check_query_chunk(
+                source_query=source_query,
+                source_params=source_chunk_params,
+                source_engine=source_engine,
+                source_adapter=source_adapter,
+                source_metadata=source_metadata,
+                exclude_columns=exclude_columns,
+                max_examples=examples_limit,
+                timezone=timezone,
+            )
+            if not chunk_stats:
+                continue
+            has_data = True
+            total_rows += chunk_stats.total_source_rows
+            good_rows += chunk_stats.total_matched_rows
+            bad_rows += chunk_stats.only_source_rows
+
+            if not chunk_details.mismatches_per_column.empty:
+                for row in chunk_details.mismatches_per_column.itertuples(index=False):
+                    status_counter[row.status_value] += int(row.count)
+
+            if chunk_details.common_attribute_columns:
+                example_columns = chunk_details.common_attribute_columns
+
+            if (
+                chunk_details.discrepant_data_examples is not None
+                and not chunk_details.discrepant_data_examples.empty
+                and sum(len(frame) for frame in bad_examples) < examples_limit
+            ):
+                bad_examples.append(chunk_details.discrepant_data_examples)
+
+        if not has_data:
+            return None, None
+
+        stats = build_sniff_issue_stats(total_rows, good_rows, bad_rows)
+        status_value_counts = (
+            pd.DataFrame(
+                [
+                    {'status_value': value, 'count': count}
+                    for value, count in sorted(status_counter.items(), key=str)
+                ]
+            )
+            if status_counter
+            else pd.DataFrame(columns=['status_value', 'count'])
+        )
+        merged_bad_examples = (
+            pd.concat(bad_examples, ignore_index=True).head(examples_limit)
+            if bad_examples
+            else pd.DataFrame()
+        )
+        details = ComparisonDiffDetails(
+            mismatches_per_column=status_value_counts,
+            discrepancies_per_col_examples=pd.DataFrame(),
+            dup_source_keys_examples=tuple(),
+            dup_target_keys_examples=tuple(),
+            source_only_keys_examples=tuple(),
+            target_only_keys_examples=tuple(),
+            discrepant_data_examples=merged_bad_examples,
+            common_attribute_columns=example_columns,
+        )
+        return stats, details
+
     def _execute_custom_query_chunk(
         self,
         source_query: str,
@@ -911,7 +1187,7 @@ class DataQualityComparator:
         ]
         source_data_filtered = source_data_prepared[common_cols]
         target_data_filtered = target_data_prepared[common_cols]
-        if 'xrecently_changed' in common_cols:
+        if ct.XRECENTLY_CHANGED_COLUMN in common_cols:
             source_data_filtered, target_data_filtered = clean_recently_changed_data(
                 source_data_filtered, target_data_filtered, custom_primary_key
             )

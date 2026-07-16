@@ -4,7 +4,7 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 import pandas as pd
 from sqlalchemy import text
 
-from ..constants import DATETIME_FORMAT
+from ..constants import DATETIME_FORMAT, FLAG_VALUE_YES, XRECENTLY_CHANGED_COLUMN
 from ..exceptions import QueryExecutionError
 from ..logger import app_logger
 from ..models import DataReference, ObjectType
@@ -429,7 +429,10 @@ class OracleAdapter(BaseDatabaseAdapter):
     ) -> Tuple[str, Dict]:
         """Oracle-specific implementation for recent data exclusion"""
         if update_column and exclude_recent_hours:
-            condition = f"""case when {update_column} > (sysdate - :exclude_recent_hours/24) then 'y' end as xrecently_changed"""
+            condition = (
+                f'case when {update_column} > (sysdate - :exclude_recent_hours/24) '
+                f"then '{FLAG_VALUE_YES}' end as {XRECENTLY_CHANGED_COLUMN}"
+            )
             params = {'exclude_recent_hours': exclude_recent_hours}
             return condition, params
 
