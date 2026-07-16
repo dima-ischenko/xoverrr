@@ -135,7 +135,7 @@ class DataQualityComparator:
         try:
             self.comparison_stats['compared'] += 1
 
-            status, report, stats, details = self._compare_counts(
+            status, draft_report, stats, details = self._compare_counts(
                 source_table,
                 target_table,
                 date_column,
@@ -150,7 +150,7 @@ class DataQualityComparator:
 
             report = self._finalize_comparison(
                 status=status,
-                report=report,
+                report=draft_report,
                 stats=stats,
                 details=details,
                 comparison_type=ct.COMPARISON_TYPE_COUNT,
@@ -242,7 +242,7 @@ class DataQualityComparator:
         try:
             self.comparison_stats['compared'] += 1
 
-            status, report, stats, details = self._compare_samples(
+            status, draft_report, stats, details = self._compare_samples(
                 source_table,
                 target_table,
                 date_column,
@@ -262,7 +262,7 @@ class DataQualityComparator:
 
             report = self._finalize_comparison(
                 status=status,
-                report=report,
+                report=draft_report,
                 stats=stats,
                 details=details,
                 comparison_type=ct.COMPARISON_TYPE_SAMPLE,
@@ -683,9 +683,14 @@ class DataQualityComparator:
 
             if not stats:
                 status = ct.COMPARISON_SKIPPED
-                report = None
+                draft_report = None
             else:
-                report = generate_comparison_sample_report(
+                status = (
+                    ct.COMPARISON_FAILED
+                    if stats.final_diff_score > tolerance_percentage
+                    else ct.COMPARISON_SUCCESS
+                )
+                draft_report = generate_comparison_sample_report(
                     None,
                     None,
                     stats,
@@ -699,15 +704,10 @@ class DataQualityComparator:
                     sniff_query_mode=True,
                     **self._report_context,
                 )
-                status = (
-                    ct.COMPARISON_FAILED
-                    if stats.final_diff_score > tolerance_percentage
-                    else ct.COMPARISON_SUCCESS
-                )
 
             report = self._finalize_comparison(
                 status=status,
-                report=report,
+                report=draft_report,
                 stats=stats,
                 details=details,
                 comparison_type=ct.COMPARISON_TYPE_SNIFF_QUERY,
@@ -836,9 +836,14 @@ class DataQualityComparator:
 
             if not stats:
                 status = ct.COMPARISON_SKIPPED
-                report = None
+                draft_report = None
             else:
-                report = generate_comparison_sample_report(
+                status = (
+                    ct.COMPARISON_FAILED
+                    if stats.final_diff_score > tolerance_percentage
+                    else ct.COMPARISON_SUCCESS
+                )
+                draft_report = generate_comparison_sample_report(
                     None,
                     None,
                     stats,
@@ -853,15 +858,10 @@ class DataQualityComparator:
                     date_chunks=date_chunks,
                     **self._report_context,
                 )
-                status = (
-                    ct.COMPARISON_FAILED
-                    if stats.final_diff_score > tolerance_percentage
-                    else ct.COMPARISON_SUCCESS
-                )
 
             report = self._finalize_comparison(
                 status=status,
-                report=report,
+                report=draft_report,
                 stats=stats,
                 details=details,
                 comparison_type=ct.COMPARISON_TYPE_CUSTOM_QUERY,
