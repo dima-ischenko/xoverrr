@@ -19,7 +19,6 @@ TABLE_NAME = 'test_sniff_query_data'
 def comparator(oracle_engine):
     return DataQualityComparator(
         source_engine=oracle_engine,
-        target_engine=oracle_engine,
         timezone='UTC',
     )
 

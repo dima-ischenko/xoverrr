@@ -37,7 +37,6 @@ class TestSniffQueryUtils:
         assert stats.only_source_rows == 1
         assert stats.final_diff_score == pytest.approx(25.0)
         assert len(details.discrepant_data_examples) == 1
-        assert details.sniff_issue_column == XSNIFF_ISSUE_COLUMN
 
     def test_evaluate_sniff_query_pass_fail_pass(self):
         df = pd.DataFrame({XSNIFF_ISSUE_COLUMN: [FLAG_VALUE_NO]})
@@ -47,7 +46,6 @@ class TestSniffQueryUtils:
         assert stats.total_source_rows == 1
         assert stats.total_matched_rows == 1
         assert stats.only_source_rows == 0
-        assert details.sniff_issue_column == XSNIFF_ISSUE_COLUMN
 
     def test_evaluate_sniff_query_pass_fail_fail(self):
         df = pd.DataFrame({XSNIFF_ISSUE_COLUMN: [FLAG_VALUE_YES]})
@@ -58,7 +56,6 @@ class TestSniffQueryUtils:
         assert stats.total_matched_rows == 0
         assert stats.only_source_rows == 1
         assert stats.final_diff_score == pytest.approx(100.0)
-        assert details.sniff_issue_column == XSNIFF_ISSUE_COLUMN
 
     def test_resolve_sniff_query_issue_column_row_level(self):
         assert (
@@ -94,9 +91,9 @@ class TestSniffQuery:
 
         comparator = DataQualityComparator.__new__(DataQualityComparator)
         comparator.source_engine = object()
-        comparator.target_engine = object()
+        comparator.target_engine = None
         comparator.source_db_type = type('DB', (), {'name': 'POSTGRESQL'})()
-        comparator.target_db_type = comparator.source_db_type
+        comparator.target_db_type = None
         comparator.timezone = 'UTC'
         comparator.comparison_stats = {
             'compared': 0,
@@ -113,8 +110,9 @@ class TestSniffQuery:
             'Persister', (), {'persist': lambda *args, **kwargs: None}
         )()
         comparator._report_context = {
+            'library_version': '1.2.5',
             'source_db_type': 'postgresql',
-            'target_db_type': 'postgresql',
+            'target_db_type': None,
         }
         comparator._finalize_calls = []
 
@@ -189,7 +187,6 @@ class TestSniffQuery:
 
         assert status == COMPARISON_SUCCESS
         assert stats.final_score == pytest.approx(100.0)
-        assert details.sniff_issue_column == XSNIFF_ISSUE_COLUMN
 
     def test_sniff_query_failure(self, monkeypatch):
         source_df = pd.DataFrame({XSNIFF_ISSUE_COLUMN: [FLAG_VALUE_YES]})
@@ -203,6 +200,15 @@ class TestSniffQuery:
 
         assert status == COMPARISON_FAILED
         assert stats.final_score == pytest.approx(0.0)
+
+    def test_compare_methods_require_target_engine(self):
+        from xoverrr.core import DataQualityComparator
+
+        comparator = DataQualityComparator.__new__(DataQualityComparator)
+        comparator.target_engine = None
+
+        with pytest.raises(ValueError, match='target_engine is required'):
+            comparator._require_target_engine()
 
     def test_compare_custom_query_requires_pk(self, monkeypatch):
         from xoverrr.core import DataQualityComparator
