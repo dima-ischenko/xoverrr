@@ -223,7 +223,7 @@ CASE WHEN updated_at > (sysdate - 3/24) THEN 'y' END AS xrecently_changed
 
 ### 4. Sniff query (`sniff_query`)
 
-Source-only check. Mark bad rows with `xsniff_issue` (`y` = failed, `n` = ok).  
+Source-only check. Mark each row with `xsniff_passed` (`y` = passed, `n` = failed).  
 No target engine or primary key required:
 
 ```python
@@ -242,9 +242,9 @@ status, report, stats, details = comparator.sniff_query(
             order_id,
             amount,
             CASE
-                WHEN amount > 0 AND customer_id IS NOT NULL THEN 'n'
-                ELSE 'y'
-            END AS xsniff_issue
+                WHEN amount > 0 AND customer_id IS NOT NULL THEN 'y'
+                ELSE 'n'
+            END AS xsniff_passed
         FROM sales.orders
         WHERE created_at >= :start_date
     """,
@@ -253,15 +253,15 @@ status, report, stats, details = comparator.sniff_query(
 )
 ```
 
-**Scalar pass/fail** — a single `xsniff_issue` value:
+**Scalar pass/fail** — a single `xsniff_passed` value:
 
 ```python
 status, report, stats, details = comparator.sniff_query(
     source_query="""
         SELECT CASE
-            WHEN EXISTS (SELECT 1 FROM sales.orders WHERE amount <= 0) THEN 'y'
-            ELSE 'n'
-        END AS xsniff_issue
+            WHEN EXISTS (SELECT 1 FROM sales.orders WHERE amount <= 0) THEN 'n'
+            ELSE 'y'
+        END AS xsniff_passed
     """,
     tolerance_percentage=0.0,
 )
@@ -274,9 +274,9 @@ Useful `stats` fields:
 | Field | Meaning |
 |-------|---------|
 | `total_source_rows` | Rows checked |
-| `total_matched_rows` | Passed (`n`) |
-| `only_source_rows` | Failed (`y`) |
-| `final_diff_score` | Failed rows % |
+| `total_matched_rows` | Passed (`xsniff_passed = y`) |
+| `total_diff_percentage_rows` | Mismatched rows % (`xsniff_passed = n`) |
+| `final_diff_score` | Same as mismatched rows % |
 
 ---
 
@@ -320,9 +320,11 @@ final_diff_score = 100 × sum_of_absolute_differences
 ### `sniff_query`
 
 ```
-failed_rows%     = (rows with xsniff_issue = 'y') / (checked rows) × 100
-final_diff_score = failed_rows%
+mismatched_rows% = (rows with xsniff_passed = 'n') / (checked rows) × 100
+final_diff_score = mismatched_rows%
 ```
+
+(`total_diff_percentage_rows` holds the same mismatched %.)
 
 Empty result → `final_diff_score = 0` (and score 100).
 

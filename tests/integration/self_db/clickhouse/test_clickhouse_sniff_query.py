@@ -7,7 +7,7 @@ from xoverrr.constants import (
     COMPARISON_SUCCESS,
     FLAG_VALUE_NO,
     FLAG_VALUE_YES,
-    XSNIFF_ISSUE_COLUMN,
+    XSNIFF_PASSED_COLUMN,
 )
 from xoverrr.core import DataQualityComparator
 
@@ -76,7 +76,7 @@ class TestClickHouseSniffQuery:
                 SELECT
                     id,
                     amount,
-                    if(amount < 0, '{FLAG_VALUE_YES}', '{FLAG_VALUE_NO}') AS {XSNIFF_ISSUE_COLUMN}
+                    if(amount < 0, '{FLAG_VALUE_NO}', '{FLAG_VALUE_YES}') AS {XSNIFF_PASSED_COLUMN}
                 FROM {TABLE_NAME}
             """,
             tolerance_percentage=0.0,
@@ -91,7 +91,7 @@ class TestClickHouseSniffQuery:
                 SELECT
                     id,
                     amount,
-                    if(amount < 0, '{FLAG_VALUE_YES}', '{FLAG_VALUE_NO}') AS {XSNIFF_ISSUE_COLUMN}
+                    if(amount < 0, '{FLAG_VALUE_NO}', '{FLAG_VALUE_YES}') AS {XSNIFF_PASSED_COLUMN}
                 FROM {TABLE_NAME}
             """,
             tolerance_percentage=0.0,
@@ -103,8 +103,8 @@ class TestClickHouseSniffQuery:
     def test_pass_fail_pass(self, comparator, setup_sniff_data):
         status, _, stats, _ = comparator.sniff_query(
             source_query=f"""
-                SELECT if(countIf(amount < 0) > 0, '{FLAG_VALUE_YES}', '{FLAG_VALUE_NO}')
-                    AS {XSNIFF_ISSUE_COLUMN}
+                SELECT if(countIf(amount < 0) > 0, '{FLAG_VALUE_NO}', '{FLAG_VALUE_YES}')
+                    AS {XSNIFF_PASSED_COLUMN}
                 FROM {TABLE_NAME}
             """,
             tolerance_percentage=0.0,
@@ -116,8 +116,8 @@ class TestClickHouseSniffQuery:
     def test_pass_fail_fail(self, comparator, setup_sniff_data_with_issue):
         status, _, stats, _ = comparator.sniff_query(
             source_query=f"""
-                SELECT if(countIf(amount < 0) > 0, '{FLAG_VALUE_YES}', '{FLAG_VALUE_NO}')
-                    AS {XSNIFF_ISSUE_COLUMN}
+                SELECT if(countIf(amount < 0) > 0, '{FLAG_VALUE_NO}', '{FLAG_VALUE_YES}')
+                    AS {XSNIFF_PASSED_COLUMN}
                 FROM {TABLE_NAME}
             """,
             tolerance_percentage=0.0,

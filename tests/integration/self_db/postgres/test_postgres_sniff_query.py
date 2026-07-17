@@ -7,7 +7,7 @@ from xoverrr.constants import (
     COMPARISON_SUCCESS,
     FLAG_VALUE_NO,
     FLAG_VALUE_YES,
-    XSNIFF_ISSUE_COLUMN,
+    XSNIFF_PASSED_COLUMN,
 )
 from xoverrr.core import DataQualityComparator
 
@@ -70,8 +70,8 @@ class TestPostgresSniffQuery:
         status, _, stats, _ = comparator.sniff_query(
             source_query=f"""
                 SELECT id, amount,
-                    CASE WHEN amount < 0 THEN '{FLAG_VALUE_YES}' ELSE '{FLAG_VALUE_NO}' END
-                    AS {XSNIFF_ISSUE_COLUMN}
+                    CASE WHEN amount < 0 THEN '{FLAG_VALUE_NO}' ELSE '{FLAG_VALUE_YES}' END
+                    AS {XSNIFF_PASSED_COLUMN}
                 FROM {TABLE_NAME}
             """,
             tolerance_percentage=0.0,
@@ -84,8 +84,8 @@ class TestPostgresSniffQuery:
         status, _, stats, _ = comparator.sniff_query(
             source_query=f"""
                 SELECT id, amount,
-                    CASE WHEN amount < 0 THEN '{FLAG_VALUE_YES}' ELSE '{FLAG_VALUE_NO}' END
-                    AS {XSNIFF_ISSUE_COLUMN}
+                    CASE WHEN amount < 0 THEN '{FLAG_VALUE_NO}' ELSE '{FLAG_VALUE_YES}' END
+                    AS {XSNIFF_PASSED_COLUMN}
                 FROM {TABLE_NAME}
             """,
             tolerance_percentage=0.0,
@@ -99,7 +99,7 @@ class TestPostgresSniffQuery:
             source_query=f"""
                 SELECT CASE
                     WHEN SUM(CASE WHEN amount < 0 THEN 1 ELSE 0 END) > 0
-                    THEN '{FLAG_VALUE_YES}' ELSE '{FLAG_VALUE_NO}' END AS {XSNIFF_ISSUE_COLUMN}
+                    THEN '{FLAG_VALUE_NO}' ELSE '{FLAG_VALUE_YES}' END AS {XSNIFF_PASSED_COLUMN}
                 FROM {TABLE_NAME}
             """,
             tolerance_percentage=0.0,
@@ -113,7 +113,7 @@ class TestPostgresSniffQuery:
             source_query=f"""
                 SELECT CASE
                     WHEN SUM(CASE WHEN amount < 0 THEN 1 ELSE 0 END) > 0
-                    THEN '{FLAG_VALUE_YES}' ELSE '{FLAG_VALUE_NO}' END AS {XSNIFF_ISSUE_COLUMN}
+                    THEN '{FLAG_VALUE_NO}' ELSE '{FLAG_VALUE_YES}' END AS {XSNIFF_PASSED_COLUMN}
                 FROM {TABLE_NAME}
             """,
             tolerance_percentage=0.0,

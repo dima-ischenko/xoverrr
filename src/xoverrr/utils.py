@@ -12,8 +12,8 @@ from .constants import (
     FLAG_VALUE_NO,
     FLAG_VALUE_YES,
     NULL_REPLACEMENT,
-    XSNIFF_ISSUE_COLUMN,
-    XSNIFF_ISSUE_VALUE_YES,
+    XSNIFF_PASSED_COLUMN,
+    XSNIFF_PASSED_VALUE_NO,
     XRECENTLY_CHANGED_COLUMN,
 )
 from .logger import app_logger
@@ -216,41 +216,47 @@ def build_sniff_issue_stats(
             final_score=100.0,
         )
 
-    bad_percentage = (bad_rows / total_rows) * 100
+    mismatched_percentage = (bad_rows / total_rows) * 100
     return ComparisonStats(
         total_source_rows=total_rows,
         total_target_rows=0,
         dup_source_rows=0,
         dup_target_rows=0,
-        only_source_rows=bad_rows,
+        only_source_rows=0,
         only_target_rows=0,
         common_pk_rows=total_rows,
         total_matched_rows=good_rows,
         dup_source_percentage_rows=0.0,
         dup_target_percentage_rows=0.0,
-        source_only_percentage_rows=bad_percentage,
+        source_only_percentage_rows=0.0,
         target_only_percentage_rows=0.0,
-        total_diff_percentage_rows=bad_percentage,
-        max_diff_percentage_cols=bad_percentage,
-        median_diff_percentage_cols=bad_percentage,
-        final_diff_score=bad_percentage,
-        final_score=100 - bad_percentage,
+        total_diff_percentage_rows=mismatched_percentage,
+        max_diff_percentage_cols=mismatched_percentage,
+        median_diff_percentage_cols=mismatched_percentage,
+        final_diff_score=mismatched_percentage,
+        final_score=100 - mismatched_percentage,
     )
 
 
-def resolve_sniff_query_issue_column(columns: List[str]) -> str:
-    """
-    Resolve the sniff-query issue flag column.
+def sniff_mismatched_row_count(stats: ComparisonStats) -> int:
+    """Mismatched (failed) row count for sniff_query stats."""
+    return max(0, stats.total_source_rows - stats.total_matched_rows)
 
-    Row-level and scalar pass/fail checks both use ``xsniff_issue``.
+
+def resolve_sniff_query_passed_column(columns: List[str]) -> str:
+    """
+    Resolve the sniff-query pass/fail flag column.
+
+    Row-level and scalar checks both use ``xsniff_passed``
+    (``y`` = passed, ``n`` = failed).
     """
     normalized_columns = normalize_column_names(columns)
-    if XSNIFF_ISSUE_COLUMN not in normalized_columns:
+    if XSNIFF_PASSED_COLUMN not in normalized_columns:
         raise ValueError(
-            f"Sniff query requires '{XSNIFF_ISSUE_COLUMN}' column; "
+            f"Sniff query requires '{XSNIFF_PASSED_COLUMN}' column; "
             f"got columns: {', '.join(normalized_columns)}"
         )
-    return XSNIFF_ISSUE_COLUMN
+    return XSNIFF_PASSED_COLUMN
 
 
 def evaluate_sniff_query_data(
@@ -258,23 +264,25 @@ def evaluate_sniff_query_data(
     max_examples: int = DEFAULT_MAX_EXAMPLES,
 ) -> Tuple[ComparisonStats, ComparisonDiffDetails]:
     """
-    Classify rows from a sniff_query using ``xsniff_issue``.
+    Classify rows from a sniff_query using ``xsniff_passed``.
+
+    ``y`` means passed, ``n`` means failed.
     """
     prepared_df = prepare_dataframe(df)
-    issue_column = resolve_sniff_query_issue_column(prepared_df.columns.tolist())
+    passed_column = resolve_sniff_query_passed_column(prepared_df.columns.tolist())
 
-    is_bad = prepared_df[issue_column] == XSNIFF_ISSUE_VALUE_YES
-    bad_rows = int(is_bad.sum())
+    is_failed = prepared_df[passed_column] == XSNIFF_PASSED_VALUE_NO
+    bad_rows = int(is_failed.sum())
     total_rows = len(prepared_df)
     good_rows = total_rows - bad_rows
     stats = build_sniff_issue_stats(total_rows, good_rows, bad_rows)
 
     example_columns = [
-        column for column in prepared_df.columns if column != issue_column
+        column for column in prepared_df.columns if column != passed_column
     ]
-    bad_row_examples = prepared_df.loc[is_bad, example_columns].head(max_examples)
+    bad_row_examples = prepared_df.loc[is_failed, example_columns].head(max_examples)
     status_value_counts = (
-        prepared_df[issue_column]
+        prepared_df[passed_column]
         .value_counts(dropna=False)
         .rename_axis('status_value')
         .reset_index(name='count')

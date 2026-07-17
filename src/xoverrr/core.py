@@ -26,7 +26,8 @@ from .utils import (ComparisonDiffDetails, ComparisonStats,
                     evaluate_sniff_query_data,
                     generate_comparison_count_report,
                     generate_comparison_sample_report, normalize_column_names,
-                    prepare_dataframe, validate_dataframe_size)
+                    prepare_dataframe, sniff_mismatched_row_count,
+                    validate_dataframe_size)
 from .reporting import (
     build_comparison_result,
     format_comparison_result,
@@ -632,8 +633,8 @@ class DataQualityComparator:
         """
         Sniff out data issues with a source-only SQL check.
 
-        Row-level and scalar pass/fail checks both use ``xsniff_issue``
-        (``y`` = failed).
+        Row-level and scalar pass/fail checks both use ``xsniff_passed``
+        (``y`` = passed, ``n`` = failed).
         """
         source_engine = self.source_engine
         timezone = self.timezone
@@ -1098,7 +1099,7 @@ class DataQualityComparator:
             has_data = True
             total_rows += chunk_stats.total_source_rows
             good_rows += chunk_stats.total_matched_rows
-            bad_rows += chunk_stats.only_source_rows
+            bad_rows += sniff_mismatched_row_count(chunk_stats)
 
             if not chunk_details.mismatches_per_column.empty:
                 for row in chunk_details.mismatches_per_column.itertuples(index=False):
