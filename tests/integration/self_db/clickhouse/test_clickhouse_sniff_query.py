@@ -19,7 +19,6 @@ TABLE_NAME = 'test_sniff_query_data'
 def comparator(clickhouse_engine):
     return DataQualityComparator(
         source_engine=clickhouse_engine,
-        target_engine=clickhouse_engine,
         timezone='UTC',
     )
 

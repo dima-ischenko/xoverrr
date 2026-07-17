@@ -187,7 +187,6 @@ class ComparisonDiffDetails:
     common_attribute_columns: List[str]
     skipped_source_columns: List[str] = field(default_factory=list)
     skipped_target_columns: List[str] = field(default_factory=list)
-    sniff_issue_column: str = ''
 
 
 def build_sniff_issue_stats(
@@ -257,7 +256,6 @@ def resolve_sniff_query_issue_column(columns: List[str]) -> str:
 def evaluate_sniff_query_data(
     df: pd.DataFrame,
     max_examples: int = DEFAULT_MAX_EXAMPLES,
-    exclude_columns: Optional[List[str]] = None,
 ) -> Tuple[ComparisonStats, ComparisonDiffDetails]:
     """
     Classify rows from a sniff_query using ``xsniff_issue``.
@@ -271,9 +269,8 @@ def evaluate_sniff_query_data(
     good_rows = total_rows - bad_rows
     stats = build_sniff_issue_stats(total_rows, good_rows, bad_rows)
 
-    exclude_cols = {issue_column, *(exclude_columns or [])}
     example_columns = [
-        column for column in prepared_df.columns if column not in exclude_cols
+        column for column in prepared_df.columns if column != issue_column
     ]
     bad_row_examples = prepared_df.loc[is_bad, example_columns].head(max_examples)
     status_value_counts = (
@@ -292,7 +289,6 @@ def evaluate_sniff_query_data(
         target_only_keys_examples=tuple(),
         discrepant_data_examples=bad_row_examples,
         common_attribute_columns=example_columns,
-        sniff_issue_column=issue_column,
     )
     return stats, details
 
@@ -607,7 +603,6 @@ def generate_comparison_sample_report(
     library_version: Optional[str] = None,
     source_db_type: Optional[str] = None,
     target_db_type: Optional[str] = None,
-    sniff_query_mode: bool = False,
 ) -> str:
     """Generate comparison report (logger output looks uuugly)"""
     rl = []
@@ -619,11 +614,8 @@ def generate_comparison_sample_report(
         source_db_type=source_db_type,
         target_db_type=target_db_type,
     )
-    if sniff_query_mode:
-        rl.append('SNIFF QUERY REPORT:')
-    else:
-        rl.append('DATA SAMPLE COMPARISON REPORT: ')
-    if source_table and target_table and not sniff_query_mode:
+    rl.append('DATA SAMPLE COMPARISON REPORT: ')
+    if source_table and target_table:
         rl.append(f'{source_table}')
         rl.append('VS')
         rl.append(f'{target_table}')
@@ -634,73 +626,57 @@ def generate_comparison_sample_report(
         for start, end in date_chunks:
             rl.append(f'  {start} → {end}')
 
-    if source_query and (target_query or sniff_query_mode):
+    if source_query and target_query:
         rl.append(f'timezone: {timezone}')
         rl.append(f'    {source_query}')
         if source_params:
             rl.append(f'    params: {source_params}')
-        if target_query:
-            rl.append('-' * 40)
-            rl.append(f'    {target_query}')
-            if target_params:
-                rl.append(f'    params: {target_params}')
+        rl.append('-' * 40)
+        rl.append(f'    {target_query}')
+        if target_params:
+            rl.append(f'    params: {target_params}')
 
     rl.append('-' * 40)
     rl.append('\nSUMMARY:')
-    if sniff_query_mode:
-        issue_column = details.sniff_issue_column or XSNIFF_ISSUE_COLUMN
-        rl.append(f'  Issue column: {issue_column}')
-        rl.append(f"  Failed value: '{XSNIFF_ISSUE_VALUE_YES}'")
-        rl.append(f'  Checked rows: {stats.total_source_rows}')
-        rl.append(f'  Passed rows: {stats.total_matched_rows}')
-        rl.append(f'  Failed rows: {stats.only_source_rows}')
-        rl.append('-' * 40)
-        rl.append(f'  Failed rows %: {stats.source_only_percentage_rows:.5f}')
-        rl.append(f'  Final discrepancies score: {stats.final_diff_score:.5f}')
-        rl.append(f'  Final data quality score: {stats.final_score:.5f}')
-    else:
-        rl.append(f'  Source rows: {stats.total_source_rows}')
-        rl.append(f'  Target rows: {stats.total_target_rows}')
-        rl.append(f'  Duplicated source rows: {stats.dup_source_rows}')
-        rl.append(f'  Duplicated target rows: {stats.dup_target_rows}')
-        rl.append(f'  Only source rows: {stats.only_source_rows}')
-        rl.append(f'  Only target rows: {stats.only_target_rows}')
-        rl.append(f'  Common rows (by primary key): {stats.common_pk_rows}')
-        rl.append(f'  Totally matched rows: {stats.total_matched_rows}')
-        rl.append('-' * 40)
-        rl.append(f'  Source only rows %: {stats.source_only_percentage_rows:.5f}')
-        rl.append(f'  Target only rows %: {stats.target_only_percentage_rows:.5f}')
-        rl.append(f'  Duplicated source rows %: {stats.dup_source_percentage_rows:.5f}')
-        rl.append(f'  Duplicated target rows %: {stats.dup_target_percentage_rows:.5f}')
-        rl.append(f'  Mismatched rows %: {stats.total_diff_percentage_rows:.5f}')
-        rl.append(f'  Final discrepancies score: {stats.final_diff_score:.5f}')
-        rl.append(f'  Final data quality score: {stats.final_score:.5f}')
-        rl.append(
-            f'  Source-only key examples: {format_report_collection(details.source_only_keys_examples)}'
-        )
-        rl.append(
-            f'  Target-only key examples: {format_report_collection(details.target_only_keys_examples)}'
-        )
-        rl.append(
-            f'  Duplicated source key examples: {format_report_collection(details.dup_source_keys_examples)}'
-        )
-        rl.append(
-            f'  Duplicated target key examples: {format_report_collection(details.dup_target_keys_examples)}'
-        )
-        rl.append(
-            f'  Common attribute columns: {format_report_collection(details.common_attribute_columns)}'
-        )
-        rl.append(
-            f'  Skipped source columns: {format_report_collection(details.skipped_source_columns)}'
-        )
-        rl.append(
-            f'  Skipped target columns: {format_report_collection(details.skipped_target_columns)}'
-        )
+    rl.append(f'  Source rows: {stats.total_source_rows}')
+    rl.append(f'  Target rows: {stats.total_target_rows}')
+    rl.append(f'  Duplicated source rows: {stats.dup_source_rows}')
+    rl.append(f'  Duplicated target rows: {stats.dup_target_rows}')
+    rl.append(f'  Only source rows: {stats.only_source_rows}')
+    rl.append(f'  Only target rows: {stats.only_target_rows}')
+    rl.append(f'  Common rows (by primary key): {stats.common_pk_rows}')
+    rl.append(f'  Totally matched rows: {stats.total_matched_rows}')
+    rl.append('-' * 40)
+    rl.append(f'  Source only rows %: {stats.source_only_percentage_rows:.5f}')
+    rl.append(f'  Target only rows %: {stats.target_only_percentage_rows:.5f}')
+    rl.append(f'  Duplicated source rows %: {stats.dup_source_percentage_rows:.5f}')
+    rl.append(f'  Duplicated target rows %: {stats.dup_target_percentage_rows:.5f}')
+    rl.append(f'  Mismatched rows %: {stats.total_diff_percentage_rows:.5f}')
+    rl.append(f'  Final discrepancies score: {stats.final_diff_score:.5f}')
+    rl.append(f'  Final data quality score: {stats.final_score:.5f}')
+    rl.append(
+        f'  Source-only key examples: {format_report_collection(details.source_only_keys_examples)}'
+    )
+    rl.append(
+        f'  Target-only key examples: {format_report_collection(details.target_only_keys_examples)}'
+    )
+    rl.append(
+        f'  Duplicated source key examples: {format_report_collection(details.dup_source_keys_examples)}'
+    )
+    rl.append(
+        f'  Duplicated target key examples: {format_report_collection(details.dup_target_keys_examples)}'
+    )
+    rl.append(
+        f'  Common attribute columns: {format_report_collection(details.common_attribute_columns)}'
+    )
+    rl.append(
+        f'  Skipped source columns: {format_report_collection(details.skipped_source_columns)}'
+    )
+    rl.append(
+        f'  Skipped target columns: {format_report_collection(details.skipped_target_columns)}'
+    )
 
-    if sniff_query_mode and not details.mismatches_per_column.empty:
-        rl.append('\nSNIFF QUERY VALUE COUNTS:')
-        rl.append(details.mismatches_per_column.to_string(index=False))
-    elif stats.max_diff_percentage_cols > 0 and not details.mismatches_per_column.empty:
+    if stats.max_diff_percentage_cols > 0 and not details.mismatches_per_column.empty:
         rl.append('\nCOLUMN DIFFERENCES:')
         rl.append(
             f'  Discrepancies per column (max %): {stats.max_diff_percentage_cols:.5f}'
@@ -718,14 +694,9 @@ def generate_comparison_sample_report(
         details.discrepant_data_examples is not None
         and not details.discrepant_data_examples.empty
     ):
-        rl.append(
-            '\nFAILED ROW EXAMPLES:'
-            if sniff_query_mode
-            else '\nDISCREPANT DATA (first pairs):'
-        )
-        if not sniff_query_mode:
-            rl.append('Sorted by primary key and dataset:')
-            rl.append('')
+        rl.append('\nDISCREPANT DATA (first pairs):')
+        rl.append('Sorted by primary key and dataset:')
+        rl.append('')
         rl.append(
             details.discrepant_data_examples.to_string(
                 index=False, max_colwidth=64, justify='left'

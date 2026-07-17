@@ -4,7 +4,7 @@ from .constants import (COMPARISON_FAILED, COMPARISON_SKIPPED,
                         XSNIFF_ISSUE_VALUE_NO, XSNIFF_ISSUE_VALUE_YES,
                         XRECENTLY_CHANGED_COLUMN)
 from .core import DataQualityComparator, DataReference
-from .reporting import ComparisonResult, generate_count_report, generate_sample_report
+from .reporting import ComparisonResult, generate_count_report, generate_sample_report, generate_sniff_query_report
 from .utils import ComparisonStats, ComparisonDiffDetails
 
 __all__ = [
@@ -15,6 +15,7 @@ __all__ = [
     'ComparisonResult',
     'generate_sample_report',
     'generate_count_report',
+    'generate_sniff_query_report',
     'COMPARISON_SUCCESS',
     'COMPARISON_FAILED',
     'COMPARISON_SKIPPED',

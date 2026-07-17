@@ -19,7 +19,6 @@ TABLE_NAME = 'test_sniff_query_data'
 def comparator(postgres_engine):
     return DataQualityComparator(
         source_engine=postgres_engine,
-        target_engine=postgres_engine,
         timezone='UTC',
     )
 

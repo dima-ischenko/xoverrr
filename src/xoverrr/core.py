@@ -32,6 +32,7 @@ from .reporting import (
     format_comparison_result,
     generate_count_report,
     generate_sample_report,
+    generate_sniff_query_report,
     validate_report_output_format,
 )
 from .version import __version__
@@ -45,7 +46,7 @@ class DataQualityComparator:
     def __init__(
         self,
         source_engine: Engine,
-        target_engine: Engine,
+        target_engine: Optional[Engine] = None,
         default_exclude_recent_hours: Optional[int] = 24,
         timezone: str = ct.DEFAULT_TZ,
         results_engine: Optional[Engine] = None,
@@ -53,7 +54,9 @@ class DataQualityComparator:
         self.source_engine = source_engine
         self.target_engine = target_engine
         self.source_db_type = DBMSType.from_engine(source_engine)
-        self.target_db_type = DBMSType.from_engine(target_engine)
+        self.target_db_type = (
+            DBMSType.from_engine(target_engine) if target_engine is not None else None
+        )
         self.default_exclude_recent_hours = default_exclude_recent_hours
         self.timezone = timezone
         self.results_engine = results_engine
@@ -70,12 +73,15 @@ class DataQualityComparator:
         self._report_context = {
             'library_version': __version__,
             'source_db_type': self.source_db_type.name.lower(),
-            'target_db_type': self.target_db_type.name.lower(),
+            'target_db_type': (
+                self.target_db_type.name.lower() if self.target_db_type else None
+            ),
         }
         app_logger.info('start')
         app_logger.info(f'Version: v{self._report_context["library_version"]}')
         app_logger.info(f'Source DB: {self._report_context["source_db_type"]}')
-        app_logger.info(f'Target DB: {self._report_context["target_db_type"]}')
+        target_db_label = self._report_context['target_db_type'] or 'not configured'
+        app_logger.info(f'Target DB: {target_db_label}')
 
     def reset_stats(self):
         self._reset_stats()
@@ -124,6 +130,7 @@ class DataQualityComparator:
     ) -> Tuple[str, Optional[ComparisonStats], Optional[ComparisonDiffDetails]]:
 
         self._validate_inputs(source_table, target_table)
+        self._require_target_engine()
         validate_report_output_format(report_output_format)
         persist_options = parse_persist_result_option(persist_result)
         run_id, run_started_at = self._start_comparison_run(
@@ -222,6 +229,7 @@ class DataQualityComparator:
                 Maximum number of discrepancy examples per column
         """
         self._validate_inputs(source_table, target_table)
+        self._require_target_engine()
         validate_report_output_format(report_output_format)
         persist_options = parse_persist_result_option(persist_result)
         run_id, run_started_at = self._start_comparison_run(
@@ -615,7 +623,6 @@ class DataQualityComparator:
         source_params: Optional[Dict] = None,
         comparison_name: Optional[str] = None,
         chunk_size_days: Optional[int] = None,
-        exclude_columns: Optional[List[str]] = None,
         tolerance_percentage: float = 0.0,
         max_examples: Optional[int] = ct.DEFAULT_MAX_EXAMPLES,
         persist_result: Union[bool, DataReference] = False,
@@ -631,7 +638,6 @@ class DataQualityComparator:
         source_engine = self.source_engine
         timezone = self.timezone
         source_params = source_params or {}
-        exclude_cols = normalize_column_names(exclude_columns or [])
 
         validate_report_output_format(report_output_format)
         persist_options = parse_persist_result_option(persist_result)
@@ -658,7 +664,6 @@ class DataQualityComparator:
                     source_engine=source_engine,
                     source_adapter=source_adapter,
                     source_metadata=source_metadata,
-                    exclude_columns=exclude_cols,
                     max_examples=max_examples,
                     timezone=timezone,
                 )
@@ -669,7 +674,6 @@ class DataQualityComparator:
                     source_engine=source_engine,
                     source_adapter=source_adapter,
                     source_metadata=source_metadata,
-                    exclude_columns=exclude_cols,
                     max_examples=max_examples,
                     timezone=timezone,
                 )
@@ -690,9 +694,7 @@ class DataQualityComparator:
                     if stats.final_diff_score > tolerance_percentage
                     else ct.COMPARISON_SUCCESS
                 )
-                draft_report = generate_comparison_sample_report(
-                    None,
-                    None,
+                draft_report = generate_sniff_query_report(
                     stats,
                     details,
                     self.timezone,
@@ -701,8 +703,8 @@ class DataQualityComparator:
                     source_query,
                     source_params,
                     date_chunks=date_chunks,
-                    sniff_query_mode=True,
-                    **self._report_context,
+                    library_version=self._report_context['library_version'],
+                    source_db_type=self._report_context['source_db_type'],
                 )
 
             report = self._finalize_comparison(
@@ -765,6 +767,7 @@ class DataQualityComparator:
 
         For source-only issue checks, use :meth:`sniff_query`.
         """
+        self._require_target_engine()
         source_engine = self.source_engine
         target_engine = self.target_engine
         timezone = self.timezone
@@ -1031,7 +1034,6 @@ class DataQualityComparator:
         source_engine: Engine,
         source_adapter,
         source_metadata: pd.DataFrame,
-        exclude_columns: Optional[List[str]],
         max_examples: Optional[int],
         timezone: str,
     ) -> Tuple[Optional[ComparisonStats], Optional[ComparisonDiffDetails]]:
@@ -1058,7 +1060,6 @@ class DataQualityComparator:
             return evaluate_sniff_query_data(
                 source_data,
                 max_examples=max_examples or ct.DEFAULT_MAX_EXAMPLES,
-                exclude_columns=exclude_columns,
             )
         finally:
             self._run_timings.mark_dataset_compare_end()
@@ -1070,7 +1071,6 @@ class DataQualityComparator:
         source_engine: Engine,
         source_adapter,
         source_metadata: pd.DataFrame,
-        exclude_columns: Optional[List[str]],
         max_examples: Optional[int],
         timezone: str,
     ) -> Tuple[Optional[ComparisonStats], Optional[ComparisonDiffDetails]]:
@@ -1090,7 +1090,6 @@ class DataQualityComparator:
                 source_engine=source_engine,
                 source_adapter=source_adapter,
                 source_metadata=source_metadata,
-                exclude_columns=exclude_columns,
                 max_examples=examples_limit,
                 timezone=timezone,
             )
@@ -1787,3 +1786,11 @@ class DataQualityComparator:
             raise TypeError('source must be a DataReference')
         if not isinstance(target, DataReference):
             raise TypeError('target must be a DataReference')
+
+    def _require_target_engine(self) -> Engine:
+        if self.target_engine is None:
+            raise ValueError(
+                'target_engine is required for compare_sample, compare_counts, '
+                'and compare_custom_query'
+            )
+        return self.target_engine
