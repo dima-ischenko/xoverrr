@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 import pandas as pd
 
 from .constants import DATETIME_FORMAT, REPORT_OUTPUT_FORMAT_JSON, REPORT_OUTPUT_FORMATS, REPORT_OUTPUT_FORMAT_TEXT
-from .utils import ComparisonDiffDetails, ComparisonStats, append_report_run_header, format_report_collection
+from .utils import ComparisonDiffDetails, ComparisonStats, append_report_run_header, format_report_collection, sniff_mismatched_row_count
 
 if TYPE_CHECKING:
     from .persistence import ComparisonRunTimings
@@ -368,9 +368,9 @@ def generate_sniff_query_report(
     lines.append('\nSUMMARY:')
     lines.append(f'  Checked rows: {stats.total_source_rows}')
     lines.append(f'  Passed rows: {stats.total_matched_rows}')
-    lines.append(f'  Failed rows: {stats.only_source_rows}')
+    lines.append(f'  Mismatched rows: {sniff_mismatched_row_count(stats)}')
     lines.append('-' * 40)
-    lines.append(f'  Failed rows %: {stats.source_only_percentage_rows:.5f}')
+    lines.append(f'  Mismatched rows %: {stats.total_diff_percentage_rows:.5f}')
     lines.append(f'  Final discrepancies score: {stats.final_diff_score:.5f}')
     lines.append(f'  Final data quality score: {stats.final_score:.5f}')
 
@@ -379,7 +379,7 @@ def generate_sniff_query_report(
         lines.append(details.mismatches_per_column.to_string(index=False))
 
     if details.discrepant_data_examples is not None and not details.discrepant_data_examples.empty:
-        lines.append('\nFAILED ROW EXAMPLES:')
+        lines.append('\nMISMATCHED ROW EXAMPLES:')
         lines.append(
             details.discrepant_data_examples.to_string(
                 index=False, max_colwidth=64, justify='left'

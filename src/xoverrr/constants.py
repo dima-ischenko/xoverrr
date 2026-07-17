@@ -30,10 +30,11 @@ FLAG_VALUE_NO = 'n'
 # Recently changed exclusion column (compare_sample / compare_custom_query).
 XRECENTLY_CHANGED_COLUMN = 'xrecently_changed'
 
-# Issue flag column for sniff_query (row-level or scalar pass/fail).
-XSNIFF_ISSUE_COLUMN = 'xsniff_issue'
-XSNIFF_ISSUE_VALUE_YES = FLAG_VALUE_YES
-XSNIFF_ISSUE_VALUE_NO = FLAG_VALUE_NO
+# Pass/fail flag column for sniff_query (row-level or scalar).
+# ``y`` = passed, ``n`` = failed.
+XSNIFF_PASSED_COLUMN = 'xsniff_passed'
+XSNIFF_PASSED_VALUE_YES = FLAG_VALUE_YES
+XSNIFF_PASSED_VALUE_NO = FLAG_VALUE_NO
 
 # Report output formats
 REPORT_OUTPUT_FORMAT_JSON = 'json'
