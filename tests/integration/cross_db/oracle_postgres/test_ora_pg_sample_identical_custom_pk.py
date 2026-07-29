@@ -78,7 +78,7 @@ class TestOraclePostgresCustomPrimaryKey:
             date_column='created_date',
             date_range=('2024-01-01', '2024-01-05'),
             custom_primary_key=['email'],  # Custom PK by email
-            tolerance_percentage=5.0,
+            tolerance_pct=5.0,
         )
 
         # Should detect duplicates

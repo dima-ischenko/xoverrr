@@ -87,7 +87,7 @@ class TestClickHouseOracleDataWithDiscrepancies:
             update_column='updated_at',
             date_range=('2024-01-01', '2024-01-05'),
             exclude_recent_hours=24,
-            tolerance_percentage=35.0,
+            tolerance_pct=35.0,
         )
         print(report)
         assert status == COMPARISON_SUCCESS  # Should pass with tolerance

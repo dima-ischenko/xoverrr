@@ -83,7 +83,7 @@ class TestClickHouseNullValues:
             target_table=DataReference('test_ch_nulls', 'test'),
             date_column='created_at',
             date_range=('2024-01-01', '2024-01-05'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_SUCCESS

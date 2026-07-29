@@ -135,7 +135,7 @@ class TestPostgresMixedTimezoneOffsets:
             date_column='event_date',
             update_column='updated_at',
             date_range=('2024-01-01', '2024-01-07'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_SUCCESS
@@ -170,7 +170,7 @@ class TestPostgresMixedTimezoneOffsets:
                 'timestamp_plus6',
                 'timestamp_minus8',
             ],  # Exclude tz-aware columns
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         # Should succeed because we excluded tz-aware columns
@@ -231,7 +231,7 @@ class TestPostgresMixedTimezoneOffsets:
             update_column='updated_at',
             date_range=('2024-01-01', '2024-01-07'),
             exclude_recent_hours=24,
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_SUCCESS
@@ -264,7 +264,7 @@ class TestPostgresMixedTimezoneOffsets:
                 'regular_timestamp',
                 'event_date',
             ],  # Only tz-naive
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status_local == COMPARISON_SUCCESS
@@ -288,7 +288,7 @@ class TestPostgresMixedTimezoneOffsets:
                 'timestamp_utc',
                 'event_date',
             ],  # Only tz-aware
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status_utc == COMPARISON_SUCCESS
@@ -318,9 +318,9 @@ class TestPostgresMixedTimezoneOffsets:
                 'created_at',
                 'event_date',
             ],  # Include tz-aware column
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_SUCCESS
         # Should have the boundary record (id=6)
-        assert stats.common_pk_rows == 1
+        assert stats.comparable_rows == 1

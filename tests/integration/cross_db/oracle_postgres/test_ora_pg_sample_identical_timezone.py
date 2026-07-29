@@ -76,7 +76,7 @@ class TestTimestampWithTimezone:
             date_column='created_at',
             update_column='updated_at',
             date_range=('2024-01-01', '2024-01-31'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
             exclude_recent_hours=24,
         )
 

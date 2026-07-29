@@ -60,7 +60,7 @@ status, report, stats, details = comparator.compare_sample(
     chunk_size_days=30,
     custom_primary_key=["employee_id"],
     exclude_columns=["audit_log", "temp_field"],
-    tolerance_percentage=0.5,
+    tolerance_pct=0.5,
     exclude_recent_hours=3,
     max_examples=5,
     persist_result=DataReference("dq_results", "test"),
@@ -116,7 +116,7 @@ status, report, stats, details = comparator.compare_sample(
     exclude_columns=["audit_timestamp", "internal_id"],
     include_columns=None,
     custom_primary_key=["id", "user_id"],
-    tolerance_percentage=1.0,
+    tolerance_pct=1.0,
     exclude_recent_hours=24,
     max_examples=3,
 )
@@ -133,7 +133,7 @@ status, report, stats, details = comparator.compare_sample(
 | `chunk_size_days` | Optional N-day windows over the range |
 | `exclude_columns` / `include_columns` | Blacklist / whitelist of columns |
 | `custom_primary_key` | PK columns; auto-detected if omitted |
-| `tolerance_percentage` | Fail if `final_diff_score` exceeds this (0–100) |
+| `tolerance_pct` | Fail if `final_diff_score` exceeds this (0–100) |
 | `exclude_recent_hours` | Drop rows modified in the last N hours |
 | `max_examples` | Cap on discrepancy examples in the report |
 | `persist_result` | `False`, `True` (default table), or `DataReference` |
@@ -155,12 +155,12 @@ status, report, stats, details = comparator.compare_counts(
     date_column="created_at",
     date_range=("2024-01-01", "2024-12-31"),
     chunk_size_days=30,
-    tolerance_percentage=2.0,
+    tolerance_pct=2.0,
     max_examples=5,
 )
 ```
 
-**Main parameters:** `source_table`, `target_table`, `date_column`, `date_range`, `chunk_size_days`, `tolerance_percentage`, `max_examples`, plus the shared `persist_result` / `comparison_name` / `comparison_tags` / `report_output_format` options described above.
+**Main parameters:** `source_table`, `target_table`, `date_column`, `date_range`, `chunk_size_days`, `tolerance_pct`, `max_examples`, plus the shared `persist_result` / `comparison_name` / `comparison_tags` / `report_output_format` options described above.
 
 ---
 
@@ -184,7 +184,7 @@ status, report, stats, details = comparator.compare_custom_query(
     target_params={'status': 'active'},
     custom_primary_key=["user_id"],
     exclude_columns=["internal_code"],
-    tolerance_percentage=0.5,
+    tolerance_pct=0.5,
     max_examples=3,
 )
 ```
@@ -209,7 +209,7 @@ status, report, stats, details = comparator.compare_custom_query(
     target_params={'start_date': '2024-01-01', 'end_date': '2024-12-31'},
     custom_primary_key=["id"],
     chunk_size_days=30,
-    tolerance_percentage=0.5,
+    tolerance_pct=0.5,
 )
 ```
 
@@ -249,7 +249,7 @@ status, report, stats, details = comparator.sniff_query(
         WHERE created_at >= :start_date
     """,
     source_params={'start_date': '2024-01-01'},
-    tolerance_percentage=1.0,
+    tolerance_pct=1.0,
 )
 ```
 
@@ -263,20 +263,41 @@ status, report, stats, details = comparator.sniff_query(
             ELSE 'y'
         END AS xsniff_passed
     """,
-    tolerance_percentage=0.0,
+    tolerance_pct=0.0,
 )
 ```
 
-**Main parameters:** `source_query`, `source_params`, `chunk_size_days` (when params include dates), `tolerance_percentage`, `max_examples`, plus shared persistence / naming / report format options.
+**Issues-only filter** — `WHERE` keeps only bad rows and marks every returned row with a literal `'n'`.  
+Empty result means pass (`final_score = 100`). Any returned row means fail (`issue_rows_pct = 100` for that result set):
+
+```python
+status, report, stats, details = comparator.sniff_query(
+    source_query="""
+        SELECT
+            order_id,
+            amount,
+            'n' AS xsniff_passed
+        FROM sales.orders
+        WHERE amount <= 0
+          AND created_at >= :start_date
+    """,
+    source_params={'start_date': '2024-01-01'},
+    tolerance_pct=0.0,
+)
+```
+
+Use this when you only care that issue rows exist (and want their keys/attributes in the report). Prefer the row-level `CASE` pattern above when you need a rate over the full checked scope.
+
+**Main parameters:** `source_query`, `source_params`, `chunk_size_days` (when params include dates), `tolerance_pct`, `max_examples`, plus shared persistence / naming / report format options.
 
 Useful `stats` fields:
 
 | Field | Meaning |
 |-------|---------|
 | `total_source_rows` | Rows checked |
-| `total_matched_rows` | Passed (`xsniff_passed = y`) |
-| `total_diff_percentage_rows` | Mismatched rows % (`xsniff_passed = n`) |
-| `final_diff_score` | Same as mismatched rows % |
+| `passed_rows` | Passed (`xsniff_passed = y`) |
+| `issue_rows_pct` | Issue rows % (`xsniff_passed = n`) |
+| `final_diff_score` | Same as `issue_rows_pct` |
 
 ---
 
@@ -293,18 +314,18 @@ final_score = 100 − final_diff_score
 Scores are 0–100%. Higher `final_score` = better quality.  
 Pass/fail uses tolerance:
 
-- `final_diff_score > tolerance_percentage` → `COMPARISON_FAILED`
+- `final_diff_score > tolerance_pct` → `COMPARISON_FAILED`
 - otherwise → `COMPARISON_SUCCESS`
 
 ### `compare_sample` / `compare_custom_query`
 
 ```
 final_diff_score =
-    (source_dup% × 0.1)
-  + (target_dup% × 0.1)
-  + (source_only_rows% × 0.15)
-  + (target_only_rows% × 0.15)
-  + (rows_mismatched_by_any_column% × 0.5)
+    (dup_source_rows_pct × 0.1)
+  + (dup_target_rows_pct × 0.1)
+  + (source_only_rows_pct × 0.15)
+  + (target_only_rows_pct × 0.15)
+  + (issue_rows_pct × 0.5)
 ```
 
 ### `compare_counts`
@@ -320,13 +341,13 @@ final_diff_score = 100 × sum_of_absolute_differences
 ### `sniff_query`
 
 ```
-mismatched_rows% = (rows with xsniff_passed = 'n') / (checked rows) × 100
-final_diff_score = mismatched_rows%
+issue_rows_pct = (rows with xsniff_passed = 'n') / (checked rows) × 100
+final_diff_score = issue_rows_pct
 ```
 
-(`total_diff_percentage_rows` holds the same mismatched %.)
-
 Empty result → `final_diff_score = 0` (and score 100).
+
+With the issues-only filter pattern (`WHERE …` + literal `'n' AS xsniff_passed`), *checked rows* are only the filtered issue rows, so any non-empty result yields `issue_rows_pct = 100`.
 
 ---
 
@@ -415,45 +436,36 @@ SUMMARY:
   Duplicated target rows: 0
   Only source rows: 0
   Only target rows: 0
-  Common rows (by primary key): 105
-  Totally matched rows: 103
+  Comparable rows: 105
+  Passed rows: 103
 ----------------------------------------
   Source only rows %: 0.00000
   Target only rows %: 0.00000
   Duplicated source rows %: 0.00000
   Duplicated target rows %: 0.00000
-  Mismatched rows %: 1.90476
+  Issue rows %: 1.90476
   Final discrepancies score: 0.95238
   Final data quality score: 99.04762
   Source-only key examples:
   Target-only key examples:
   Duplicated source key examples:
   Duplicated target key examples:
-  Common attribute columns: first_name, last_name, salary, department_id
+  Evaluated columns: first_name, last_name, salary, department_id
   Skipped source columns: audit_log, temp_field
   Skipped target columns:
 
-COLUMN DIFFERENCES:
-  Discrepancies per column (max %): 1.90476
-  Count of mismatches per column:
+ISSUE BREAKDOWN:
+  Max issue %: 1.90476
+  Issue counts by column:
 
- column_name  mismatch_count
+ column_name  issue_count
      salary                2
 
-  Some examples:
+  Issue examples:
 
  primary_key column_name source_value target_value
          101      salary        50000        51000
          102      salary        60000        60500
-
-DISCREPANT DATA (first pairs):
-Sorted by primary key and dataset:
-
- employee_id first_name last_name salary department_id xflg
-         101       John      Doe  50000            10   src
-         101       John      Doe  51000            10   trg
-         102       Jane      Doe  60000            20   src
-         102       Jane      Doe  60500            20   trg
 
 ================================================================================
 ```

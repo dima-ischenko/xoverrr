@@ -123,7 +123,7 @@ class TestOraclePostgresCountsWithVariousDateTypes:
             target_table=DataReference(table_name, 'test'),
             date_column='event_date',  # DATE type
             date_range=('2024-01-01', '2024-01-04'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_SUCCESS
@@ -145,7 +145,7 @@ class TestOraclePostgresCountsWithVariousDateTypes:
             target_table=DataReference(table_name, 'test'),
             date_column='event_timestamp',  # TIMESTAMP type
             date_range=('2024-01-01', '2024-01-04'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_SUCCESS
@@ -167,7 +167,7 @@ class TestOraclePostgresCountsWithVariousDateTypes:
             target_table=DataReference(table_name, 'test'),
             date_column='event_datetime',  # DATETIME/TIMESTAMP type
             date_range=('2024-01-01', '2024-01-04'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_SUCCESS
@@ -192,7 +192,7 @@ class TestOraclePostgresCountsWithVariousDateTypes:
             target_table=DataReference(table_name, 'test'),
             date_column='event_timestamp_tz',  # TIMESTAMP WITH TIME ZONE type
             date_range=('2024-01-01', '2024-01-04'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         # This should work as both databases store timezone offset information

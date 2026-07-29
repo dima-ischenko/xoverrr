@@ -46,15 +46,15 @@ def _build_stats() -> ComparisonStats:
         dup_target_rows=0,
         only_source_rows=0,
         only_target_rows=0,
-        common_pk_rows=10,
-        total_matched_rows=10,
-        dup_source_percentage_rows=0.0,
-        dup_target_percentage_rows=0.0,
-        source_only_percentage_rows=0.0,
-        target_only_percentage_rows=0.0,
-        total_diff_percentage_rows=0.0,
-        max_diff_percentage_cols=0.0,
-        median_diff_percentage_cols=0.0,
+        comparable_rows=10,
+        passed_rows=10,
+        dup_source_rows_pct=0.0,
+        dup_target_rows_pct=0.0,
+        source_only_rows_pct=0.0,
+        target_only_rows_pct=0.0,
+        issue_rows_pct=0.0,
+        max_issue_pct=0.0,
+        median_issue_pct=0.0,
         final_diff_score=0.0,
         final_score=100.0,
     )
@@ -62,14 +62,14 @@ def _build_stats() -> ComparisonStats:
 
 def _build_details() -> ComparisonDiffDetails:
     return ComparisonDiffDetails(
-        mismatches_per_column=pd.DataFrame(columns=['column_name', 'mismatch_count']),
-        discrepancies_per_col_examples=pd.DataFrame(),
+        issue_breakdown=pd.DataFrame(columns=['column_name', 'issue_count']),
+        issue_examples=pd.DataFrame(),
         dup_source_keys_examples=tuple(),
         dup_target_keys_examples=tuple(),
         source_only_keys_examples=tuple(),
         target_only_keys_examples=tuple(),
-        discrepant_data_examples=pd.DataFrame(),
-        common_attribute_columns=['id', 'name'],
+        issue_row_examples=pd.DataFrame(),
+        evaluated_columns=['id', 'name'],
         skipped_source_columns=[],
         skipped_target_columns=[],
     )
@@ -153,7 +153,7 @@ def test_persist_writes_to_results_engine():
     assert stored.iloc[0]['stats_total_source_rows'] == 10
     assert stored.iloc[0]['stats_total_target_rows'] == 10
     assert stored.iloc[0]['stats_final_score'] == 100.0
-    assert stored.iloc[0]['details_common_attribute_columns_json'] == json.dumps(
+    assert stored.iloc[0]['details_evaluated_columns_json'] == json.dumps(
         ['id', 'name'], ensure_ascii=False
     )
     assert stored.iloc[0]['source_table'] == 'public.a'
@@ -176,7 +176,7 @@ def test_persist_rounds_stats_floats_to_report_precision():
     stats = _build_stats()
     stats.final_score = 83.33333333333333
     stats.final_diff_score = 16.666666666666668
-    stats.total_diff_percentage_rows = 33.333333333333336
+    stats.issue_rows_pct = 33.333333333333336
 
     result = build_comparison_result(
         run_id=RUN_ID,
@@ -196,7 +196,7 @@ def test_persist_rounds_stats_floats_to_report_precision():
     stored = pd.read_sql('select * from dq_results_rounded', results_engine)
     assert stored.iloc[0]['stats_final_score'] == 83.33333
     assert stored.iloc[0]['stats_final_diff_score'] == 16.66667
-    assert stored.iloc[0]['stats_total_diff_percentage_rows'] == 33.33333
+    assert stored.iloc[0]['stats_issue_rows_pct'] == 33.33333
 
 
 def test_persist_writes_timing_columns():

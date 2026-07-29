@@ -26,7 +26,7 @@ from .utils import (ComparisonDiffDetails, ComparisonStats,
                     evaluate_sniff_query_data,
                     generate_comparison_count_report,
                     generate_comparison_sample_report, normalize_column_names,
-                    prepare_dataframe, sniff_mismatched_row_count,
+                    prepare_dataframe, sniff_issue_row_count,
                     validate_dataframe_size)
 from .reporting import (
     build_comparison_result,
@@ -123,7 +123,7 @@ class DataQualityComparator:
         date_column: Optional[str] = None,
         date_range: Optional[Tuple[str, str]] = None,
         chunk_size_days: Optional[int] = None,
-        tolerance_percentage: float = 0.0,
+        tolerance_pct: float = 0.0,
         max_examples: Optional[int] = ct.DEFAULT_MAX_EXAMPLES,
         persist_result: Union[bool, DataReference] = False,
         comparison_tags: Optional[Dict] = None,
@@ -150,7 +150,7 @@ class DataQualityComparator:
                 start_date,
                 end_date,
                 chunk_size_days,
-                tolerance_percentage,
+                tolerance_pct,
                 max_examples,
                 run_id=run_id,
                 run_started_at=run_started_at,
@@ -203,7 +203,7 @@ class DataQualityComparator:
         exclude_columns: Optional[List[str]] = None,
         include_columns: Optional[List[str]] = None,
         custom_primary_key: Optional[List[str]] = None,
-        tolerance_percentage: float = 0.0,
+        tolerance_pct: float = 0.0,
         exclude_recent_hours: Optional[int] = None,
         max_examples: Optional[int] = ct.DEFAULT_MAX_EXAMPLES,
         persist_result: Union[bool, DataReference] = False,
@@ -224,8 +224,8 @@ class DataQualityComparator:
                 Columns to exclude from comparison.
             include_columns : `Optional[List[str]] = None`
                 Columns to include from comparison (default all cols)
-            tolerance_percentage : `float`
-                Tolerance percentage for discrepancies.
+            tolerance_pct : `float`
+                Tolerance pct for discrepancies (0–100).
             max_examples
                 Maximum number of discrepancy examples per column
         """
@@ -262,7 +262,7 @@ class DataQualityComparator:
                 exclude_cols,
                 include_cols,
                 custom_keys,
-                tolerance_percentage,
+                tolerance_pct,
                 exclude_hours,
                 max_examples,
                 run_id=run_id,
@@ -327,7 +327,7 @@ class DataQualityComparator:
         start_date: Optional[str],
         end_date: Optional[str],
         chunk_size_days: Optional[int],
-        tolerance_percentage: float,
+        tolerance_pct: float,
         max_examples: int,
         run_id: str,
         run_started_at: str,
@@ -413,7 +413,7 @@ class DataQualityComparator:
                 result_diff_in_counters = abs(merged['cnt_x'] - merged['cnt_y']).sum()
                 result_equal_in_counters = merged[['cnt_x', 'cnt_y']].min(axis=1).sum()
 
-                discrepancies_counters_percentage = (
+                discrepancies_counters_pct = (
                     100
                     * result_diff_in_counters
                     / (result_diff_in_counters + result_equal_in_counters)
@@ -427,7 +427,7 @@ class DataQualityComparator:
 
                 status = (
                     ct.COMPARISON_FAILED
-                    if discrepancies_counters_percentage > tolerance_percentage
+                    if discrepancies_counters_pct > tolerance_pct
                     else ct.COMPARISON_SUCCESS
                 )
 
@@ -438,7 +438,7 @@ class DataQualityComparator:
                     details,
                     total_count_source,
                     total_count_taget,
-                    discrepancies_counters_percentage,
+                    discrepancies_counters_pct,
                     result_diff_in_counters,
                     result_equal_in_counters,
                     self.timezone,
@@ -469,7 +469,7 @@ class DataQualityComparator:
         exclude_columns: List[str],
         include_columns: List[str],
         custom_key_columns: Optional[List[str]],
-        tolerance_percentage: float,
+        tolerance_pct: float,
         exclude_recent_hours: Optional[int],
         max_examples: Optional[int],
         run_id: str,
@@ -608,7 +608,7 @@ class DataQualityComparator:
                 end_date=end_date,
                 chunk_size_days=chunk_size_days,
                 exclude_recent_hours=exclude_recent_hours,
-                tolerance_percentage=tolerance_percentage,
+                tolerance_pct=tolerance_pct,
                 max_examples=max_examples,
                 run_id=run_id,
                 run_started_at=run_started_at,
@@ -624,7 +624,7 @@ class DataQualityComparator:
         source_params: Optional[Dict] = None,
         comparison_name: Optional[str] = None,
         chunk_size_days: Optional[int] = None,
-        tolerance_percentage: float = 0.0,
+        tolerance_pct: float = 0.0,
         max_examples: Optional[int] = ct.DEFAULT_MAX_EXAMPLES,
         persist_result: Union[bool, DataReference] = False,
         comparison_tags: Optional[Dict] = None,
@@ -692,7 +692,7 @@ class DataQualityComparator:
             else:
                 status = (
                     ct.COMPARISON_FAILED
-                    if stats.final_diff_score > tolerance_percentage
+                    if stats.final_diff_score > tolerance_pct
                     else ct.COMPARISON_SUCCESS
                 )
                 draft_report = generate_sniff_query_report(
@@ -757,7 +757,7 @@ class DataQualityComparator:
         comparison_name: Optional[str] = None,
         chunk_size_days: Optional[int] = None,
         exclude_columns: Optional[List[str]] = None,
-        tolerance_percentage: float = 0.0,
+        tolerance_pct: float = 0.0,
         max_examples: Optional[int] = ct.DEFAULT_MAX_EXAMPLES,
         persist_result: Union[bool, DataReference] = False,
         comparison_tags: Optional[Dict] = None,
@@ -844,7 +844,7 @@ class DataQualityComparator:
             else:
                 status = (
                     ct.COMPARISON_FAILED
-                    if stats.final_diff_score > tolerance_percentage
+                    if stats.final_diff_score > tolerance_pct
                     else ct.COMPARISON_SUCCESS
                 )
                 draft_report = generate_comparison_sample_report(
@@ -1046,14 +1046,14 @@ class DataQualityComparator:
         )
         if source_data.empty:
             return build_sniff_issue_stats(0, 0, 0), ComparisonDiffDetails(
-                mismatches_per_column=pd.DataFrame(),
-                discrepancies_per_col_examples=pd.DataFrame(),
+                issue_breakdown=pd.DataFrame(),
+                issue_examples=pd.DataFrame(),
                 dup_source_keys_examples=tuple(),
                 dup_target_keys_examples=tuple(),
                 source_only_keys_examples=tuple(),
                 target_only_keys_examples=tuple(),
-                discrepant_data_examples=pd.DataFrame(),
-                common_attribute_columns=[],
+                issue_row_examples=pd.DataFrame(),
+                evaluated_columns=[],
             )
 
         self._run_timings.mark_dataset_compare_start()
@@ -1077,10 +1077,10 @@ class DataQualityComparator:
     ) -> Tuple[Optional[ComparisonStats], Optional[ComparisonDiffDetails]]:
         examples_limit = max_examples or ct.DEFAULT_MAX_EXAMPLES
         total_rows = 0
-        good_rows = 0
-        bad_rows = 0
+        passed_rows = 0
+        issue_rows = 0
         status_counter = defaultdict(int)
-        bad_examples: List[pd.DataFrame] = []
+        issue_example_frames: List[pd.DataFrame] = []
         example_columns: List[str] = []
         has_data = False
 
@@ -1098,27 +1098,27 @@ class DataQualityComparator:
                 continue
             has_data = True
             total_rows += chunk_stats.total_source_rows
-            good_rows += chunk_stats.total_matched_rows
-            bad_rows += sniff_mismatched_row_count(chunk_stats)
+            passed_rows += chunk_stats.passed_rows
+            issue_rows += sniff_issue_row_count(chunk_stats)
 
-            if not chunk_details.mismatches_per_column.empty:
-                for row in chunk_details.mismatches_per_column.itertuples(index=False):
+            if not chunk_details.issue_breakdown.empty:
+                for row in chunk_details.issue_breakdown.itertuples(index=False):
                     status_counter[row.status_value] += int(row.count)
 
-            if chunk_details.common_attribute_columns:
-                example_columns = chunk_details.common_attribute_columns
+            if chunk_details.evaluated_columns:
+                example_columns = chunk_details.evaluated_columns
 
             if (
-                chunk_details.discrepant_data_examples is not None
-                and not chunk_details.discrepant_data_examples.empty
-                and sum(len(frame) for frame in bad_examples) < examples_limit
+                chunk_details.issue_row_examples is not None
+                and not chunk_details.issue_row_examples.empty
+                and sum(len(frame) for frame in issue_example_frames) < examples_limit
             ):
-                bad_examples.append(chunk_details.discrepant_data_examples)
+                issue_example_frames.append(chunk_details.issue_row_examples)
 
         if not has_data:
             return None, None
 
-        stats = build_sniff_issue_stats(total_rows, good_rows, bad_rows)
+        stats = build_sniff_issue_stats(total_rows, passed_rows, issue_rows)
         status_value_counts = (
             pd.DataFrame(
                 [
@@ -1129,20 +1129,20 @@ class DataQualityComparator:
             if status_counter
             else pd.DataFrame(columns=['status_value', 'count'])
         )
-        merged_bad_examples = (
-            pd.concat(bad_examples, ignore_index=True).head(examples_limit)
-            if bad_examples
+        merged_issue_row_examples = (
+            pd.concat(issue_example_frames, ignore_index=True).head(examples_limit)
+            if issue_example_frames
             else pd.DataFrame()
         )
         details = ComparisonDiffDetails(
-            mismatches_per_column=status_value_counts,
-            discrepancies_per_col_examples=pd.DataFrame(),
+            issue_breakdown=status_value_counts,
+            issue_examples=pd.DataFrame(),
             dup_source_keys_examples=tuple(),
             dup_target_keys_examples=tuple(),
             source_only_keys_examples=tuple(),
             target_only_keys_examples=tuple(),
-            discrepant_data_examples=merged_bad_examples,
-            common_attribute_columns=example_columns,
+            issue_row_examples=merged_issue_row_examples,
+            evaluated_columns=example_columns,
         )
         return stats, details
 
@@ -1221,9 +1221,9 @@ class DataQualityComparator:
         dup_target_rows = 0
         only_source_rows = 0
         only_target_rows = 0
-        common_pk_rows = 0
-        total_matched_rows = 0
-        mismatch_counter = defaultdict(int)
+        comparable_rows = 0
+        passed_rows = 0
+        issue_counter = defaultdict(int)
         has_data = False
 
         dup_source_examples: set = set()
@@ -1260,12 +1260,12 @@ class DataQualityComparator:
             dup_target_rows += chunk_stats.dup_target_rows
             only_source_rows += chunk_stats.only_source_rows
             only_target_rows += chunk_stats.only_target_rows
-            common_pk_rows += chunk_stats.common_pk_rows
-            total_matched_rows += chunk_stats.total_matched_rows
+            comparable_rows += chunk_stats.comparable_rows
+            passed_rows += chunk_stats.passed_rows
 
-            if not chunk_details.mismatches_per_column.empty:
-                for row in chunk_details.mismatches_per_column.itertuples(index=False):
-                    mismatch_counter[row.column_name] += int(row.mismatch_count)
+            if not chunk_details.issue_breakdown.empty:
+                for row in chunk_details.issue_breakdown.itertuples(index=False):
+                    issue_counter[row.column_name] += int(row.issue_count)
 
             self._merge_examples_set(
                 dup_source_examples,
@@ -1289,8 +1289,8 @@ class DataQualityComparator:
             )
 
             if (
-                chunk_details.discrepant_data_examples is not None
-                and not chunk_details.discrepant_data_examples.empty
+                chunk_details.issue_row_examples is not None
+                and not chunk_details.issue_row_examples.empty
                 and len(discrepant_chunks) < examples_limit
             ):
                 needed = examples_limit * 2
@@ -1298,14 +1298,14 @@ class DataQualityComparator:
                 if current_cnt < needed:
                     remain = needed - current_cnt
                     discrepant_chunks.append(
-                        chunk_details.discrepant_data_examples.head(remain)
+                        chunk_details.issue_row_examples.head(remain)
                     )
 
             if (
-                chunk_details.discrepancies_per_col_examples is not None
-                and not chunk_details.discrepancies_per_col_examples.empty
+                chunk_details.issue_examples is not None
+                and not chunk_details.issue_examples.empty
             ):
-                for row in chunk_details.discrepancies_per_col_examples.to_dict(
+                for row in chunk_details.issue_examples.to_dict(
                     'records'
                 ):
                     col = row['column_name']
@@ -1323,23 +1323,23 @@ class DataQualityComparator:
             dup_target_rows=dup_target_rows,
             only_source_rows=only_source_rows,
             only_target_rows=only_target_rows,
-            common_pk_rows=common_pk_rows,
-            total_matched_rows=total_matched_rows,
-            mismatch_counts=list(mismatch_counter.values()),
+            comparable_rows=comparable_rows,
+            passed_rows=passed_rows,
+            issue_counts=list(issue_counter.values()),
         )
-        mismatches_per_column = (
+        issue_breakdown = (
             pd.DataFrame(
                 sorted(
-                    mismatch_counter.items(), key=lambda item: item[1], reverse=True
+                    issue_counter.items(), key=lambda item: item[1], reverse=True
                 ),
-                columns=['column_name', 'mismatch_count'],
+                columns=['column_name', 'issue_count'],
             )
-            if mismatch_counter
-            else pd.DataFrame(columns=['column_name', 'mismatch_count'])
+            if issue_counter
+            else pd.DataFrame(columns=['column_name', 'issue_count'])
         )
         details = ComparisonDiffDetails(
-            mismatches_per_column=mismatches_per_column,
-            discrepancies_per_col_examples=(
+            issue_breakdown=issue_breakdown,
+            issue_examples=(
                 pd.DataFrame(discrepancy_examples_rows)
                 if discrepancy_examples_rows
                 else pd.DataFrame()
@@ -1348,12 +1348,12 @@ class DataQualityComparator:
             dup_target_keys_examples=tuple(dup_target_examples),
             source_only_keys_examples=tuple(source_only_examples),
             target_only_keys_examples=tuple(target_only_examples),
-            discrepant_data_examples=(
+            issue_row_examples=(
                 pd.concat(discrepant_chunks, ignore_index=True)
                 if discrepant_chunks
                 else pd.DataFrame()
             ),
-            common_attribute_columns=[],
+            evaluated_columns=[],
         )
         return stats, details
 
@@ -1499,7 +1499,7 @@ class DataQualityComparator:
         end_date: Optional[str],
         chunk_size_days: Optional[int],
         exclude_recent_hours: Optional[int],
-        tolerance_percentage: float,
+        tolerance_pct: float,
         max_examples: Optional[int],
         run_id: str,
         run_started_at: str,
@@ -1512,9 +1512,9 @@ class DataQualityComparator:
         dup_target_rows = 0
         only_source_rows = 0
         only_target_rows = 0
-        common_pk_rows = 0
-        total_matched_rows = 0
-        mismatch_counter = defaultdict(int)
+        comparable_rows = 0
+        passed_rows = 0
+        issue_counter = defaultdict(int)
 
         dup_source_examples: set = set()
         dup_target_examples: set = set()
@@ -1586,12 +1586,12 @@ class DataQualityComparator:
             dup_target_rows += chunk_stats.dup_target_rows
             only_source_rows += chunk_stats.only_source_rows
             only_target_rows += chunk_stats.only_target_rows
-            common_pk_rows += chunk_stats.common_pk_rows
-            total_matched_rows += chunk_stats.total_matched_rows
+            comparable_rows += chunk_stats.comparable_rows
+            passed_rows += chunk_stats.passed_rows
 
-            if not chunk_details.mismatches_per_column.empty:
-                for row in chunk_details.mismatches_per_column.itertuples(index=False):
-                    mismatch_counter[row.column_name] += int(row.mismatch_count)
+            if not chunk_details.issue_breakdown.empty:
+                for row in chunk_details.issue_breakdown.itertuples(index=False):
+                    issue_counter[row.column_name] += int(row.issue_count)
 
             self._merge_examples_set(
                 dup_source_examples,
@@ -1615,8 +1615,8 @@ class DataQualityComparator:
             )
 
             if (
-                chunk_details.discrepant_data_examples is not None
-                and not chunk_details.discrepant_data_examples.empty
+                chunk_details.issue_row_examples is not None
+                and not chunk_details.issue_row_examples.empty
                 and len(discrepant_chunks) < examples_limit
             ):
                 needed = examples_limit * 2
@@ -1624,14 +1624,14 @@ class DataQualityComparator:
                 if current_cnt < needed:
                     remain = needed - current_cnt
                     discrepant_chunks.append(
-                        chunk_details.discrepant_data_examples.head(remain)
+                        chunk_details.issue_row_examples.head(remain)
                     )
 
             if (
-                chunk_details.discrepancies_per_col_examples is not None
-                and not chunk_details.discrepancies_per_col_examples.empty
+                chunk_details.issue_examples is not None
+                and not chunk_details.issue_examples.empty
             ):
-                for row in chunk_details.discrepancies_per_col_examples.to_dict(
+                for row in chunk_details.issue_examples.to_dict(
                     'records'
                 ):
                     col = row['column_name']
@@ -1650,43 +1650,43 @@ class DataQualityComparator:
             dup_target_rows=dup_target_rows,
             only_source_rows=only_source_rows,
             only_target_rows=only_target_rows,
-            common_pk_rows=common_pk_rows,
-            total_matched_rows=total_matched_rows,
-            mismatch_counts=list(mismatch_counter.values()),
+            comparable_rows=comparable_rows,
+            passed_rows=passed_rows,
+            issue_counts=list(issue_counter.values()),
         )
 
-        mismatches_per_column = (
+        issue_breakdown = (
             pd.DataFrame(
                 sorted(
-                    mismatch_counter.items(),
+                    issue_counter.items(),
                     key=lambda item: item[1],
                     reverse=True,
                 ),
-                columns=['column_name', 'mismatch_count'],
+                columns=['column_name', 'issue_count'],
             )
-            if mismatch_counter
-            else pd.DataFrame(columns=['column_name', 'mismatch_count'])
+            if issue_counter
+            else pd.DataFrame(columns=['column_name', 'issue_count'])
         )
-        discrepancies_per_col_examples = (
+        issue_examples = (
             pd.DataFrame(discrepancy_examples_rows)
             if discrepancy_examples_rows
             else pd.DataFrame()
         )
-        discrepant_data_examples = (
+        issue_row_examples = (
             pd.concat(discrepant_chunks, ignore_index=True)
             if discrepant_chunks
             else pd.DataFrame()
         )
 
         details = ComparisonDiffDetails(
-            mismatches_per_column=mismatches_per_column,
-            discrepancies_per_col_examples=discrepancies_per_col_examples,
+            issue_breakdown=issue_breakdown,
+            issue_examples=issue_examples,
             dup_source_keys_examples=tuple(dup_source_examples),
             dup_target_keys_examples=tuple(dup_target_examples),
             source_only_keys_examples=tuple(source_only_examples),
             target_only_keys_examples=tuple(target_only_examples),
-            discrepant_data_examples=discrepant_data_examples,
-            common_attribute_columns=common_cols,
+            issue_row_examples=issue_row_examples,
+            evaluated_columns=common_cols,
             skipped_source_columns=source_only_cols,
             skipped_target_columns=target_only_cols,
         )
@@ -1708,7 +1708,7 @@ class DataQualityComparator:
         )
         status = (
             ct.COMPARISON_FAILED
-            if stats.final_diff_score > tolerance_percentage
+            if stats.final_diff_score > tolerance_pct
             else ct.COMPARISON_SUCCESS
         )
         return status, report, stats, details

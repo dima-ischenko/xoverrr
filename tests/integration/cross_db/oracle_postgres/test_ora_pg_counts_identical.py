@@ -79,7 +79,7 @@ class TestOraclePostgresCountsComparison:
             target_table=DataReference(table_name, 'test'),
             date_column='event_date',
             date_range=('2024-01-01', '2024-01-03'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
         print(report)
         assert status == COMPARISON_SUCCESS

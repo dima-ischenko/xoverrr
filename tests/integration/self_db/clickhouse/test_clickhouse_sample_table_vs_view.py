@@ -77,7 +77,7 @@ class TestClickHouseTableVsView:
             date_column='created_at',
             date_range=('2024-01-01', '2024-01-04'),
             include_columns=['id', 'name', 'price', 'created_at'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_SUCCESS

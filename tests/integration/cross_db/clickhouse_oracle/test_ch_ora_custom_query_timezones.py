@@ -104,7 +104,7 @@ class TestClickHouseOracleQueryMixedTimezoneOffsets:
             target_query=target_query,
             target_params={'start_date': '2024-01-01', 'end_date': '2024-01-08'},
             custom_primary_key=['id'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
         print(report)
         # assert status == COMPARISON_SUCCESS

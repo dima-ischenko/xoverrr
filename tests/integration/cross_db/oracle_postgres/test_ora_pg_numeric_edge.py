@@ -247,7 +247,7 @@ class TestOraclePostgresNumericEdge:
             source_table=DataReference(numeric_large_data, 'test'),
             target_table=DataReference(numeric_large_data, 'test'),
             date_range=('2024-01-01', '2024-01-05'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
         print(report)
 
@@ -270,7 +270,7 @@ class TestOraclePostgresNumericEdge:
         status, report, stats, details = comparator.compare_sample(
             source_table=DataReference(numeric_scientific_data, 'test'),
             target_table=DataReference(numeric_scientific_data, 'test'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         print(report)
@@ -297,7 +297,7 @@ class TestOraclePostgresNumericEdge:
         status, report, stats, details = comparator.compare_sample(
             source_table=DataReference(numeric_edge_precision_data, 'test'),
             target_table=DataReference(numeric_edge_precision_data, 'test'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         print(report)
@@ -346,7 +346,7 @@ class TestOraclePostgresNumericEdge:
             """,
             target_params={},
             custom_primary_key=['id'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         print('\n' + '=' * 80)

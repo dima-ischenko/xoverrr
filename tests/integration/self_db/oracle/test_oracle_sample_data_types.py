@@ -92,7 +92,7 @@ class TestOracleComplexDataTypes:
             exclude_columns=[
                 'raw_col'
             ],  # Exclude RAW columns as they might not compare well
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_SUCCESS
@@ -125,7 +125,7 @@ class TestOracleComplexDataTypes:
                 'number_col',
                 'date_col',
             ],  # Include specific columns
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_SUCCESS
@@ -149,7 +149,7 @@ class TestOracleComplexDataTypes:
                 '2025-01-01',
                 '2025-01-31',
             ),  # Future date range, should be empty
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         # Should be skipped due to empty result
@@ -170,7 +170,7 @@ class TestOracleComplexDataTypes:
             date_column='created_at',
             update_column='created_at',
             date_range=('2024-01-01', '2024-01-03'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
             exclude_recent_hours=9000000, #exclude all data in fact
         )
         print(report)

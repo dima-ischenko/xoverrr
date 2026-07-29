@@ -393,7 +393,7 @@ class TestClickHouseOracleNumericEdge:
             target_table=DataReference(numeric_large_data, 'test'),
             date_column='created_at',
             date_range=('2024-01-01', '2024-01-05'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
         print(report)
 
@@ -418,7 +418,7 @@ class TestClickHouseOracleNumericEdge:
             target_table=DataReference(numeric_scientific_data, 'test'),
             date_column='created_at',
             date_range=('2024-01-01', '2024-01-05'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         print(report)
@@ -447,7 +447,7 @@ class TestClickHouseOracleNumericEdge:
             target_table=DataReference(numeric_edge_precision_data, 'test'),
             date_column='created_at',
             date_range=('2024-01-01', '2024-01-05'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         print(report)
@@ -498,7 +498,7 @@ class TestClickHouseOracleNumericEdge:
             """,
             target_params={},
             custom_primary_key=['id'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         print('\n' + '=' * 80)
@@ -528,7 +528,7 @@ class TestClickHouseOracleNumericEdge:
             target_table=DataReference(numeric_null_data, 'test'),
             date_column='created_at',
             date_range=('2024-01-01', '2024-01-05'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         print('\n' + '=' * 80)
@@ -537,7 +537,7 @@ class TestClickHouseOracleNumericEdge:
         print(report)
 
         assert status == COMPARISON_SUCCESS
-        assert stats.total_matched_rows == stats.common_pk_rows
+        assert stats.passed_rows == stats.comparable_rows
         print(f'NULL handling test passed: {stats.final_score:.2f}%')
 
     def test_decimal_precision_handling(
@@ -559,7 +559,7 @@ class TestClickHouseOracleNumericEdge:
             target_table=DataReference(numeric_decimal_precision_data, 'test'),
             date_column='created_at',
             date_range=('2024-01-01', '2024-01-05'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         print('\n' + '=' * 80)

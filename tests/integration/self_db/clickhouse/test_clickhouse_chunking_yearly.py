@@ -79,7 +79,7 @@ class TestClickHouseYearlyChunking:
             target_table=table_ref,
             date_column='created_at',
             date_range=('2024-01-01', '2024-12-31'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
         status_counts_chunked, _, stats_counts_chunked, _ = comparator.compare_counts(
             source_table=table_ref,
@@ -87,7 +87,7 @@ class TestClickHouseYearlyChunking:
             date_column='created_at',
             date_range=('2024-01-01', '2024-12-31'),
             chunk_size_days=30,
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         status_sample_full, _, stats_sample_full, _ = comparator.compare_sample(
@@ -96,7 +96,7 @@ class TestClickHouseYearlyChunking:
             date_column='created_at',
             update_column='updated_at',
             date_range=('2024-01-01', '2024-12-31'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
         status_sample_chunked, _, stats_sample_chunked, _ = comparator.compare_sample(
             source_table=table_ref,
@@ -105,7 +105,7 @@ class TestClickHouseYearlyChunking:
             update_column='updated_at',
             date_range=('2024-01-01', '2024-12-31'),
             chunk_size_days=30,
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status_counts_full == COMPARISON_SUCCESS
@@ -136,7 +136,7 @@ class TestClickHouseYearlyChunking:
                 date_column='created_at',
                 update_column='updated_at',
                 date_range=('2024-01-01', '2024-12-31'),
-                tolerance_percentage=0.0,
+                tolerance_pct=0.0,
             )
         )
         status_sample_chunked, _, stats_sample_chunked, details_sample_chunked = (
@@ -147,7 +147,7 @@ class TestClickHouseYearlyChunking:
                 update_column='updated_at',
                 date_range=('2024-01-01', '2024-12-31'),
                 chunk_size_days=30,
-                tolerance_percentage=0.0,
+                tolerance_pct=0.0,
             )
         )
 
@@ -156,11 +156,11 @@ class TestClickHouseYearlyChunking:
         assert (
             stats_sample_chunked.final_diff_score == stats_sample_full.final_diff_score
         )
-        mismatch_full = details_sample_full.mismatches_per_column.set_index(
+        mismatch_full = details_sample_full.issue_breakdown.set_index(
             'column_name'
         )
-        mismatch_chunked = details_sample_chunked.mismatches_per_column.set_index(
+        mismatch_chunked = details_sample_chunked.issue_breakdown.set_index(
             'column_name'
         )
-        assert int(mismatch_full.loc['name', 'mismatch_count']) == 3
-        assert int(mismatch_chunked.loc['name', 'mismatch_count']) == 3
+        assert int(mismatch_full.loc['name', 'issue_count']) == 3
+        assert int(mismatch_chunked.loc['name', 'issue_count']) == 3

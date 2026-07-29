@@ -97,7 +97,7 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
             update_column='updated_on',
             date_range=('2024-01-01', '2024-01-08'),
             exclude_recent_hours=24,
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
         print(report)
         assert status == COMPARISON_SUCCESS, 'Failed with UTC timezone'
@@ -126,7 +126,7 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
             update_column='updated_on',
             date_range=('2024-01-01', '2024-01-08'),
             exclude_recent_hours=24,
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_SUCCESS
@@ -192,7 +192,7 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
             target_table=DataReference(table_name, 'test'),
             date_column='record_date',
             date_range=('2024-01-01', '2024-01-03'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_SUCCESS
@@ -255,7 +255,7 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
             target_table=DataReference(table_name, 'test'),
             date_column='record_date',
             date_range=('2024-01-01', '2024-01-07'),  # Includes boundary
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
         print(report)
         assert status == COMPARISON_SUCCESS
@@ -280,12 +280,12 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
             target_table=DataReference(table_name, 'test'),
             date_column='record_date',
             date_range=('2024-01-06', '2024-01-07'),  # Includes boundary
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_SUCCESS
         # Should have the boundary record (id=6)
-        assert stats.common_pk_rows >= 1
+        assert stats.comparable_rows >= 1
         print(
             f'PostgreSQL   ClickHouse date boundary with UTC passed: {stats.final_score:.2f}%'
         )

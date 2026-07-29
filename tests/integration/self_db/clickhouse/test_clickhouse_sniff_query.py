@@ -79,7 +79,7 @@ class TestClickHouseSniffQuery:
                     if(amount < 0, '{FLAG_VALUE_NO}', '{FLAG_VALUE_YES}') AS {XSNIFF_PASSED_COLUMN}
                 FROM {TABLE_NAME}
             """,
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_SUCCESS
@@ -94,7 +94,7 @@ class TestClickHouseSniffQuery:
                     if(amount < 0, '{FLAG_VALUE_NO}', '{FLAG_VALUE_YES}') AS {XSNIFF_PASSED_COLUMN}
                 FROM {TABLE_NAME}
             """,
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_FAILED
@@ -107,7 +107,7 @@ class TestClickHouseSniffQuery:
                     AS {XSNIFF_PASSED_COLUMN}
                 FROM {TABLE_NAME}
             """,
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_SUCCESS
@@ -120,8 +120,41 @@ class TestClickHouseSniffQuery:
                     AS {XSNIFF_PASSED_COLUMN}
                 FROM {TABLE_NAME}
             """,
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_FAILED
         assert stats.final_score == 0.0
+
+    def test_issues_only_filter_pass(self, comparator, setup_sniff_data):
+        status, _, stats, details = comparator.sniff_query(
+            source_query=f"""
+                SELECT id, amount, '{FLAG_VALUE_NO}' AS {XSNIFF_PASSED_COLUMN}
+                FROM {TABLE_NAME}
+                WHERE amount < 0
+            """,
+            tolerance_pct=0.0,
+        )
+
+        assert status == COMPARISON_SUCCESS
+        assert stats.total_source_rows == 0
+        assert stats.final_score == 100.0
+        assert details.issue_row_examples.empty
+
+    def test_issues_only_filter_fail(self, comparator, setup_sniff_data_with_issue):
+        status, _, stats, details = comparator.sniff_query(
+            source_query=f"""
+                SELECT id, amount, '{FLAG_VALUE_NO}' AS {XSNIFF_PASSED_COLUMN}
+                FROM {TABLE_NAME}
+                WHERE amount < 0
+            """,
+            tolerance_pct=0.0,
+        )
+
+        assert status == COMPARISON_FAILED
+        assert stats.total_source_rows == 1
+        assert stats.passed_rows == 0
+        assert stats.issue_rows_pct == 100.0
+        assert stats.final_score == 0.0
+        assert len(details.issue_row_examples) == 1
+        assert int(details.issue_row_examples.iloc[0]['id']) == 2

@@ -101,11 +101,11 @@ class TestCustomQueryComparisonPGClickHouse:
             target_query=target_query,
             target_params={'start_date': '2024-01-01', 'end_date': '2024-01-06'},
             custom_primary_key=['id'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
         print(report)
         assert status == COMPARISON_SUCCESS
-        assert stats.total_matched_rows == 6
+        assert stats.passed_rows == 6
         print(f'Custom query comparison passed: {stats.final_score:.2f}%')
 
     def test_custom_query_comparison_numeric(self, postgres_engine, clickhouse_engine):
@@ -136,7 +136,7 @@ class TestCustomQueryComparisonPGClickHouse:
             target_query=target_query,
             target_params={'start_date': '2024-01-01', 'end_date': '2024-01-06'},
             custom_primary_key=['id'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
         print(report)
         assert status == COMPARISON_SUCCESS
@@ -170,7 +170,7 @@ class TestCustomQueryComparisonPGClickHouse:
             target_query=target_query,
             target_params={'start_date': '2024-01-01', 'end_date': '2024-01-06'},
             custom_primary_key=['id'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
         print(report)
         assert status == COMPARISON_SUCCESS
@@ -206,7 +206,7 @@ class TestCustomQueryComparisonPGClickHouse:
             target_query=target_query,
             target_params={'start_date': '2024-01-01', 'end_date': '2024-01-06'},
             custom_primary_key=['id'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
         print(report)
         assert status == COMPARISON_SUCCESS
@@ -240,11 +240,11 @@ class TestCustomQueryComparisonPGClickHouse:
             target_query=target_query,
             target_params={'start_date': '2024-01-01', 'end_date': '2024-01-06'},
             custom_primary_key=['id'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
         print(report)
         assert status == COMPARISON_SUCCESS
-        assert stats.total_matched_rows == 6
+        assert stats.passed_rows == 6
         print(f'Custom query comparison passed: {stats.final_score:.2f}%')
 
     def test_custom_query_comparison_with_filter(
@@ -287,11 +287,11 @@ class TestCustomQueryComparisonPGClickHouse:
                 'name_filter': '%lice%',
             },
             custom_primary_key=['id'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
         print(report)
         assert status == COMPARISON_SUCCESS
-        assert stats.total_matched_rows == 1  # Only Alice matches
+        assert stats.passed_rows == 1  # Only Alice matches
         print(f'Custom query comparison passed: {stats.final_score:.2f}%')
 
     def test_custom_query_comparison_date_range(
@@ -324,11 +324,11 @@ class TestCustomQueryComparisonPGClickHouse:
             target_query=target_query,
             target_params={'start_date': '2024-01-02', 'end_date': '2024-01-04'},
             custom_primary_key=['id'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
         print(report)
         assert status == COMPARISON_SUCCESS
-        assert stats.total_matched_rows == 4  # IDs 2,3,4,5 (Jan 2-4)
+        assert stats.passed_rows == 4  # IDs 2,3,4,5 (Jan 2-4)
         print(f'Custom query comparison passed: {stats.final_score:.2f}%')
 
     def test_custom_query_comparison_group_by(self, postgres_engine, clickhouse_engine):
@@ -369,7 +369,7 @@ class TestCustomQueryComparisonPGClickHouse:
             target_query=target_query,
             target_params={'start_date': '2024-01-01', 'end_date': '2024-01-06'},
             custom_primary_key=['dt'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
         print(report)
         assert status == COMPARISON_SUCCESS
