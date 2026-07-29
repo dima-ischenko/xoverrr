@@ -71,7 +71,7 @@ class TestPostgresChunkedComparison:
             target_table=target_ref,
             date_column='created_at',
             date_range=('2024-01-01', '2024-01-04'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
         status_chunked, _, stats_chunked, _ = comparator.compare_counts(
             source_table=source_ref,
@@ -79,7 +79,7 @@ class TestPostgresChunkedComparison:
             date_column='created_at',
             date_range=('2024-01-01', '2024-01-04'),
             chunk_size_days=2,
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status_non_chunked == COMPARISON_SUCCESS
@@ -106,7 +106,7 @@ class TestPostgresChunkedComparison:
                 date_column='created_at',
                 update_column='updated_at',
                 date_range=('2024-01-01', '2024-01-04'),
-                tolerance_percentage=0.0,
+                tolerance_pct=0.0,
             )
         )
 
@@ -117,18 +117,18 @@ class TestPostgresChunkedComparison:
             update_column='updated_at',
             date_range=('2024-01-01', '2024-01-04'),
             chunk_size_days=1,
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status_non_chunked == COMPARISON_FAILED
         assert status_chunked == COMPARISON_FAILED
         assert stats_chunked.final_diff_score == stats_non_chunked.final_diff_score
-        assert stats_chunked.total_matched_rows == stats_non_chunked.total_matched_rows
+        assert stats_chunked.passed_rows == stats_non_chunked.passed_rows
 
-        non_chunked_mismatch = details_non_chunked.mismatches_per_column.set_index(
+        non_chunked_mismatch = details_non_chunked.issue_breakdown.set_index(
             'column_name'
-        )['mismatch_count']
-        chunked_mismatch = details_chunked.mismatches_per_column.set_index(
+        )['issue_count']
+        chunked_mismatch = details_chunked.issue_breakdown.set_index(
             'column_name'
-        )['mismatch_count']
+        )['issue_count']
         assert int(chunked_mismatch['name']) == int(non_chunked_mismatch['name']) == 2

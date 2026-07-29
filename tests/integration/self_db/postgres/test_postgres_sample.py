@@ -148,7 +148,7 @@ class TestPostgresSelfComparison:
             date_column='created_at',
             update_column='updated_at',
             date_range=('2024-01-01', '2024-01-03'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_SUCCESS
@@ -173,7 +173,7 @@ class TestPostgresSelfComparison:
             date_column='created_at',
             update_column='updated_at',
             date_range=('2024-01-01', '2024-01-03'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_SUCCESS
@@ -199,7 +199,7 @@ class TestPostgresSelfComparison:
             date_column='created_at',
             update_column='updated_at',
             date_range=('2024-01-01', '2024-01-03'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_SUCCESS
@@ -221,7 +221,7 @@ class TestPostgresSelfComparison:
             date_column='created_at',
             update_column='updated_at',
             date_range=('2024-01-01', '2024-01-03'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
             exclude_recent_hours=9000000, #exclude all data in fact
         )
 

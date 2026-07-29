@@ -61,7 +61,7 @@ class TestOraclePersistenceE2E:
             date_column='created_at',
             date_range=('2024-01-01', '2024-01-03'),
             custom_primary_key=['id'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
             persist_result=DataReference(results_table),
             comparison_tags={'adapter': 'oracle', 'kind': 'self_db'},
             report_output_format='json',
@@ -82,7 +82,7 @@ class TestOraclePersistenceE2E:
                         stats_total_source_rows,
                         stats_total_target_rows,
                         stats_final_score,
-                        details_common_attribute_columns_json
+                        details_evaluated_columns_json
                     FROM {results_table}
                     """
                 )

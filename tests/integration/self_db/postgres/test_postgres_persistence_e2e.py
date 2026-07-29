@@ -74,7 +74,7 @@ class TestPostgresPersistenceE2E:
             date_column='created_at',
             date_range=('2024-01-01', '2024-01-03'),
             custom_primary_key=['id'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
             persist_result=DataReference(RESULTS_TABLE_SAMPLE),
             report_output_format='json',
         )
@@ -103,7 +103,7 @@ class TestPostgresPersistenceE2E:
             target_table=DataReference(trg_table, 'test'),
             date_column='created_at',
             date_range=('2024-01-01', '2024-01-04'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
             persist_result=DataReference(RESULTS_TABLE_COUNTS),
             report_output_format='json',
         )
@@ -147,7 +147,7 @@ class TestPostgresPersistenceE2E:
             target_query=target_query,
             target_params=query_params,
             custom_primary_key=['id'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
             persist_result=DataReference(RESULTS_TABLE_CUSTOM),
             report_output_format='json',
         )
@@ -215,7 +215,7 @@ class TestPostgresPersistenceE2E:
             date_column='created_at',
             date_range=('2024-01-01', '2024-01-04'),
             custom_primary_key=['id'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
             persist_result=DataReference(RESULTS_TABLE_FAILED),
             report_output_format='text',
         )
@@ -225,7 +225,7 @@ class TestPostgresPersistenceE2E:
         assert stats.dup_target_rows > 0
         assert stats.only_source_rows > 0
         assert stats.only_target_rows > 0
-        assert stats.total_matched_rows < stats.common_pk_rows
+        assert stats.passed_rows < stats.comparable_rows
 
         with postgres_engine.begin() as conn:
             row = conn.execute(
@@ -237,7 +237,7 @@ class TestPostgresPersistenceE2E:
                         stats_dup_source_rows,
                         stats_only_source_rows,
                         stats_only_target_rows,
-                        stats_total_diff_percentage_rows,
+                        stats_issue_rows_pct,
                         stats_final_diff_score,
                         stats_final_score,
                         report
@@ -302,7 +302,7 @@ class TestPostgresPersistenceE2E:
             date_column='created_at',
             date_range=('2024-01-01', '2024-01-04'),
             custom_primary_key=['user_id', 'session_id'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
             persist_result=DataReference(RESULTS_TABLE_FAILED_COMPOUND),
             report_output_format='text',
         )
@@ -310,8 +310,8 @@ class TestPostgresPersistenceE2E:
         assert status == COMPARISON_FAILED
         assert stats.only_source_rows >= 2
         assert stats.only_target_rows >= 2
-        assert stats.common_pk_rows == 3
-        assert stats.total_matched_rows < stats.common_pk_rows
+        assert stats.comparable_rows == 3
+        assert stats.passed_rows < stats.comparable_rows
         assert len(details.source_only_keys_examples) >= 2
         assert len(details.target_only_keys_examples) >= 2
 
@@ -333,8 +333,8 @@ class TestPostgresPersistenceE2E:
 
         assert row[:2] == ('sample', COMPARISON_FAILED)
         assert row[2] >= 2 and row[3] >= 2
-        assert f'Source only rows %: {stats.source_only_percentage_rows:.5f}' in row[5]
-        assert f'Target only rows %: {stats.target_only_percentage_rows:.5f}' in row[5]
+        assert f'Source only rows %: {stats.source_only_rows_pct:.5f}' in row[5]
+        assert f'Target only rows %: {stats.target_only_rows_pct:.5f}' in row[5]
         assert f'Final discrepancies score: {row[4]:.5f}' in row[5]
         assert report == row[5]
 

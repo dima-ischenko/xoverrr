@@ -74,7 +74,7 @@ class TestPostgresSniffQuery:
                     AS {XSNIFF_PASSED_COLUMN}
                 FROM {TABLE_NAME}
             """,
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_SUCCESS
@@ -88,7 +88,7 @@ class TestPostgresSniffQuery:
                     AS {XSNIFF_PASSED_COLUMN}
                 FROM {TABLE_NAME}
             """,
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_FAILED
@@ -102,7 +102,7 @@ class TestPostgresSniffQuery:
                     THEN '{FLAG_VALUE_NO}' ELSE '{FLAG_VALUE_YES}' END AS {XSNIFF_PASSED_COLUMN}
                 FROM {TABLE_NAME}
             """,
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_SUCCESS
@@ -116,7 +116,7 @@ class TestPostgresSniffQuery:
                     THEN '{FLAG_VALUE_NO}' ELSE '{FLAG_VALUE_YES}' END AS {XSNIFF_PASSED_COLUMN}
                 FROM {TABLE_NAME}
             """,
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_FAILED

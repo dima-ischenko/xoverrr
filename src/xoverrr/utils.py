@@ -60,13 +60,13 @@ def build_comparison_stats(
     dup_target_rows: int,
     only_source_rows: int,
     only_target_rows: int,
-    common_pk_rows: int,
-    total_matched_rows: int,
-    mismatch_counts: Optional[List[int]] = None,
+    comparable_rows: int,
+    passed_rows: int,
+    issue_counts: Optional[List[int]] = None,
 ) -> 'ComparisonStats':
-    mismatch_counts = mismatch_counts or []
+    issue_counts = issue_counts or []
 
-    if common_pk_rows == 0:
+    if comparable_rows == 0:
         return ComparisonStats(
             total_source_rows=total_source_rows,
             total_target_rows=total_target_rows,
@@ -74,39 +74,39 @@ def build_comparison_stats(
             dup_target_rows=dup_target_rows,
             only_source_rows=only_source_rows,
             only_target_rows=only_target_rows,
-            common_pk_rows=0,
-            total_matched_rows=total_matched_rows,
-            dup_source_percentage_rows=100,
-            dup_target_percentage_rows=100,
-            source_only_percentage_rows=100,
-            target_only_percentage_rows=100,
-            total_diff_percentage_rows=100,
-            max_diff_percentage_cols=100,
-            median_diff_percentage_cols=100,
+            comparable_rows=0,
+            passed_rows=passed_rows,
+            dup_source_rows_pct=100,
+            dup_target_rows_pct=100,
+            source_only_rows_pct=100,
+            target_only_rows_pct=100,
+            issue_rows_pct=100,
+            max_issue_pct=100,
+            median_issue_pct=100,
             final_diff_score=100,
             final_score=0,
         )
 
-    source_dup_percentage = (dup_source_rows / total_source_rows) * 100
-    target_dup_percentage = (dup_target_rows / total_target_rows) * 100
-    source_only_percentage = (only_source_rows / common_pk_rows) * 100
-    target_only_percentage = (only_target_rows / common_pk_rows) * 100
-    total_diff_percentage = (1 - total_matched_rows / common_pk_rows) * 100
+    dup_source_rows_pct = (dup_source_rows / total_source_rows) * 100
+    dup_target_rows_pct = (dup_target_rows / total_target_rows) * 100
+    source_only_rows_pct = (only_source_rows / comparable_rows) * 100
+    target_only_rows_pct = (only_target_rows / comparable_rows) * 100
+    issue_rows_pct = (1 - passed_rows / comparable_rows) * 100
 
-    mismatch_percentages = [(cnt / common_pk_rows) * 100 for cnt in mismatch_counts]
-    max_diff_pct_cols = (
-        float(np.max(mismatch_percentages)) if mismatch_percentages else 0.0
+    issue_pcts = [(cnt / comparable_rows) * 100 for cnt in issue_counts]
+    max_issue_pct = (
+        float(np.max(issue_pcts)) if issue_pcts else 0.0
     )
-    median_diff_pct_cols = (
-        float(np.median(mismatch_percentages)) if mismatch_percentages else 0.0
+    median_issue_pct = (
+        float(np.median(issue_pcts)) if issue_pcts else 0.0
     )
 
     final_diff_score = (
-        source_dup_percentage * 0.1
-        + target_dup_percentage * 0.1
-        + source_only_percentage * 0.15
-        + target_only_percentage * 0.15
-        + total_diff_percentage * 0.5
+        dup_source_rows_pct * 0.1
+        + dup_target_rows_pct * 0.1
+        + source_only_rows_pct * 0.15
+        + target_only_rows_pct * 0.15
+        + issue_rows_pct * 0.5
     )
 
     return ComparisonStats(
@@ -116,15 +116,15 @@ def build_comparison_stats(
         dup_target_rows=dup_target_rows,
         only_source_rows=only_source_rows,
         only_target_rows=only_target_rows,
-        common_pk_rows=common_pk_rows,
-        total_matched_rows=total_matched_rows,
-        dup_source_percentage_rows=source_dup_percentage,
-        dup_target_percentage_rows=target_dup_percentage,
-        source_only_percentage_rows=source_only_percentage,
-        target_only_percentage_rows=target_only_percentage,
-        total_diff_percentage_rows=total_diff_percentage,
-        max_diff_percentage_cols=max_diff_pct_cols,
-        median_diff_percentage_cols=median_diff_pct_cols,
+        comparable_rows=comparable_rows,
+        passed_rows=passed_rows,
+        dup_source_rows_pct=dup_source_rows_pct,
+        dup_target_rows_pct=dup_target_rows_pct,
+        source_only_rows_pct=source_only_rows_pct,
+        target_only_rows_pct=target_only_rows_pct,
+        issue_rows_pct=issue_rows_pct,
+        max_issue_pct=max_issue_pct,
+        median_issue_pct=median_issue_pct,
         final_diff_score=final_diff_score,
         final_score=100 - final_diff_score,
     )
@@ -155,18 +155,18 @@ class ComparisonStats:
 
     only_source_rows: int
     only_target_rows: int
-    common_pk_rows: int
-    total_matched_rows: int
-    # percentages
-    dup_source_percentage_rows: float
-    dup_target_percentage_rows: float
+    comparable_rows: int
+    passed_rows: int
+    # pct metrics
+    dup_source_rows_pct: float
+    dup_target_rows_pct: float
 
-    source_only_percentage_rows: float
-    target_only_percentage_rows: float
-    total_diff_percentage_rows: float
+    source_only_rows_pct: float
+    target_only_rows_pct: float
+    issue_rows_pct: float
     #
-    max_diff_percentage_cols: float
-    median_diff_percentage_cols: float
+    max_issue_pct: float
+    median_issue_pct: float
     #
     final_diff_score: float
     final_score: float
@@ -174,8 +174,8 @@ class ComparisonStats:
 
 @dataclass
 class ComparisonDiffDetails:
-    mismatches_per_column: pd.DataFrame
-    discrepancies_per_col_examples: pd.DataFrame
+    issue_breakdown: pd.DataFrame
+    issue_examples: pd.DataFrame
 
     dup_source_keys_examples: tuple
     dup_target_keys_examples: tuple
@@ -183,16 +183,16 @@ class ComparisonDiffDetails:
     source_only_keys_examples: tuple
     target_only_keys_examples: tuple
 
-    discrepant_data_examples: pd.DataFrame
-    common_attribute_columns: List[str]
+    issue_row_examples: pd.DataFrame
+    evaluated_columns: List[str]
     skipped_source_columns: List[str] = field(default_factory=list)
     skipped_target_columns: List[str] = field(default_factory=list)
 
 
 def build_sniff_issue_stats(
     total_rows: int,
-    good_rows: int,
-    bad_rows: int,
+    passed_rows: int,
+    issue_rows: int,
 ) -> ComparisonStats:
     """Build ComparisonStats for source-only sniff_query checks."""
     if total_rows == 0:
@@ -203,20 +203,20 @@ def build_sniff_issue_stats(
             dup_target_rows=0,
             only_source_rows=0,
             only_target_rows=0,
-            common_pk_rows=0,
-            total_matched_rows=0,
-            dup_source_percentage_rows=0.0,
-            dup_target_percentage_rows=0.0,
-            source_only_percentage_rows=0.0,
-            target_only_percentage_rows=0.0,
-            total_diff_percentage_rows=0.0,
-            max_diff_percentage_cols=0.0,
-            median_diff_percentage_cols=0.0,
+            comparable_rows=0,
+            passed_rows=0,
+            dup_source_rows_pct=0.0,
+            dup_target_rows_pct=0.0,
+            source_only_rows_pct=0.0,
+            target_only_rows_pct=0.0,
+            issue_rows_pct=0.0,
+            max_issue_pct=0.0,
+            median_issue_pct=0.0,
             final_diff_score=0.0,
             final_score=100.0,
         )
 
-    mismatched_percentage = (bad_rows / total_rows) * 100
+    issue_rows_pct = (issue_rows / total_rows) * 100
     return ComparisonStats(
         total_source_rows=total_rows,
         total_target_rows=0,
@@ -224,23 +224,23 @@ def build_sniff_issue_stats(
         dup_target_rows=0,
         only_source_rows=0,
         only_target_rows=0,
-        common_pk_rows=total_rows,
-        total_matched_rows=good_rows,
-        dup_source_percentage_rows=0.0,
-        dup_target_percentage_rows=0.0,
-        source_only_percentage_rows=0.0,
-        target_only_percentage_rows=0.0,
-        total_diff_percentage_rows=mismatched_percentage,
-        max_diff_percentage_cols=mismatched_percentage,
-        median_diff_percentage_cols=mismatched_percentage,
-        final_diff_score=mismatched_percentage,
-        final_score=100 - mismatched_percentage,
+        comparable_rows=total_rows,
+        passed_rows=passed_rows,
+        dup_source_rows_pct=0.0,
+        dup_target_rows_pct=0.0,
+        source_only_rows_pct=0.0,
+        target_only_rows_pct=0.0,
+        issue_rows_pct=issue_rows_pct,
+        max_issue_pct=issue_rows_pct,
+        median_issue_pct=issue_rows_pct,
+        final_diff_score=issue_rows_pct,
+        final_score=100 - issue_rows_pct,
     )
 
 
-def sniff_mismatched_row_count(stats: ComparisonStats) -> int:
-    """Mismatched (failed) row count for sniff_query stats."""
-    return max(0, stats.total_source_rows - stats.total_matched_rows)
+def sniff_issue_row_count(stats: ComparisonStats) -> int:
+    """Issue (failed) row count for sniff_query stats."""
+    return max(0, stats.total_source_rows - stats.passed_rows)
 
 
 def resolve_sniff_query_passed_column(columns: List[str]) -> str:
@@ -272,16 +272,16 @@ def evaluate_sniff_query_data(
     passed_column = resolve_sniff_query_passed_column(prepared_df.columns.tolist())
 
     is_failed = prepared_df[passed_column] == XSNIFF_PASSED_VALUE_NO
-    bad_rows = int(is_failed.sum())
+    issue_rows = int(is_failed.sum())
     total_rows = len(prepared_df)
-    good_rows = total_rows - bad_rows
-    stats = build_sniff_issue_stats(total_rows, good_rows, bad_rows)
+    passed_rows = total_rows - issue_rows
+    stats = build_sniff_issue_stats(total_rows, passed_rows, issue_rows)
 
-    example_columns = [
+    evaluated_columns = [
         column for column in prepared_df.columns if column != passed_column
     ]
-    bad_row_examples = prepared_df.loc[is_failed, example_columns].head(max_examples)
-    status_value_counts = (
+    issue_row_examples = prepared_df.loc[is_failed, evaluated_columns].head(max_examples)
+    issue_breakdown = (
         prepared_df[passed_column]
         .value_counts(dropna=False)
         .rename_axis('status_value')
@@ -289,14 +289,14 @@ def evaluate_sniff_query_data(
     )
 
     details = ComparisonDiffDetails(
-        mismatches_per_column=status_value_counts,
-        discrepancies_per_col_examples=pd.DataFrame(),
+        issue_breakdown=issue_breakdown,
+        issue_examples=pd.DataFrame(),
         dup_source_keys_examples=tuple(),
         dup_target_keys_examples=tuple(),
         source_only_keys_examples=tuple(),
         target_only_keys_examples=tuple(),
-        discrepant_data_examples=bad_row_examples,
-        common_attribute_columns=example_columns,
+        issue_row_examples=issue_row_examples,
+        evaluated_columns=evaluated_columns,
     )
     return stats, details
 
@@ -394,7 +394,7 @@ def analyze_column_discrepancies(
     # 2
     df_diff_counters = pd.DataFrame(
         list(diff_counters.items()),  # преобразуем в список кортежей
-        columns=['column_name', 'mismatch_count'],  # переименовываем колонки
+        columns=['column_name', 'issue_count'],  # переименовываем колонки
     )
 
     return metrics, df_diff_examples, df_diff_counters
@@ -524,20 +524,20 @@ def compare_dataframes(
             dup_target_rows=target_dup_cnt,
             only_source_rows=xor_source_only_keys_cnt,
             only_target_rows=xor_target_only_keys_cnt,
-            common_pk_rows=0,
-            total_matched_rows=0,
-            mismatch_counts=[],
+            comparable_rows=0,
+            passed_rows=0,
+            issue_counts=[],
         )
 
         comparison_diff_detais = ComparisonDiffDetails(
-            mismatches_per_column=pd.DataFrame(),
-            discrepancies_per_col_examples=pd.DataFrame(),
+            issue_breakdown=pd.DataFrame(),
+            issue_examples=pd.DataFrame(),
             dup_source_keys_examples=source_dup_keys_examples,
             dup_target_keys_examples=target_dup_keys_examples,
-            common_attribute_columns=non_key_columns,
+            evaluated_columns=non_key_columns,
             source_only_keys_examples=xor_source_only_keys_examples,
             target_only_keys_examples=xor_target_only_keys_examples,
-            discrepant_data_examples=pd.DataFrame(),
+            issue_row_examples=pd.DataFrame(),
         )
         app_logger.info('end')
 
@@ -557,20 +557,20 @@ def compare_dataframes(
         dup_target_rows=target_dup_cnt,
         only_source_rows=xor_source_only_keys_cnt,
         only_target_rows=xor_target_only_keys_cnt,
-        common_pk_rows=common_keys_cnt,
-        total_matched_rows=total_matched_records_cnt,
-        mismatch_counts=diff_col_counters['mismatch_count'].tolist(),
+        comparable_rows=common_keys_cnt,
+        passed_rows=total_matched_records_cnt,
+        issue_counts=diff_col_counters['issue_count'].tolist(),
     )
 
     comparison_diff_detais = ComparisonDiffDetails(
-        mismatches_per_column=diff_col_counters,
-        discrepancies_per_col_examples=diff_col_examples,
+        issue_breakdown=diff_col_counters,
+        issue_examples=diff_col_examples,
         dup_source_keys_examples=source_dup_keys_examples,
         dup_target_keys_examples=target_dup_keys_examples,
         source_only_keys_examples=xor_source_only_keys_examples,
         target_only_keys_examples=xor_target_only_keys_examples,
-        discrepant_data_examples=xor_df_multi_example,
-        common_attribute_columns=non_key_columns,
+        issue_row_examples=xor_df_multi_example,
+        evaluated_columns=non_key_columns,
     )
 
     app_logger.info('end')
@@ -652,14 +652,14 @@ def generate_comparison_sample_report(
     rl.append(f'  Duplicated target rows: {stats.dup_target_rows}')
     rl.append(f'  Only source rows: {stats.only_source_rows}')
     rl.append(f'  Only target rows: {stats.only_target_rows}')
-    rl.append(f'  Common rows (by primary key): {stats.common_pk_rows}')
-    rl.append(f'  Totally matched rows: {stats.total_matched_rows}')
+    rl.append(f'  Comparable rows: {stats.comparable_rows}')
+    rl.append(f'  Passed rows: {stats.passed_rows}')
     rl.append('-' * 40)
-    rl.append(f'  Source only rows %: {stats.source_only_percentage_rows:.5f}')
-    rl.append(f'  Target only rows %: {stats.target_only_percentage_rows:.5f}')
-    rl.append(f'  Duplicated source rows %: {stats.dup_source_percentage_rows:.5f}')
-    rl.append(f'  Duplicated target rows %: {stats.dup_target_percentage_rows:.5f}')
-    rl.append(f'  Mismatched rows %: {stats.total_diff_percentage_rows:.5f}')
+    rl.append(f'  Source only rows %: {stats.source_only_rows_pct:.5f}')
+    rl.append(f'  Target only rows %: {stats.target_only_rows_pct:.5f}')
+    rl.append(f'  Duplicated source rows %: {stats.dup_source_rows_pct:.5f}')
+    rl.append(f'  Duplicated target rows %: {stats.dup_target_rows_pct:.5f}')
+    rl.append(f'  Issue rows %: {stats.issue_rows_pct:.5f}')
     rl.append(f'  Final discrepancies score: {stats.final_diff_score:.5f}')
     rl.append(f'  Final data quality score: {stats.final_score:.5f}')
     rl.append(
@@ -675,7 +675,7 @@ def generate_comparison_sample_report(
         f'  Duplicated target key examples: {format_report_collection(details.dup_target_keys_examples)}'
     )
     rl.append(
-        f'  Common attribute columns: {format_report_collection(details.common_attribute_columns)}'
+        f'  Evaluated columns: {format_report_collection(details.evaluated_columns)}'
     )
     rl.append(
         f'  Skipped source columns: {format_report_collection(details.skipped_source_columns)}'
@@ -684,29 +684,29 @@ def generate_comparison_sample_report(
         f'  Skipped target columns: {format_report_collection(details.skipped_target_columns)}'
     )
 
-    if stats.max_diff_percentage_cols > 0 and not details.mismatches_per_column.empty:
-        rl.append('\nCOLUMN DIFFERENCES:')
+    if stats.max_issue_pct > 0 and not details.issue_breakdown.empty:
+        rl.append('\nISSUE BREAKDOWN:')
+        rl.append(f'  Max issue %: {stats.max_issue_pct:.5f}')
+        rl.append('  Issue counts by column:\n')
+        rl.append(details.issue_breakdown.to_string(index=False))
+        rl.append('  Issue examples:\n')
         rl.append(
-            f'  Discrepancies per column (max %): {stats.max_diff_percentage_cols:.5f}'
-        )
-        rl.append('  Count of mismatches per column:\n')
-        rl.append(details.mismatches_per_column.to_string(index=False))
-        rl.append('  Some examples:\n')
-        rl.append(
-            details.discrepancies_per_col_examples.to_string(
+            details.issue_examples.to_string(
                 index=False, max_colwidth=64, justify='left'
             )
         )
 
-    if (
-        details.discrepant_data_examples is not None
-        and not details.discrepant_data_examples.empty
+    # Horizontal wide row dumps are hard to use in text reports.
+    # Keep the code for a future optional report parameter (e.g. include_issue_row_examples).
+    if False and (
+        details.issue_row_examples is not None
+        and not details.issue_row_examples.empty
     ):
-        rl.append('\nDISCREPANT DATA (first pairs):')
+        rl.append('\nISSUE ROW EXAMPLES:')
         rl.append('Sorted by primary key and dataset:')
         rl.append('')
         rl.append(
-            details.discrepant_data_examples.to_string(
+            details.issue_row_examples.to_string(
                 index=False, max_colwidth=64, justify='left'
             )
         )
@@ -723,7 +723,7 @@ def generate_comparison_count_report(
     details: ComparisonDiffDetails,
     total_source_count: int,
     total_target_count: int,
-    discrepancies_counters_percentage: int,
+    discrepancies_counters_pct: int,
     result_diff_in_counters: int,
     result_equal_in_counters: int,
     timezone: str,
@@ -776,24 +776,25 @@ def generate_comparison_count_report(
     rl.append(f'  Target total count: {total_target_count}')
     rl.append(f'  Common total count: {result_equal_in_counters}')
     rl.append(f'  Diff total count: {result_diff_in_counters}')
-    rl.append(f'  Discrepancies percentage: {discrepancies_counters_percentage:.5f}%')
-    rl.append(f'  Final discrepancies score: {discrepancies_counters_percentage:.5f}')
+    rl.append(f'  Discrepancies %: {discrepancies_counters_pct:.5f}%')
+    rl.append(f'  Final discrepancies score: {discrepancies_counters_pct:.5f}')
     rl.append(
-        f'  Final data quality score: {(100 - discrepancies_counters_percentage):.5f}'
+        f'  Final data quality score: {(100 - discrepancies_counters_pct):.5f}'
     )
-    if not details.mismatches_per_column.empty:
-        rl.append(f'\nDETAIL DIFFERENCES:')
-        rl.append(details.mismatches_per_column.to_string(index=False))
+    if not details.issue_breakdown.empty:
+        rl.append(f'\nISSUE BREAKDOWN:')
+        rl.append(details.issue_breakdown.to_string(index=False))
 
-    # Display sample data if available
-    if (
-        details.discrepant_data_examples is not None
-        and not details.discrepant_data_examples.empty
+    # Horizontal wide row dumps are hard to use in text reports.
+    # Keep the code for a future optional report parameter (e.g. include_issue_row_examples).
+    if False and (
+        details.issue_row_examples is not None
+        and not details.issue_row_examples.empty
     ):
-        rl.append(f'\nDISCREPANT DATA (first pairs):')
+        rl.append(f'\nISSUE ROW EXAMPLES:')
         rl.append('Sorted by primary key and dataset:')
         rl.append(f'\n')
-        rl.append(details.discrepant_data_examples.to_string(index=False))
+        rl.append(details.issue_row_examples.to_string(index=False))
         rl.append(f'\n')
     rl.append('=' * 80)
 
@@ -934,13 +935,13 @@ def create_result_message(
     if discrepancies.empty:
         return f'{comparison_type} match: Source={source_total}, Target={target_total}'
 
-    mismatch_count = len(discrepancies)
+    issue_count = len(discrepancies)
     diff = source_total - target_total
     diff_msg = f' (Δ={diff})' if diff != 0 else ''
 
     return (
         f'{comparison_type} mismatch: Source={source_total}, Target={target_total}{diff_msg}, '
-        f'{mismatch_count} discrepancies found'
+        f'{issue_count} discrepancies found'
     )
 
 

@@ -13,7 +13,7 @@ from xoverrr.utils import (
     build_sniff_issue_stats,
     evaluate_sniff_query_data,
     resolve_sniff_query_passed_column,
-    sniff_mismatched_row_count,
+    sniff_issue_row_count,
 )
 
 
@@ -34,12 +34,12 @@ class TestSniffQueryUtils:
         stats, details = evaluate_sniff_query_data(df, max_examples=2)
 
         assert stats.total_source_rows == 4
-        assert stats.total_matched_rows == 3
+        assert stats.passed_rows == 3
         assert stats.only_source_rows == 0
-        assert stats.total_diff_percentage_rows == pytest.approx(25.0)
+        assert stats.issue_rows_pct == pytest.approx(25.0)
         assert stats.final_diff_score == pytest.approx(25.0)
-        assert sniff_mismatched_row_count(stats) == 1
-        assert len(details.discrepant_data_examples) == 1
+        assert sniff_issue_row_count(stats) == 1
+        assert len(details.issue_row_examples) == 1
 
     def test_evaluate_sniff_query_pass_fail_pass(self):
         df = pd.DataFrame({XSNIFF_PASSED_COLUMN: [FLAG_VALUE_YES]})
@@ -47,8 +47,8 @@ class TestSniffQueryUtils:
         stats, details = evaluate_sniff_query_data(df)
 
         assert stats.total_source_rows == 1
-        assert stats.total_matched_rows == 1
-        assert stats.total_diff_percentage_rows == pytest.approx(0.0)
+        assert stats.passed_rows == 1
+        assert stats.issue_rows_pct == pytest.approx(0.0)
 
     def test_evaluate_sniff_query_pass_fail_fail(self):
         df = pd.DataFrame({XSNIFF_PASSED_COLUMN: [FLAG_VALUE_NO]})
@@ -56,8 +56,8 @@ class TestSniffQueryUtils:
         stats, details = evaluate_sniff_query_data(df)
 
         assert stats.total_source_rows == 1
-        assert stats.total_matched_rows == 0
-        assert stats.total_diff_percentage_rows == pytest.approx(100.0)
+        assert stats.passed_rows == 0
+        assert stats.issue_rows_pct == pytest.approx(100.0)
         assert stats.final_diff_score == pytest.approx(100.0)
 
     def test_resolve_sniff_query_passed_column_row_level(self):
@@ -170,12 +170,12 @@ class TestSniffQuery:
 
         status, report, stats, details = comparator.sniff_query(
             source_query='SELECT order_id, xsniff_passed FROM orders',
-            tolerance_percentage=50.0,
+            tolerance_pct=50.0,
         )
 
         assert status == COMPARISON_SUCCESS
-        assert sniff_mismatched_row_count(stats) == 1
-        assert stats.total_diff_percentage_rows == pytest.approx(100 / 3)
+        assert sniff_issue_row_count(stats) == 1
+        assert stats.issue_rows_pct == pytest.approx(100 / 3)
         assert 'SNIFF QUERY REPORT' in report
         assert comparator._finalize_calls[-1]['comparison_type'] == COMPARISON_TYPE_SNIFF_QUERY
 
@@ -186,7 +186,7 @@ class TestSniffQuery:
 
         status, report, stats, details = comparator.sniff_query(
             source_query="SELECT 'y' AS xsniff_passed",
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_SUCCESS
@@ -199,7 +199,7 @@ class TestSniffQuery:
 
         status, report, stats, details = comparator.sniff_query(
             source_query="SELECT 'n' AS xsniff_passed",
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_FAILED

@@ -79,7 +79,7 @@ class TestClickHouseSniffQuery:
                     if(amount < 0, '{FLAG_VALUE_NO}', '{FLAG_VALUE_YES}') AS {XSNIFF_PASSED_COLUMN}
                 FROM {TABLE_NAME}
             """,
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_SUCCESS
@@ -94,7 +94,7 @@ class TestClickHouseSniffQuery:
                     if(amount < 0, '{FLAG_VALUE_NO}', '{FLAG_VALUE_YES}') AS {XSNIFF_PASSED_COLUMN}
                 FROM {TABLE_NAME}
             """,
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_FAILED
@@ -107,7 +107,7 @@ class TestClickHouseSniffQuery:
                     AS {XSNIFF_PASSED_COLUMN}
                 FROM {TABLE_NAME}
             """,
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_SUCCESS
@@ -120,7 +120,7 @@ class TestClickHouseSniffQuery:
                     AS {XSNIFF_PASSED_COLUMN}
                 FROM {TABLE_NAME}
             """,
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_FAILED

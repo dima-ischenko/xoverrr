@@ -76,7 +76,7 @@ class TestBooleanComparison:
             target_table=DataReference(table_name, 'test'),
             date_column='created_at',
             date_range=('2024-01-01', '2024-01-05'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         # Adapters should convert both to string representation

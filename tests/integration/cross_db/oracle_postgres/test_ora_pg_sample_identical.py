@@ -87,7 +87,7 @@ class TestOraclePostgresHRData:
             update_column=None,
             date_range=('2018-01-01', '2022-01-01'),
             exclude_recent_hours=1,
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_SUCCESS
@@ -113,7 +113,7 @@ class TestOraclePostgresHRData:
             custom_primary_key=['EMPLOYEE_ID'],
             date_range=('2018-01-01', '2022-01-01'),
             exclude_recent_hours=1,
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_SUCCESS

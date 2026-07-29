@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 import pandas as pd
 
 from .constants import DATETIME_FORMAT, REPORT_OUTPUT_FORMAT_JSON, REPORT_OUTPUT_FORMATS, REPORT_OUTPUT_FORMAT_TEXT
-from .utils import ComparisonDiffDetails, ComparisonStats, append_report_run_header, format_report_collection, sniff_mismatched_row_count
+from .utils import ComparisonDiffDetails, ComparisonStats, append_report_run_header, format_report_collection, sniff_issue_row_count
 
 if TYPE_CHECKING:
     from .persistence import ComparisonRunTimings
@@ -277,16 +277,16 @@ def generate_sample_report(
     lines.append(f'  Duplicated target rows: {stats.dup_target_rows}')
     lines.append(f'  Only source rows: {stats.only_source_rows}')
     lines.append(f'  Only target rows: {stats.only_target_rows}')
-    lines.append(f'  Common rows (by primary key): {stats.common_pk_rows}')
-    lines.append(f'  Totally matched rows: {stats.total_matched_rows}')
+    lines.append(f'  Comparable rows: {stats.comparable_rows}')
+    lines.append(f'  Passed rows: {stats.passed_rows}')
     lines.append('-' * 40)
     
     # Percentages
-    lines.append(f'  Source only rows %: {stats.source_only_percentage_rows:.5f}')
-    lines.append(f'  Target only rows %: {stats.target_only_percentage_rows:.5f}')
-    lines.append(f'  Duplicated source rows %: {stats.dup_source_percentage_rows:.5f}')
-    lines.append(f'  Duplicated target rows %: {stats.dup_target_percentage_rows:.5f}')
-    lines.append(f'  Mismatched rows %: {stats.total_diff_percentage_rows:.5f}')
+    lines.append(f'  Source only rows %: {stats.source_only_rows_pct:.5f}')
+    lines.append(f'  Target only rows %: {stats.target_only_rows_pct:.5f}')
+    lines.append(f'  Duplicated source rows %: {stats.dup_source_rows_pct:.5f}')
+    lines.append(f'  Duplicated target rows %: {stats.dup_target_rows_pct:.5f}')
+    lines.append(f'  Issue rows %: {stats.issue_rows_pct:.5f}')
     lines.append(f'  Final discrepancies score: {stats.final_diff_score:.5f}')
     lines.append(f'  Final data quality score: {stats.final_score:.5f}')
 
@@ -296,29 +296,33 @@ def generate_sample_report(
     lines.append(f'  Duplicated source key examples: {format_report_collection(details.dup_source_keys_examples)}')
     lines.append(f'  Duplicated target key examples: {format_report_collection(details.dup_target_keys_examples)}')
 
-    lines.append(f'  Common attribute columns: {format_report_collection(details.common_attribute_columns)}')
+    lines.append(f'  Evaluated columns: {format_report_collection(details.evaluated_columns)}')
     lines.append(f'  Skipped source columns: {format_report_collection(details.skipped_source_columns)}')
     lines.append(f'  Skipped target columns: {format_report_collection(details.skipped_target_columns)}')
 
     # Column differences
-    if stats.max_diff_percentage_cols > 0 and not details.mismatches_per_column.empty:
-        lines.append('\nCOLUMN DIFFERENCES:')
-        lines.append(f'  Discrepancies per column (max %): {stats.max_diff_percentage_cols:.5f}')
-        lines.append('  Count of mismatches per column:\n')
-        lines.append(details.mismatches_per_column.to_string(index=False))
-        lines.append('\n  Some examples:\n')
+    if stats.max_issue_pct > 0 and not details.issue_breakdown.empty:
+        lines.append('\nISSUE BREAKDOWN:')
+        lines.append(f'  Max issue %: {stats.max_issue_pct:.5f}')
+        lines.append('  Issue counts by column:\n')
+        lines.append(details.issue_breakdown.to_string(index=False))
+        lines.append('\n  Issue examples:\n')
         lines.append(
-            details.discrepancies_per_col_examples.to_string(
+            details.issue_examples.to_string(
                 index=False, max_colwidth=64, justify='left'
             )
         )
 
-    # Discrepant data examples
-    if details.discrepant_data_examples is not None and not details.discrepant_data_examples.empty:
-        lines.append('\nDISCREPANT DATA (first pairs):')
+    # Horizontal wide row dumps are hard to use in text reports.
+    # Keep the code for a future optional report parameter (e.g. include_issue_row_examples).
+    if False and (
+        details.issue_row_examples is not None
+        and not details.issue_row_examples.empty
+    ):
+        lines.append('\nISSUE ROW EXAMPLES:')
         lines.append('Sorted by primary key and dataset:\n')
         lines.append(
-            details.discrepant_data_examples.to_string(
+            details.issue_row_examples.to_string(
                 index=False, max_colwidth=64, justify='left'
             )
         )
@@ -367,21 +371,26 @@ def generate_sniff_query_report(
     lines.append('-' * 40)
     lines.append('\nSUMMARY:')
     lines.append(f'  Checked rows: {stats.total_source_rows}')
-    lines.append(f'  Passed rows: {stats.total_matched_rows}')
-    lines.append(f'  Mismatched rows: {sniff_mismatched_row_count(stats)}')
+    lines.append(f'  Passed rows: {stats.passed_rows}')
+    lines.append(f'  Issue rows: {sniff_issue_row_count(stats)}')
     lines.append('-' * 40)
-    lines.append(f'  Mismatched rows %: {stats.total_diff_percentage_rows:.5f}')
+    lines.append(f'  Issue rows %: {stats.issue_rows_pct:.5f}')
     lines.append(f'  Final discrepancies score: {stats.final_diff_score:.5f}')
     lines.append(f'  Final data quality score: {stats.final_score:.5f}')
 
-    if not details.mismatches_per_column.empty:
-        lines.append('\nSNIFF QUERY VALUE COUNTS:')
-        lines.append(details.mismatches_per_column.to_string(index=False))
+    if not details.issue_breakdown.empty:
+        lines.append('\nISSUE BREAKDOWN:')
+        lines.append(details.issue_breakdown.to_string(index=False))
 
-    if details.discrepant_data_examples is not None and not details.discrepant_data_examples.empty:
-        lines.append('\nMISMATCHED ROW EXAMPLES:')
+    # Horizontal wide row dumps are hard to use in text reports.
+    # Keep the code for a future optional report parameter (e.g. include_issue_row_examples).
+    if False and (
+        details.issue_row_examples is not None
+        and not details.issue_row_examples.empty
+    ):
+        lines.append('\nISSUE ROW EXAMPLES:')
         lines.append(
-            details.discrepant_data_examples.to_string(
+            details.issue_row_examples.to_string(
                 index=False, max_colwidth=64, justify='left'
             )
         )
@@ -398,7 +407,7 @@ def generate_count_report(
     details: ComparisonDiffDetails,
     total_source_count: int,
     total_target_count: int,
-    discrepancies_percentage: float,
+    discrepancies_pct: float,
     diff_count: int,
     equal_count: int,
     timezone: str,
@@ -422,7 +431,7 @@ def generate_count_report(
         details: Discrepancy details
         total_source_count: Total rows in source
         total_target_count: Total rows in target
-        discrepancies_percentage: Overall discrepancy percentage
+        discrepancies_pct: Overall discrepancy pct
         diff_count: Sum of absolute differences
         equal_count: Sum of common minimum counts
         timezone: Timezone used for comparison
@@ -466,18 +475,23 @@ def generate_count_report(
     lines.append(f'  Target total count: {total_target_count}')
     lines.append(f'  Common total count: {equal_count}')
     lines.append(f'  Diff total count: {diff_count}')
-    lines.append(f'  Discrepancies percentage: {discrepancies_percentage:.5f}%')
-    lines.append(f'  Final discrepancies score: {discrepancies_percentage:.5f}')
-    lines.append(f'  Final data quality score: {(100 - discrepancies_percentage):.5f}')
+    lines.append(f'  Discrepancies %: {discrepancies_pct:.5f}%')
+    lines.append(f'  Final discrepancies score: {discrepancies_pct:.5f}')
+    lines.append(f'  Final data quality score: {(100 - discrepancies_pct):.5f}')
 
-    if not details.mismatches_per_column.empty:
-        lines.append('\nDETAIL DIFFERENCES:')
-        lines.append(details.mismatches_per_column.to_string(index=False))
+    if not details.issue_breakdown.empty:
+        lines.append('\nISSUE BREAKDOWN:')
+        lines.append(details.issue_breakdown.to_string(index=False))
 
-    if details.discrepant_data_examples is not None and not details.discrepant_data_examples.empty:
-        lines.append('\nDISCREPANT DATA (first pairs):')
+    # Horizontal wide row dumps are hard to use in text reports.
+    # Keep the code for a future optional report parameter (e.g. include_issue_row_examples).
+    if False and (
+        details.issue_row_examples is not None
+        and not details.issue_row_examples.empty
+    ):
+        lines.append('\nISSUE ROW EXAMPLES:')
         lines.append('Sorted by primary key and dataset:\n')
-        lines.append(details.discrepant_data_examples.to_string(index=False))
+        lines.append(details.issue_row_examples.to_string(index=False))
         lines.append('')
 
     lines.append('=' * 80)

@@ -98,7 +98,7 @@ class TestClickHouseOracleMixedTimezoneOffsets:
                 target_table=DataReference(table_name, 'test'),
                 date_column='record_date',
                 date_range=('2024-01-01', '2024-01-08'),
-                tolerance_percentage=0.0,
+                tolerance_pct=0.0,
             )
 
             assert status == COMPARISON_SUCCESS, f'Failed with timezone {timezone}'

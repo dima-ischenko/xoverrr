@@ -72,7 +72,7 @@ class TestOracleCustomQueryYearlyChunking:
             target_query=query,
             target_params=params,
             custom_primary_key=['id'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
         status_chunked, _, stats_chunked, _ = comparator.compare_custom_query(
             source_query=query,
@@ -81,7 +81,7 @@ class TestOracleCustomQueryYearlyChunking:
             target_params=params,
             custom_primary_key=['id'],
             chunk_size_days=30,
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
         assert status_full == COMPARISON_SUCCESS
         assert status_chunked == COMPARISON_SUCCESS
@@ -109,7 +109,7 @@ class TestOracleCustomQueryYearlyChunking:
             target_query=target_query,
             target_params=params,
             custom_primary_key=['id'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
         status_chunked, _, stats_chunked, details_chunked = (
             comparator.compare_custom_query(
@@ -119,7 +119,7 @@ class TestOracleCustomQueryYearlyChunking:
                 target_params=params,
                 custom_primary_key=['id'],
                 chunk_size_days=30,
-                tolerance_percentage=0.0,
+                tolerance_pct=0.0,
             )
         )
         assert status_full == COMPARISON_FAILED
@@ -127,16 +127,16 @@ class TestOracleCustomQueryYearlyChunking:
         assert stats_chunked.final_diff_score == stats_full.final_diff_score
         assert (
             int(
-                details_full.mismatches_per_column.set_index('column_name').loc[
-                    'name', 'mismatch_count'
+                details_full.issue_breakdown.set_index('column_name').loc[
+                    'name', 'issue_count'
                 ]
             )
             == 3
         )
         assert (
             int(
-                details_chunked.mismatches_per_column.set_index('column_name').loc[
-                    'name', 'mismatch_count'
+                details_chunked.issue_breakdown.set_index('column_name').loc[
+                    'name', 'issue_count'
                 ]
             )
             == 3

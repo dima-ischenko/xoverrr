@@ -113,7 +113,7 @@ class TestClickHouseOracleCountsWithVariousDateTypes:
             target_table=DataReference(table_name, 'test'),
             date_column='event_date',  # DATE type
             date_range=('2024-01-01', '2024-01-04'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_SUCCESS
@@ -135,7 +135,7 @@ class TestClickHouseOracleCountsWithVariousDateTypes:
             target_table=DataReference(table_name, 'test'),
             date_column='event_datetime',  # ClickHouse DateTime / Oracle TIMESTAMP
             date_range=('2024-01-01', '2024-01-04'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_SUCCESS
@@ -159,7 +159,7 @@ class TestClickHouseOracleCountsWithVariousDateTypes:
             target_table=DataReference(table_name, 'test'),
             date_column='event_datetime64',  # ClickHouse DateTime64 / Oracle TIMESTAMP
             date_range=('2024-01-01', '2024-01-04'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         assert status == COMPARISON_SUCCESS
@@ -183,7 +183,7 @@ class TestClickHouseOracleCountsWithVariousDateTypes:
             target_table=DataReference(table_name, 'test'),
             date_column='event_datetime',
             date_range=('2024-01-01', '2024-01-04'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
 
         # Oracle thin client doesn't support named time zones, but should still work
