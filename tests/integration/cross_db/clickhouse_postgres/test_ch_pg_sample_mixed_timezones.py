@@ -90,7 +90,7 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
             timezone='UTC',  # MUST be UTC
         )
 
-        status, report, stats, details = checker.check_sample(
+        status, report, stats, details = checker.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='record_date',
@@ -119,7 +119,7 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
             timezone='UTC',  # Must be UTC since ClickHouse stores UTC
         )
 
-        status, report, stats, details = checker.check_sample(
+        status, report, stats, details = checker.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='record_date',
@@ -187,7 +187,7 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_sample(
+        status, report, stats, details = checker.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='record_date',
@@ -250,7 +250,7 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
             target_engine=clickhouse_engine,
             timezone='UTC',  # Even UTC won't help mixing tz-aware with tz-naive
         )
-        status, report, stats, details = checker.check_sample(
+        status, report, stats, details = checker.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='record_date',
@@ -275,7 +275,7 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
         )
 
         # Test filtering on the boundary date
-        status, report, stats, details = checker.check_sample(
+        status, report, stats, details = checker.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='record_date',

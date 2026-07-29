@@ -71,7 +71,7 @@ class TestClickHouseTableVsView:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_sample(
+        status, report, stats, details = checker.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(view_name, 'test'),
             date_column='created_at',

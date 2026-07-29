@@ -70,7 +70,7 @@ class TestTimestampWithTimezone:
             timezone='+05:00',
         )
 
-        status, report, stats, details = checker.check_sample(
+        status, report, stats, details = checker.check_samples(
             source_table=DataReference('test_timestamps', 'test'),
             target_table=DataReference('test_timestamps', 'test'),
             date_column='created_at',

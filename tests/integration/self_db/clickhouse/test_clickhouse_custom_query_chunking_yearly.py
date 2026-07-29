@@ -74,7 +74,7 @@ class TestClickHouseCustomQueryYearlyChunking:
         """
         params = {'start_date': '2024-01-01', 'end_date': '2024-12-31'}
 
-        status_full, _, stats_full, _ = checker.check_query(
+        status_full, _, stats_full, _ = checker.check_custom_queries(
             source_query=query,
             source_params=params,
             target_query=query,
@@ -82,7 +82,7 @@ class TestClickHouseCustomQueryYearlyChunking:
             custom_primary_key=['id'],
             tolerance_pct=0.0,
         )
-        status_chunked, _, stats_chunked, _ = checker.check_query(
+        status_chunked, _, stats_chunked, _ = checker.check_custom_queries(
             source_query=query,
             source_params=params,
             target_query=query,
@@ -113,7 +113,7 @@ class TestClickHouseCustomQueryYearlyChunking:
         """
         params = {'start_date': '2024-01-01', 'end_date': '2024-12-31'}
 
-        status_full, _, stats_full, details_full = checker.check_query(
+        status_full, _, stats_full, details_full = checker.check_custom_queries(
             source_query=source_query,
             source_params=params,
             target_query=target_query,
@@ -122,7 +122,7 @@ class TestClickHouseCustomQueryYearlyChunking:
             tolerance_pct=0.0,
         )
         status_chunked, _, stats_chunked, details_chunked = (
-            checker.check_query(
+            checker.check_custom_queries(
                 source_query=source_query,
                 source_params=params,
                 target_query=target_query,

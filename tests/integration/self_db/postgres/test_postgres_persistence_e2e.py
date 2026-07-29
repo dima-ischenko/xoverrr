@@ -68,7 +68,7 @@ class TestPostgresPersistenceE2E:
         src_table = 'test_persist_postgres_src'
         trg_table = 'test_persist_postgres_trg'
 
-        status, _, _, _ = self._build_checker(postgres_engine).check_sample(
+        status, _, _, _ = self._build_checker(postgres_engine).check_samples(
             source_table=DataReference(src_table, 'test'),
             target_table=DataReference(trg_table, 'test'),
             date_column='created_at',
@@ -91,8 +91,8 @@ class TestPostgresPersistenceE2E:
                 )
             ).fetchone()
 
-        assert row[0] == 'sample' and row[1] == CHECK_SUCCESS
-        assert 'DATA SAMPLE CHECK REPORT' in row[2]
+        assert row[0] == 'samples' and row[1] == CHECK_SUCCESS
+        assert 'SAMPLES CHECK REPORT' in row[2]
 
     def test_postgres_persistence_counts_e2e(self, postgres_engine):
         src_table = 'test_persist_postgres_src'
@@ -120,8 +120,8 @@ class TestPostgresPersistenceE2E:
                 )
             ).fetchone()
 
-        assert row[:2] == ('count', CHECK_SUCCESS)
-        assert 'COUNT CHECK REPORT' in row[2]
+        assert row[:2] == ('counts', CHECK_SUCCESS)
+        assert 'COUNTS CHECK REPORT' in row[2]
 
     def test_postgres_persistence_custom_query_e2e(self, postgres_engine):
         src_table = 'test_persist_postgres_src'
@@ -141,7 +141,7 @@ class TestPostgresPersistenceE2E:
         """
         query_params = {'start_date': '2024-01-01', 'end_date': '2024-01-04'}
 
-        status, _, _, _ = self._build_checker(postgres_engine).check_query(
+        status, _, _, _ = self._build_checker(postgres_engine).check_custom_queries(
             source_query=source_query,
             source_params=query_params,
             target_query=target_query,
@@ -164,7 +164,7 @@ class TestPostgresPersistenceE2E:
                 )
             ).fetchone()
 
-        assert row[:2] == ('custom_query', CHECK_SUCCESS)
+        assert row[:2] == ('custom_queries', CHECK_SUCCESS)
         assert ':start_date' not in row[2] and "'2024-01-01'" in row[2]
         assert ':end_date' not in row[3] and "'2024-01-04'" in row[3]
 
@@ -209,7 +209,7 @@ class TestPostgresPersistenceE2E:
             """,
         )
 
-        status, report, stats, details = self._build_checker(postgres_engine).check_sample(
+        status, report, stats, details = self._build_checker(postgres_engine).check_samples(
             source_table=DataReference(failed_src, 'test'),
             target_table=DataReference(failed_trg, 'test'),
             date_column='created_at',
@@ -246,7 +246,7 @@ class TestPostgresPersistenceE2E:
                 )
             ).fetchone()
 
-        assert row[:2] == ('sample', CHECK_FAILED)
+        assert row[:2] == ('samples', CHECK_FAILED)
         assert row[2] > 0 and row[3] > 0 and row[4] > 0
         assert f'Final discrepancies score: {row[6]:.5f}' in row[8]
         assert report == row[8]
@@ -296,7 +296,7 @@ class TestPostgresPersistenceE2E:
             """,
         )
 
-        status, report, stats, details = self._build_checker(postgres_engine).check_sample(
+        status, report, stats, details = self._build_checker(postgres_engine).check_samples(
             source_table=DataReference(failed_src, 'test'),
             target_table=DataReference(failed_trg, 'test'),
             date_column='created_at',
@@ -331,7 +331,7 @@ class TestPostgresPersistenceE2E:
                 )
             ).fetchone()
 
-        assert row[:2] == ('sample', CHECK_FAILED)
+        assert row[:2] == ('samples', CHECK_FAILED)
         assert row[2] >= 2 and row[3] >= 2
         assert f'Source only rows %: {stats.source_only_rows_pct:.5f}' in row[5]
         assert f'Target only rows %: {stats.target_only_rows_pct:.5f}' in row[5]

@@ -52,7 +52,7 @@ class TestOracleSelfCheck:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_sample(
+        status, report, stats, details = checker.check_samples(
             source_table=DataReference('test_oracle_self', 'test'),
             target_table=DataReference('test_oracle_self', 'test'),
             date_column='created_at',
@@ -86,7 +86,7 @@ class TestOracleSelfCheck:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_sample(
+        status, report, stats, details = checker.check_samples(
             source_table=DataReference('test_oracle_self', 'test'),  # таблица
             target_table=DataReference('v_test_oracle_self', 'test'),  # вьюха
             date_column='created_at',

@@ -243,7 +243,7 @@ class TestOraclePostgresNumericEdge:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_sample(
+        status, report, stats, details = checker.check_samples(
             source_table=DataReference(numeric_large_data, 'test'),
             target_table=DataReference(numeric_large_data, 'test'),
             date_range=('2024-01-01', '2024-01-05'),
@@ -267,7 +267,7 @@ class TestOraclePostgresNumericEdge:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_sample(
+        status, report, stats, details = checker.check_samples(
             source_table=DataReference(numeric_scientific_data, 'test'),
             target_table=DataReference(numeric_scientific_data, 'test'),
             tolerance_pct=0.0,
@@ -294,7 +294,7 @@ class TestOraclePostgresNumericEdge:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_sample(
+        status, report, stats, details = checker.check_samples(
             source_table=DataReference(numeric_edge_precision_data, 'test'),
             target_table=DataReference(numeric_edge_precision_data, 'test'),
             tolerance_pct=0.0,
@@ -320,7 +320,7 @@ class TestOraclePostgresNumericEdge:
         )
 
         # Compare arithmetic expressions
-        status, report, stats, details = checker.check_query(
+        status, report, stats, details = checker.check_custom_queries(
             source_query=f"""
                 SELECT 
                     id,

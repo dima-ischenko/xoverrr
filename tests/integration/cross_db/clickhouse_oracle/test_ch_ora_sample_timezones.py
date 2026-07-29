@@ -87,7 +87,7 @@ class TestClickHouseOracleMixedTimezoneOffsets:
             timezone='Europe/Paris',
         )
 
-        status, report, stats, details = checker.check_sample(
+        status, report, stats, details = checker.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='record_date',
@@ -111,7 +111,7 @@ class TestClickHouseOracleMixedTimezoneOffsets:
             timezone='UTC',
         )
 
-        status, report, stats, details = checker.check_sample(
+        status, report, stats, details = checker.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='record_date',
@@ -178,7 +178,7 @@ class TestClickHouseOracleMixedTimezoneOffsets:
             timezone='UTC',
         )
 
-        status, report, stats, details = checker.check_sample(
+        status, report, stats, details = checker.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='record_date',

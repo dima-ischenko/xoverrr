@@ -142,7 +142,7 @@ class TestPostgresSelfCheck:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_sample(
+        status, report, stats, details = checker.check_samples(
             source_table=DataReference('test_custom_data2', 'test'),
             target_table=DataReference('test_custom_data2', 'test'),
             date_column='created_at',
@@ -167,7 +167,7 @@ class TestPostgresSelfCheck:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_sample(
+        status, report, stats, details = checker.check_samples(
             source_table=DataReference('test_custom_data2', 'test'),
             target_table=DataReference('vtest_custom_data2', 'test'),
             date_column='created_at',
@@ -193,7 +193,7 @@ class TestPostgresSelfCheck:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_sample(
+        status, report, stats, details = checker.check_samples(
             source_table=DataReference('test_custom_data3', 'test'),
             target_table=DataReference('mvtest_custom_data3', 'test'),
             date_column='created_at',
@@ -215,7 +215,7 @@ class TestPostgresSelfCheck:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_sample(
+        status, report, stats, details = checker.check_samples(
             source_table=DataReference('test_custom_data_empty_one_side', 'test'),
             target_table=DataReference('vtest_custom_data_empty_one_side', 'test'),
             date_column='created_at',

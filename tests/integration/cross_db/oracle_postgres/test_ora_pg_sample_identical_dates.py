@@ -68,7 +68,7 @@ class TestDateTypeCheck:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_sample(
+        status, report, stats, details = checker.check_samples(
             source_table=DataReference('test_dates', 'test'),
             target_table=DataReference('test_dates', 'test'),
             date_column='event_date',

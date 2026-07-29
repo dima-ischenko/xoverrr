@@ -31,7 +31,7 @@ class CheckResult:
     """
     timestamp: str
     run_id: str
-    check_type: str  # CHECK_TYPE_SAMPLE, CHECK_TYPE_COUNT, ...
+    check_type: str  # CHECK_TYPE_SAMPLES, CHECK_TYPE_COUNTS, ...
     status: str
     check_name: Optional[str] = None
     check_tags: Optional[Dict[str, Any]] = None
@@ -217,6 +217,7 @@ def generate_sample_report(
     source_params: Optional[Dict] = None,
     target_query: Optional[str] = None,
     target_params: Optional[Dict] = None,
+    date_chunks: Optional[List[Tuple[str, str]]] = None,
     library_version: Optional[str] = None,
     source_db_type: Optional[str] = None,
     target_db_type: Optional[str] = None,
@@ -234,6 +235,7 @@ def generate_sample_report(
         source_params: Source query parameters
         target_query: Target SQL query
         target_params: Target query parameters
+        date_chunks: Optional chunk intervals used for the check
         
     Returns:
         Formatted text report
@@ -248,14 +250,19 @@ def generate_sample_report(
         target_db_type=target_db_type,
     )
     if source_table and target_table:
-        lines.append('DATA SAMPLE CHECK REPORT:')
+        lines.append('SAMPLES CHECK REPORT:')
         lines.append(f'{source_table}')
         lines.append('VS')
         lines.append(f'{target_table}')
     else:
-        lines.append('DATA SAMPLE CHECK REPORT:')
+        lines.append('SAMPLES CHECK REPORT:')
     
     lines.append('=' * 80)
+
+    if date_chunks and len(date_chunks) > 1:
+        lines.append(f'\nchunks processed ({len(date_chunks)} intervals):')
+        for start, end in date_chunks:
+            lines.append(f'  {start} → {end}')
 
     if source_query and target_query:
         lines.append(f'timezone: {timezone}')
@@ -333,7 +340,7 @@ def generate_sample_report(
     return '\n'.join(lines)
 
 
-def generate_sniff_query_report(
+def generate_check_sniff_query_report(
     stats: CheckStats,
     details: CheckDetails,
     timezone: str,
@@ -354,7 +361,7 @@ def generate_sniff_query_report(
         library_version=library_version,
         source_db_type=source_db_type,
     )
-    lines.append('SNIFF CHECK REPORT:')
+    lines.append('SNIFF QUERY CHECK REPORT:')
     lines.append('=' * 80)
 
     if date_chunks and len(date_chunks) > 1:
@@ -452,7 +459,7 @@ def generate_count_report(
         source_db_type=source_db_type,
         target_db_type=target_db_type,
     )
-    lines.append('COUNT CHECK REPORT:')
+    lines.append('COUNTS CHECK REPORT:')
     lines.append(f'{source_table}')
     lines.append('VS')
     lines.append(f'{target_table}')
