@@ -6,8 +6,8 @@ This test specifically checks that all timestamptz comparisons are done in UTC.
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
 class TestPostgresMixedTimezoneOffsets:
@@ -116,20 +116,20 @@ class TestPostgresMixedTimezoneOffsets:
 
         yield
 
-    def test_self_comparison_with_utc_timezone(self, postgres_engine):
+    def test_self_check_with_utc_timezone(self, postgres_engine):
         """
-        Test self-comparison with UTC timezone (Rule 1).
+        Test self-check with UTC timezone (Rule 1).
         All timestamptz comparisons must be done in UTC.
         """
         table_name = 'test_pg_mixed_tz_offsets'
 
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=postgres_engine,
             target_engine=postgres_engine,
             timezone='UTC',  # Explicit UTC for tz-aware comparisons
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_date',
@@ -138,27 +138,27 @@ class TestPostgresMixedTimezoneOffsets:
             tolerance_pct=0.0,
         )
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         assert stats.final_diff_score == 0.0
         print(
-            f'PostgreSQL self-comparison with UTC timezone passed: {stats.final_score:.2f}%'
+            f'PostgreSQL self-check with UTC timezone passed: {stats.final_score:.2f}%'
         )
 
-    def test_comparison_with_explicit_timezone_fails(self, postgres_engine):
+    def test_check_with_explicit_timezone_fails(self, postgres_engine):
         """
-        Test that comparison with non-UTC timezone fails when tz-aware columns are present.
+        Test that check with non-UTC timezone fails when tz-aware columns are present.
         This demonstrates Rule 1 violation.
         """
         table_name = 'test_pg_mixed_tz_offsets'
 
         # This should either fail or show discrepancies because timestamps are compared in different timezones
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=postgres_engine,
             target_engine=postgres_engine,
             timezone='Europe/Athens',  # Non-UTC timezone
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_date',
@@ -174,9 +174,9 @@ class TestPostgresMixedTimezoneOffsets:
         )
 
         # Should succeed because we excluded tz-aware columns
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         print(
-            f'PostgreSQL comparison with non-UTC but tz-naive columns passed: {stats.final_score:.2f}%'
+            f'PostgreSQL check with non-UTC but tz-naive columns passed: {stats.final_score:.2f}%'
         )
 
     def test_cross_table_comparison_with_utc(self, postgres_engine, table_helper):
@@ -218,13 +218,13 @@ class TestPostgresMixedTimezoneOffsets:
             """,
         )
 
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=postgres_engine,
             target_engine=postgres_engine,
             timezone='Asia/Tokyo',  # Required for tz-aware columns
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference(source_table, 'test'),
             target_table=DataReference(target_table, 'test'),
             date_column='event_date',
@@ -234,10 +234,10 @@ class TestPostgresMixedTimezoneOffsets:
             tolerance_pct=0.0,
         )
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         assert stats.final_diff_score == 0.0
         print(
-            f'PostgreSQL cross-table comparison with UTC passed: {stats.final_score:.2f}%'
+            f'PostgreSQL cross-table check with UTC passed: {stats.final_score:.2f}%'
         )
 
     def test_tz_naive_vs_tz_aware_separate_comparisons(self, postgres_engine):
@@ -247,13 +247,13 @@ class TestPostgresMixedTimezoneOffsets:
         table_name = 'test_pg_mixed_tz_offsets'
 
         # Test 1: Compare only tz-naive columns with local timezone
-        comparator_local = DataQualityComparator(
+        comparator_local = DataQualityChecker(
             source_engine=postgres_engine,
             target_engine=postgres_engine,
             timezone='Europe/Paris',  # Local timezone for tz-naive
         )
 
-        status_local, _, _, _ = comparator_local.compare_sample(
+        status_local, _, _, _ = comparator_local.check_sample(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_date',
@@ -267,16 +267,16 @@ class TestPostgresMixedTimezoneOffsets:
             tolerance_pct=0.0,
         )
 
-        assert status_local == COMPARISON_SUCCESS
-        print('Tz-naive columns comparison with local timezone passed')
+        assert status_local == CHECK_SUCCESS
+        print('Tz-naive columns check with local timezone passed')
 
-        comparator_utc = DataQualityComparator(
+        comparator_utc = DataQualityChecker(
             source_engine=postgres_engine,
             target_engine=postgres_engine,
             timezone='US/Pacific',
         )
 
-        status_utc, _, _, _ = comparator_utc.compare_sample(
+        status_utc, _, _, _ = comparator_utc.check_sample(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_date',
@@ -291,8 +291,8 @@ class TestPostgresMixedTimezoneOffsets:
             tolerance_pct=0.0,
         )
 
-        assert status_utc == COMPARISON_SUCCESS
-        print('Tz-aware columns comparison with UTC passed')
+        assert status_utc == CHECK_SUCCESS
+        print('Tz-aware columns check with UTC passed')
 
     def test_date_boundary_filtering_with_utc(self, postgres_engine):
         """
@@ -300,14 +300,14 @@ class TestPostgresMixedTimezoneOffsets:
         """
         table_name = 'test_pg_mixed_tz_offsets'
 
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=postgres_engine,
             target_engine=postgres_engine,
             timezone='Asia/Tokyo',
         )
 
         # Test filtering on the boundary date
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_date',
@@ -321,6 +321,6 @@ class TestPostgresMixedTimezoneOffsets:
             tolerance_pct=0.0,
         )
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         # Should have the boundary record (id=6)
         assert stats.comparable_rows == 1

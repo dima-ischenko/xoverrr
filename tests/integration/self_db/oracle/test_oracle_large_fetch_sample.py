@@ -1,5 +1,5 @@
 """
-Test Oracle self-comparison with identical data.
+Test Oracle self-check with identical data.
 """
 
 import time
@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 from sqlalchemy import text
 
-from xoverrr.core import DataQualityComparator
+from xoverrr.core import DataQualityChecker
 
 
 @pytest.mark.timeout(30)
@@ -60,7 +60,7 @@ class TestOracleSelfFetchPerformance:
         """
         Compare identical tables within same Oracle database.
         """
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=oracle_engine,
             timezone='Europe/Athens',
@@ -75,8 +75,8 @@ class TestOracleSelfFetchPerformance:
         params = None
 
         start_time = time.time()
-        df = comparator._execute_query(
-            (query, params), comparator.source_engine, comparator.timezone
+        df = checker._execute_query(
+            (query, params), checker.source_engine, checker.timezone
         )
         execution_time = time.time() - start_time
 

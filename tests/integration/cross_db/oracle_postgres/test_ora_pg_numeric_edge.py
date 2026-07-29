@@ -1,16 +1,16 @@
 """
-Test numeric type comparison between Oracle and PostgreSQL.
+Test numeric type check between Oracle and PostgreSQL.
 """
 
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import COMPARISON_FAILED, COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_FAILED, CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
 class TestOraclePostgresNumericEdge:
-    """Tests for numeric type comparison"""
+    """Tests for numeric type check"""
 
     @pytest.fixture
     def numeric_large_data(self, oracle_engine, postgres_engine, table_helper):
@@ -230,20 +230,20 @@ class TestOraclePostgresNumericEdge:
 
         yield table_name
 
-    def test_numeric_types_large_comparison(
+    def test_numeric_types_large_check(
         self, oracle_engine, postgres_engine, numeric_large_data
     ):
         # pytest.skip('issue #48')
         """
         Compare numeric types with the large value (16+ digits)
         """
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference(numeric_large_data, 'test'),
             target_table=DataReference(numeric_large_data, 'test'),
             date_range=('2024-01-01', '2024-01-05'),
@@ -251,7 +251,7 @@ class TestOraclePostgresNumericEdge:
         )
         print(report)
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
 
     def test_numeric_scientific_notation(
         self, oracle_engine, postgres_engine, numeric_scientific_data
@@ -261,13 +261,13 @@ class TestOraclePostgresNumericEdge:
         Test that scientific notation is handled correctly.
         Numbers that might be represented in scientific notation by PostgreSQL.
         """
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference(numeric_scientific_data, 'test'),
             target_table=DataReference(numeric_scientific_data, 'test'),
             tolerance_pct=0.0,
@@ -275,7 +275,7 @@ class TestOraclePostgresNumericEdge:
 
         print(report)
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         print(f'Scientific notation test passed: {stats.final_score:.2f}%')
 
     def test_numeric_edge_precision(
@@ -288,13 +288,13 @@ class TestOraclePostgresNumericEdge:
         - Numbers with many decimal places
         - Numbers that lose precision in float
         """
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference(numeric_edge_precision_data, 'test'),
             target_table=DataReference(numeric_edge_precision_data, 'test'),
             tolerance_pct=0.0,
@@ -302,7 +302,7 @@ class TestOraclePostgresNumericEdge:
 
         print(report)
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         print(f'Edge precision test passed: {stats.final_score:.2f}%')
 
     def test_numeric_with_arithmetic_operations(
@@ -311,16 +311,16 @@ class TestOraclePostgresNumericEdge:
         # pytest.skip('issue #48')
         """
         Test that arithmetic operations in queries produce consistent results.
-        This ensures that when users use expressions in SELECT, the comparison works.
+        This ensures that when users use expressions in SELECT, the check works.
         """
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
             timezone='Europe/Athens',
         )
 
         # Compare arithmetic expressions
-        status, report, stats, details = comparator.compare_custom_query(
+        status, report, stats, details = checker.check_query(
             source_query=f"""
                 SELECT 
                     id,
@@ -356,5 +356,5 @@ class TestOraclePostgresNumericEdge:
 
         # Note: This test may have precision differences between Oracle and PostgreSQL
         # Consider adjusting tolerance or marking as expected failure
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         print(f'Arithmetic operations test passed: {stats.final_score:.2f}%')

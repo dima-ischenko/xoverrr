@@ -3,21 +3,21 @@
 import pytest
 
 from xoverrr.constants import (
-    COMPARISON_FAILED,
-    COMPARISON_SUCCESS,
+    CHECK_FAILED,
+    CHECK_SUCCESS,
     FLAG_VALUE_NO,
     FLAG_VALUE_YES,
     XSNIFF_PASSED_COLUMN,
 )
-from xoverrr.core import DataQualityComparator
+from xoverrr.core import DataQualityChecker
 
 
 TABLE_NAME = 'test_sniff_query_data'
 
 
 @pytest.fixture
-def comparator(postgres_engine):
-    return DataQualityComparator(
+def checker(postgres_engine):
+    return DataQualityChecker(
         source_engine=postgres_engine,
         timezone='UTC',
     )
@@ -66,8 +66,8 @@ def setup_sniff_data_with_issue(postgres_engine, table_helper):
 
 
 class TestPostgresSniffQuery:
-    def test_row_level_pass(self, comparator, setup_sniff_data):
-        status, _, stats, _ = comparator.sniff_query(
+    def test_row_level_pass(self, checker, setup_sniff_data):
+        status, _, stats, _ = checker.sniff_query(
             source_query=f"""
                 SELECT id, amount,
                     CASE WHEN amount < 0 THEN '{FLAG_VALUE_NO}' ELSE '{FLAG_VALUE_YES}' END
@@ -77,11 +77,11 @@ class TestPostgresSniffQuery:
             tolerance_pct=0.0,
         )
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         assert stats.final_score == 100.0
 
-    def test_row_level_fail(self, comparator, setup_sniff_data_with_issue):
-        status, _, stats, _ = comparator.sniff_query(
+    def test_row_level_fail(self, checker, setup_sniff_data_with_issue):
+        status, _, stats, _ = checker.sniff_query(
             source_query=f"""
                 SELECT id, amount,
                     CASE WHEN amount < 0 THEN '{FLAG_VALUE_NO}' ELSE '{FLAG_VALUE_YES}' END
@@ -91,11 +91,11 @@ class TestPostgresSniffQuery:
             tolerance_pct=0.0,
         )
 
-        assert status == COMPARISON_FAILED
+        assert status == CHECK_FAILED
         assert stats.final_score < 100.0
 
-    def test_pass_fail_pass(self, comparator, setup_sniff_data):
-        status, _, stats, _ = comparator.sniff_query(
+    def test_pass_fail_pass(self, checker, setup_sniff_data):
+        status, _, stats, _ = checker.sniff_query(
             source_query=f"""
                 SELECT CASE
                     WHEN SUM(CASE WHEN amount < 0 THEN 1 ELSE 0 END) > 0
@@ -105,11 +105,11 @@ class TestPostgresSniffQuery:
             tolerance_pct=0.0,
         )
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         assert stats.final_score == 100.0
 
-    def test_pass_fail_fail(self, comparator, setup_sniff_data_with_issue):
-        status, _, stats, _ = comparator.sniff_query(
+    def test_pass_fail_fail(self, checker, setup_sniff_data_with_issue):
+        status, _, stats, _ = checker.sniff_query(
             source_query=f"""
                 SELECT CASE
                     WHEN SUM(CASE WHEN amount < 0 THEN 1 ELSE 0 END) > 0
@@ -119,11 +119,11 @@ class TestPostgresSniffQuery:
             tolerance_pct=0.0,
         )
 
-        assert status == COMPARISON_FAILED
+        assert status == CHECK_FAILED
         assert stats.final_score == 0.0
 
-    def test_issues_only_filter_pass(self, comparator, setup_sniff_data):
-        status, _, stats, details = comparator.sniff_query(
+    def test_issues_only_filter_pass(self, checker, setup_sniff_data):
+        status, _, stats, details = checker.sniff_query(
             source_query=f"""
                 SELECT id, amount, '{FLAG_VALUE_NO}' AS {XSNIFF_PASSED_COLUMN}
                 FROM {TABLE_NAME}
@@ -132,13 +132,13 @@ class TestPostgresSniffQuery:
             tolerance_pct=0.0,
         )
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         assert stats.total_source_rows == 0
         assert stats.final_score == 100.0
         assert details.issue_row_examples.empty
 
-    def test_issues_only_filter_fail(self, comparator, setup_sniff_data_with_issue):
-        status, _, stats, details = comparator.sniff_query(
+    def test_issues_only_filter_fail(self, checker, setup_sniff_data_with_issue):
+        status, _, stats, details = checker.sniff_query(
             source_query=f"""
                 SELECT id, amount, '{FLAG_VALUE_NO}' AS {XSNIFF_PASSED_COLUMN}
                 FROM {TABLE_NAME}
@@ -147,7 +147,7 @@ class TestPostgresSniffQuery:
             tolerance_pct=0.0,
         )
 
-        assert status == COMPARISON_FAILED
+        assert status == CHECK_FAILED
         assert stats.total_source_rows == 1
         assert stats.passed_rows == 0
         assert stats.issue_rows_pct == 100.0

@@ -1,16 +1,16 @@
 """
-Test sample comparison with compound primary key between ClickHouse and PostgreSQL.
+Test sample check with compound primary key between ClickHouse and PostgreSQL.
 """
 
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
 class TestClickHousePostgresCompoundKey:
-    """Cross-database sample comparison with compound primary key"""
+    """Cross-database sample check with compound primary key"""
 
     @pytest.fixture(autouse=True)
     def setup_compound_key_data(self, clickhouse_engine, postgres_engine, table_helper):
@@ -69,17 +69,17 @@ class TestClickHousePostgresCompoundKey:
 
     def test_sample_with_compound_key(self, clickhouse_engine, postgres_engine):
         """
-        Test sample comparison with compound primary key.
+        Test sample check with compound primary key.
         """
         table_name = 'test_ch_pg_compound_key'
 
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=clickhouse_engine,
             target_engine=postgres_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_date',
@@ -89,8 +89,8 @@ class TestClickHousePostgresCompoundKey:
             tolerance_pct=0.0,
         )
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         assert stats.final_diff_score == 0.0
         print(
-            f'ClickHouse   PostgreSQL compound key comparison passed: {stats.final_score:.2f}%'
+            f'ClickHouse   PostgreSQL compound key check passed: {stats.final_score:.2f}%'
         )

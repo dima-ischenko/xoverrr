@@ -2,9 +2,9 @@ import pandas as pd
 import pytest
 
 from xoverrr.constants import (
-    COMPARISON_FAILED,
-    COMPARISON_SUCCESS,
-    COMPARISON_TYPE_SNIFF_QUERY,
+    CHECK_FAILED,
+    CHECK_SUCCESS,
+    CHECK_TYPE_SNIFF_QUERY,
     FLAG_VALUE_NO,
     FLAG_VALUE_YES,
     XSNIFF_PASSED_COLUMN,
@@ -85,21 +85,21 @@ class TestSniffQueryUtils:
 
 
 class TestSniffQuery:
-    def _build_comparator(self, monkeypatch, source_df, metadata):
-        from xoverrr.core import DataQualityComparator
+    def _build_checker(self, monkeypatch, source_df, metadata):
+        from xoverrr.core import DataQualityChecker
 
         class DummyAdapter:
             def convert_types(self, df, metadata, timezone):
                 return df
 
-        comparator = DataQualityComparator.__new__(DataQualityComparator)
-        comparator.source_engine = object()
-        comparator.target_engine = None
-        comparator.source_db_type = type('DB', (), {'name': 'POSTGRESQL'})()
-        comparator.target_db_type = None
-        comparator.timezone = 'UTC'
-        comparator.comparison_stats = {
-            'compared': 0,
+        checker = DataQualityChecker.__new__(DataQualityChecker)
+        checker.source_engine = object()
+        checker.target_engine = None
+        checker.source_db_type = type('DB', (), {'name': 'POSTGRESQL'})()
+        checker.target_db_type = None
+        checker.timezone = 'UTC'
+        checker.check_stats = {
+            'checked': 0,
             'success': 0,
             'failed': 0,
             'skipped': 0,
@@ -109,52 +109,52 @@ class TestSniffQuery:
             'start_time': '2025-01-01 00:00:00',
             'end_time': None,
         }
-        comparator.result_persister = type(
+        checker.result_persister = type(
             'Persister', (), {'persist': lambda *args, **kwargs: None}
         )()
-        comparator._report_context = {
+        checker._report_context = {
             'library_version': '1.2.5',
             'source_db_type': 'postgresql',
             'target_db_type': None,
         }
-        comparator._finalize_calls = []
+        checker._finalize_calls = []
 
         monkeypatch.setattr(
-            comparator,
+            checker,
             '_get_metadata_cols_for_custom_query',
             lambda query, engine: metadata,
         )
         monkeypatch.setattr(
-            comparator,
+            checker,
             '_execute_query',
             lambda query, engine, timezone=None, query_side=None: source_df.copy(),
         )
         monkeypatch.setattr(
-            comparator,
+            checker,
             '_get_adapter',
             lambda db_type: DummyAdapter(),
         )
         monkeypatch.setattr(
-            comparator,
-            '_start_comparison_run',
-            lambda comparison_type, comparison_name: ('run123', '2025-01-01 00:00:00'),
+            checker,
+            '_start_check_run',
+            lambda check_type, check_name: ('run123', '2025-01-01 00:00:00'),
         )
 
         def _capture_finalize(**kwargs):
-            comparator._finalize_calls.append(kwargs)
+            checker._finalize_calls.append(kwargs)
             return kwargs['report']
 
-        monkeypatch.setattr(comparator, '_finalize_comparison', _capture_finalize)
-        monkeypatch.setattr(comparator, '_update_stats', lambda status, table: None)
-        comparator._run_timings = type(
+        monkeypatch.setattr(checker, '_finalize_check', _capture_finalize)
+        monkeypatch.setattr(checker, '_update_stats', lambda status, table: None)
+        checker._run_timings = type(
             'Timings',
             (),
             {
-                'mark_dataset_compare_start': lambda self: None,
-                'mark_dataset_compare_end': lambda self: None,
+                'mark_dataset_check_start': lambda self: None,
+                'mark_dataset_check_end': lambda self: None,
             },
         )()
-        return comparator
+        return checker
 
     def test_sniff_query_row_level(self, monkeypatch):
         source_df = pd.DataFrame(
@@ -166,74 +166,74 @@ class TestSniffQuery:
         metadata = pd.DataFrame(
             {'column_name': ['order_id', XSNIFF_PASSED_COLUMN]}
         )
-        comparator = self._build_comparator(monkeypatch, source_df, metadata)
+        checker = self._build_checker(monkeypatch, source_df, metadata)
 
-        status, report, stats, details = comparator.sniff_query(
+        status, report, stats, details = checker.sniff_query(
             source_query='SELECT order_id, xsniff_passed FROM orders',
             tolerance_pct=50.0,
         )
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         assert sniff_issue_row_count(stats) == 1
         assert stats.issue_rows_pct == pytest.approx(100 / 3)
-        assert 'SNIFF QUERY REPORT' in report
-        assert comparator._finalize_calls[-1]['comparison_type'] == COMPARISON_TYPE_SNIFF_QUERY
+        assert 'SNIFF CHECK REPORT' in report
+        assert checker._finalize_calls[-1]['check_type'] == CHECK_TYPE_SNIFF_QUERY
 
     def test_sniff_query_pass_fail_scalar(self, monkeypatch):
         source_df = pd.DataFrame({XSNIFF_PASSED_COLUMN: [FLAG_VALUE_YES]})
         metadata = pd.DataFrame({'column_name': [XSNIFF_PASSED_COLUMN]})
-        comparator = self._build_comparator(monkeypatch, source_df, metadata)
+        checker = self._build_checker(monkeypatch, source_df, metadata)
 
-        status, report, stats, details = comparator.sniff_query(
+        status, report, stats, details = checker.sniff_query(
             source_query="SELECT 'y' AS xsniff_passed",
             tolerance_pct=0.0,
         )
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         assert stats.final_score == pytest.approx(100.0)
 
     def test_sniff_query_failure(self, monkeypatch):
         source_df = pd.DataFrame({XSNIFF_PASSED_COLUMN: [FLAG_VALUE_NO]})
         metadata = pd.DataFrame({'column_name': [XSNIFF_PASSED_COLUMN]})
-        comparator = self._build_comparator(monkeypatch, source_df, metadata)
+        checker = self._build_checker(monkeypatch, source_df, metadata)
 
-        status, report, stats, details = comparator.sniff_query(
+        status, report, stats, details = checker.sniff_query(
             source_query="SELECT 'n' AS xsniff_passed",
             tolerance_pct=0.0,
         )
 
-        assert status == COMPARISON_FAILED
+        assert status == CHECK_FAILED
         assert stats.final_score == pytest.approx(0.0)
 
-    def test_compare_methods_require_target_engine(self):
-        from xoverrr.core import DataQualityComparator
+    def test_check_methods_require_target_engine(self):
+        from xoverrr.core import DataQualityChecker
 
-        comparator = DataQualityComparator.__new__(DataQualityComparator)
-        comparator.target_engine = None
+        checker = DataQualityChecker.__new__(DataQualityChecker)
+        checker.target_engine = None
 
         with pytest.raises(ValueError, match='target_engine is required'):
-            comparator._require_target_engine()
+            checker._require_target_engine()
 
-    def test_compare_custom_query_requires_pk(self, monkeypatch):
-        from xoverrr.core import DataQualityComparator
+    def test_check_query_requires_pk(self, monkeypatch):
+        from xoverrr.core import DataQualityChecker
 
-        comparator = DataQualityComparator.__new__(DataQualityComparator)
-        comparator.source_engine = object()
-        comparator.target_engine = object()
-        comparator.timezone = 'UTC'
-        comparator.comparison_stats = {'compared': 0}
-        comparator.result_persister = type(
+        checker = DataQualityChecker.__new__(DataQualityChecker)
+        checker.source_engine = object()
+        checker.target_engine = object()
+        checker.timezone = 'UTC'
+        checker.check_stats = {'checked': 0}
+        checker.result_persister = type(
             'Persister', (), {'persist': lambda *args, **kwargs: None}
         )()
 
         monkeypatch.setattr(
-            comparator,
-            '_start_comparison_run',
-            lambda comparison_type, comparison_name: ('run123', '2025-01-01 00:00:00'),
+            checker,
+            '_start_check_run',
+            lambda check_type, check_name: ('run123', '2025-01-01 00:00:00'),
         )
 
         with pytest.raises(ValueError, match='custom_primary_key'):
-            comparator.compare_custom_query(
+            checker.check_query(
                 source_query='SELECT id FROM source_table',
                 source_params={},
                 target_query='SELECT id FROM target_table',

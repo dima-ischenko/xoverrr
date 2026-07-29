@@ -1,7 +1,7 @@
 import pytest
 
-from xoverrr.constants import COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
 class TestPostgresOracleMixedTimezoneOffsets:
@@ -65,17 +65,17 @@ class TestPostgresOracleMixedTimezoneOffsets:
 
         yield
 
-    def test_date_only_comparison_with_utc(self, postgres_engine, oracle_engine):
+    def test_date_only_check_with_utc(self, postgres_engine, oracle_engine):
         # pytest.skip('issue #33')
         table_name = 'test_mixed_timezones_counts_ora_pg'
 
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
             timezone='US/Pacific',
         )
 
-        status, report, stats, details = comparator.compare_counts(
+        status, report, stats, details = checker.check_counts(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='created_on',
@@ -83,5 +83,5 @@ class TestPostgresOracleMixedTimezoneOffsets:
             tolerance_pct=0.0,
         )
         print(report)
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         assert stats.final_score == 100.0

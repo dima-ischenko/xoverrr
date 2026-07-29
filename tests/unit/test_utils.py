@@ -9,7 +9,7 @@ from xoverrr.constants import (
     FLAG_VALUE_YES,
     XRECENTLY_CHANGED_COLUMN,
 )
-from xoverrr.utils import (ComparisonDiffDetails, ComparisonStats,
+from xoverrr.utils import (CheckDetails, CheckStats,
                            clean_recently_changed_data, compare_dataframes,
                            cross_fill_missing_dates, format_report_collection,
                            get_dataframe_size_gb, prepare_dataframe,
@@ -75,7 +75,7 @@ class TestUtils:
         assert stats.final_diff_score == pytest.approx(expected_score, rel=1e-5)
 
     def test_compare_dataframes_different_values(self):
-        """Test comparison with different values"""
+        """Test check with different values"""
         df1 = pd.DataFrame(
             {'id': [1, 2, 3], 'name': ['Alice', 'Bob', 'Charlie'], 'age': [25, 30, 35]}
         )
@@ -96,7 +96,7 @@ class TestUtils:
         assert len(details.issue_examples) == 3
 
     def test_compare_dataframes_empty(self):
-        """Test comparison with empty dataframes"""
+        """Test check with empty dataframes"""
         df1 = pd.DataFrame({'id': [], 'name': []})
         df2 = pd.DataFrame({'id': [], 'name': []})
 
@@ -105,7 +105,7 @@ class TestUtils:
         assert details is None
 
     def test_compare_dataframes_missing_columns_raises(self):
-        """Test comparison with missing key columns raises error"""
+        """Test check with missing key columns raises error"""
         df1 = pd.DataFrame({'id': [1], 'name': ['Alice']})
         df2 = pd.DataFrame({'name': ['Alice']})  # Missing id column
 
@@ -213,7 +213,7 @@ class TestUtils:
         assert stats.final_diff_score < 0.1
 
     def test_compound_primary_key(self):
-        """Test comparison with compound primary key"""
+        """Test check with compound primary key"""
         df1 = pd.DataFrame(
             {'id1': [1, 1, 2], 'id2': ['a', 'b', 'a'], 'value': [10, 20, 30]}
         )
@@ -295,7 +295,7 @@ class TestUtils:
         assert XRECENTLY_CHANGED_COLUMN not in df1_clean.columns
 
     def test_compare_dataframes_different_keys(self):
-        """Test comparison with different primary keys"""
+        """Test check with different primary keys"""
         df1 = pd.DataFrame({'id': [1, 2, 3], 'name': ['Alice', 'Bob', 'Charlie']})
 
         df2 = pd.DataFrame({'id': [1, 2, 4], 'name': ['Alice', 'Bob', 'David']})
@@ -311,7 +311,7 @@ class TestUtils:
         assert stats.final_diff_score == pytest.approx(expected_score, rel=1e-5)
 
     def test_compare_dataframes_missing_columns(self):
-        """Test comparison with missing key columns"""
+        """Test check with missing key columns"""
         df1 = pd.DataFrame({'id': [1], 'name': ['Alice']})
         df2 = pd.DataFrame({'name': ['Alice']})  # Missing id column
 
@@ -394,7 +394,7 @@ class TestUtils:
         assert stats.passed_rows == 3
 
     def test_compound_primary_key_with_duplicates(self):
-        """Test comparison with compound primary key and duplicate keys in source data (from unittest)"""
+        """Test check with compound primary key and duplicate keys in source data (from unittest)"""
         df1 = pd.DataFrame(
             {
                 'id1': [1, 1, 2, 3],

@@ -1,12 +1,12 @@
 """
 Test for bug fix: Mixed timezone offsets in timestamptz columns should be handled correctly.
-All cross-database comparisons with tz-aware columns must use UTC.
+All cross-database checks with tz-aware columns must use UTC.
 """
 
 import pytest
 
-from xoverrr.constants import COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
 class TestPostgresOracleMixedTimezoneOffsets:
@@ -78,10 +78,10 @@ class TestPostgresOracleMixedTimezoneOffsets:
 
     def test_custom_query_with_utc_for_tz_aware(self, postgres_engine, oracle_engine):
         """
-        Test custom query comparison with tz-aware data must use UTC.
+        Test custom query check with tz-aware data must use UTC.
         """
         # pytest.skip('issue #33')
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
             timezone='Europe/Paris',
@@ -101,7 +101,7 @@ class TestPostgresOracleMixedTimezoneOffsets:
               AND record_date < date_trunc('day', cast(:end_date as date)) + interval '1 day'
         """
 
-        status, report, stats, details = comparator.compare_custom_query(
+        status, report, stats, details = checker.check_query(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-08'},
             target_query=target_query,
@@ -111,5 +111,5 @@ class TestPostgresOracleMixedTimezoneOffsets:
         )
         print(report)
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         print(f'custom query with UTC for tz-aware passed: {stats.final_score:.2f}%')

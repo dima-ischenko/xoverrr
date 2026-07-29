@@ -1,8 +1,8 @@
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import COMPARISON_FAILED, COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_FAILED, CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
 RESULTS_TABLE_SAMPLE = 'test_persist_postgres_results'
@@ -56,8 +56,8 @@ class TestPostgresPersistenceE2E:
 
         yield
 
-    def _build_comparator(self, postgres_engine):
-        return DataQualityComparator(
+    def _build_checker(self, postgres_engine):
+        return DataQualityChecker(
             source_engine=postgres_engine,
             target_engine=postgres_engine,
             results_engine=postgres_engine,
@@ -68,7 +68,7 @@ class TestPostgresPersistenceE2E:
         src_table = 'test_persist_postgres_src'
         trg_table = 'test_persist_postgres_trg'
 
-        status, _, _, _ = self._build_comparator(postgres_engine).compare_sample(
+        status, _, _, _ = self._build_checker(postgres_engine).check_sample(
             source_table=DataReference(src_table, 'test'),
             target_table=DataReference(trg_table, 'test'),
             date_column='created_at',
@@ -79,26 +79,26 @@ class TestPostgresPersistenceE2E:
             report_output_format='json',
         )
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
 
         with postgres_engine.begin() as conn:
             row = conn.execute(
                 text(
                     f"""
-                    SELECT comparison_type, status, report
+                    SELECT check_type, status, report
                     FROM {RESULTS_TABLE_SAMPLE}
                     """
                 )
             ).fetchone()
 
-        assert row[0] == 'sample' and row[1] == COMPARISON_SUCCESS
-        assert 'DATA SAMPLE COMPARISON REPORT' in row[2]
+        assert row[0] == 'sample' and row[1] == CHECK_SUCCESS
+        assert 'DATA SAMPLE CHECK REPORT' in row[2]
 
     def test_postgres_persistence_counts_e2e(self, postgres_engine):
         src_table = 'test_persist_postgres_src'
         trg_table = 'test_persist_postgres_trg'
 
-        status, _, _, _ = self._build_comparator(postgres_engine).compare_counts(
+        status, _, _, _ = self._build_checker(postgres_engine).check_counts(
             source_table=DataReference(src_table, 'test'),
             target_table=DataReference(trg_table, 'test'),
             date_column='created_at',
@@ -108,20 +108,20 @@ class TestPostgresPersistenceE2E:
             report_output_format='json',
         )
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
 
         with postgres_engine.begin() as conn:
             row = conn.execute(
                 text(
                     f"""
-                    SELECT comparison_type, status, report
+                    SELECT check_type, status, report
                     FROM {RESULTS_TABLE_COUNTS}
                     """
                 )
             ).fetchone()
 
-        assert row[:2] == ('count', COMPARISON_SUCCESS)
-        assert 'COUNT COMPARISON REPORT' in row[2]
+        assert row[:2] == ('count', CHECK_SUCCESS)
+        assert 'COUNT CHECK REPORT' in row[2]
 
     def test_postgres_persistence_custom_query_e2e(self, postgres_engine):
         src_table = 'test_persist_postgres_src'
@@ -141,7 +141,7 @@ class TestPostgresPersistenceE2E:
         """
         query_params = {'start_date': '2024-01-01', 'end_date': '2024-01-04'}
 
-        status, _, _, _ = self._build_comparator(postgres_engine).compare_custom_query(
+        status, _, _, _ = self._build_checker(postgres_engine).check_query(
             source_query=source_query,
             source_params=query_params,
             target_query=target_query,
@@ -152,19 +152,19 @@ class TestPostgresPersistenceE2E:
             report_output_format='json',
         )
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
 
         with postgres_engine.begin() as conn:
             row = conn.execute(
                 text(
                     f"""
-                    SELECT comparison_type, status, source_query, target_query
+                    SELECT check_type, status, source_query, target_query
                     FROM {RESULTS_TABLE_CUSTOM}
                     """
                 )
             ).fetchone()
 
-        assert row[:2] == ('custom_query', COMPARISON_SUCCESS)
+        assert row[:2] == ('custom_query', CHECK_SUCCESS)
         assert ':start_date' not in row[2] and "'2024-01-01'" in row[2]
         assert ':end_date' not in row[3] and "'2024-01-04'" in row[3]
 
@@ -209,7 +209,7 @@ class TestPostgresPersistenceE2E:
             """,
         )
 
-        status, report, stats, details = self._build_comparator(postgres_engine).compare_sample(
+        status, report, stats, details = self._build_checker(postgres_engine).check_sample(
             source_table=DataReference(failed_src, 'test'),
             target_table=DataReference(failed_trg, 'test'),
             date_column='created_at',
@@ -220,7 +220,7 @@ class TestPostgresPersistenceE2E:
             report_output_format='text',
         )
 
-        assert status == COMPARISON_FAILED
+        assert status == CHECK_FAILED
         assert stats.dup_source_rows > 0
         assert stats.dup_target_rows > 0
         assert stats.only_source_rows > 0
@@ -232,7 +232,7 @@ class TestPostgresPersistenceE2E:
                 text(
                     f"""
                     SELECT
-                        comparison_type,
+                        check_type,
                         status,
                         stats_dup_source_rows,
                         stats_only_source_rows,
@@ -246,7 +246,7 @@ class TestPostgresPersistenceE2E:
                 )
             ).fetchone()
 
-        assert row[:2] == ('sample', COMPARISON_FAILED)
+        assert row[:2] == ('sample', CHECK_FAILED)
         assert row[2] > 0 and row[3] > 0 and row[4] > 0
         assert f'Final discrepancies score: {row[6]:.5f}' in row[8]
         assert report == row[8]
@@ -296,7 +296,7 @@ class TestPostgresPersistenceE2E:
             """,
         )
 
-        status, report, stats, details = self._build_comparator(postgres_engine).compare_sample(
+        status, report, stats, details = self._build_checker(postgres_engine).check_sample(
             source_table=DataReference(failed_src, 'test'),
             target_table=DataReference(failed_trg, 'test'),
             date_column='created_at',
@@ -307,7 +307,7 @@ class TestPostgresPersistenceE2E:
             report_output_format='text',
         )
 
-        assert status == COMPARISON_FAILED
+        assert status == CHECK_FAILED
         assert stats.only_source_rows >= 2
         assert stats.only_target_rows >= 2
         assert stats.comparable_rows == 3
@@ -320,7 +320,7 @@ class TestPostgresPersistenceE2E:
                 text(
                     f"""
                     SELECT
-                        comparison_type,
+                        check_type,
                         status,
                         stats_only_source_rows,
                         stats_only_target_rows,
@@ -331,7 +331,7 @@ class TestPostgresPersistenceE2E:
                 )
             ).fetchone()
 
-        assert row[:2] == ('sample', COMPARISON_FAILED)
+        assert row[:2] == ('sample', CHECK_FAILED)
         assert row[2] >= 2 and row[3] >= 2
         assert f'Source only rows %: {stats.source_only_rows_pct:.5f}' in row[5]
         assert f'Target only rows %: {stats.target_only_rows_pct:.5f}' in row[5]

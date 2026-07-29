@@ -1,14 +1,14 @@
 """
 Test for bug fix: Mixed timezone offsets in timestamptz columns should be handled correctly.
-ClickHouse ↔ PostgreSQL comparisons must handle timezone conversions properly.
+ClickHouse ↔ PostgreSQL checks must handle timezone conversions properly.
 ClickHouse doesn't store timezone info natively, so we store UTC times.
 """
 
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
 class TestPostgresClickHouseMixedTimezoneOffsets:
@@ -76,21 +76,21 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
 
         yield
 
-    def test_cross_db_comparison_must_use_utc(self, postgres_engine, clickhouse_engine):
+    def test_cross_db_check_must_use_utc(self, postgres_engine, clickhouse_engine):
         """
-        Test PostgreSQL ↔ ClickHouse comparison MUST use UTC.
+        Test PostgreSQL ↔ ClickHouse check MUST use UTC.
         ClickHouse stores UTC, PostgreSQL has tz-aware columns.
         """
         table_name = 'test_mixed_timezones_ch_pg'
 
         # Only UTC is valid for this comparison
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=clickhouse_engine,
             target_engine=postgres_engine,
             timezone='UTC',  # MUST be UTC
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='record_date',
@@ -100,7 +100,7 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
             tolerance_pct=0.0,
         )
         print(report)
-        assert status == COMPARISON_SUCCESS, 'Failed with UTC timezone'
+        assert status == CHECK_SUCCESS, 'Failed with UTC timezone'
         assert stats.final_diff_score == 0.0, f'Non-zero diff with UTC timezone'
         print(f'PostgreSQL   ClickHouse with UTC passed: {stats.final_score:.2f}%')
 
@@ -113,13 +113,13 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
         """
         table_name = 'test_mixed_timezones_ch_pg'
 
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=clickhouse_engine,
             target_engine=postgres_engine,
             timezone='UTC',  # Must be UTC since ClickHouse stores UTC
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='record_date',
@@ -129,15 +129,15 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
             tolerance_pct=0.0,
         )
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         assert stats.final_diff_score == 0.0
         print(f'ClickHouse   PostgreSQL with UTC passed: {stats.final_score:.2f}%')
 
-    def test_clickhouse_tz_naive_comparison(
+    def test_clickhouse_tz_naive_check(
         self, clickhouse_engine, postgres_engine, table_helper
     ):
         """
-        Test comparison with ClickHouse tz-naive columns.
+        Test check with ClickHouse tz-naive columns.
         Can use any timezone since ClickHouse doesn't store timezone info.
         """
         table_name = 'test_ch_pg_tz_naive'
@@ -181,13 +181,13 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
             """,
         )
 
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=clickhouse_engine,
             target_engine=postgres_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='record_date',
@@ -195,7 +195,7 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
             tolerance_pct=0.0,
         )
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
 
     def test_mixed_tz_types_not_allowed(
         self, postgres_engine, clickhouse_engine, table_helper
@@ -244,13 +244,13 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
             """,
         )
 
-        # This comparison should fail or show discrepancies
-        comparator = DataQualityComparator(
+        # This check should fail or show discrepancies
+        checker = DataQualityChecker(
             source_engine=postgres_engine,
             target_engine=clickhouse_engine,
             timezone='UTC',  # Even UTC won't help mixing tz-aware with tz-naive
         )
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='record_date',
@@ -258,7 +258,7 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
             tolerance_pct=0.0,
         )
         print(report)
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
 
     def test_date_boundary_with_timezone_conversion(
         self, postgres_engine, clickhouse_engine
@@ -268,14 +268,14 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
         """
         table_name = 'test_mixed_timezones_ch_pg'
 
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=postgres_engine,
             target_engine=clickhouse_engine,
             timezone='UTC',  # Must use UTC
         )
 
         # Test filtering on the boundary date
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='record_date',
@@ -283,7 +283,7 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
             tolerance_pct=0.0,
         )
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         # Should have the boundary record (id=6)
         assert stats.comparable_rows >= 1
         print(

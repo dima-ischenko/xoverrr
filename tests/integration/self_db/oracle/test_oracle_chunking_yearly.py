@@ -4,8 +4,8 @@ Year-range chunking integration tests for Oracle.
 
 import pytest
 
-from xoverrr.constants import COMPARISON_FAILED, COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_FAILED, CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
 class TestOracleYearlyChunking:
@@ -66,21 +66,21 @@ class TestOracleYearlyChunking:
         yield
 
     def test_oracle_chunking_30_days_matches_non_chunked(self, oracle_engine):
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=oracle_engine,
             timezone='UTC',
         )
         table_ref = DataReference('test_ora_chunking_yearly', 'test')
 
-        status_counts_full, _, stats_counts_full, _ = comparator.compare_counts(
+        status_counts_full, _, stats_counts_full, _ = checker.check_counts(
             source_table=table_ref,
             target_table=table_ref,
             date_column='created_at',
             date_range=('2024-01-01', '2024-12-31'),
             tolerance_pct=0.0,
         )
-        status_counts_chunked, _, stats_counts_chunked, _ = comparator.compare_counts(
+        status_counts_chunked, _, stats_counts_chunked, _ = checker.check_counts(
             source_table=table_ref,
             target_table=table_ref,
             date_column='created_at',
@@ -89,7 +89,7 @@ class TestOracleYearlyChunking:
             tolerance_pct=0.0,
         )
 
-        status_sample_full, _, stats_sample_full, _ = comparator.compare_sample(
+        status_sample_full, _, stats_sample_full, _ = checker.check_sample(
             source_table=table_ref,
             target_table=table_ref,
             date_column='created_at',
@@ -97,7 +97,7 @@ class TestOracleYearlyChunking:
             date_range=('2024-01-01', '2024-12-31'),
             tolerance_pct=0.0,
         )
-        status_sample_chunked, _, stats_sample_chunked, _ = comparator.compare_sample(
+        status_sample_chunked, _, stats_sample_chunked, _ = checker.check_sample(
             source_table=table_ref,
             target_table=table_ref,
             date_column='created_at',
@@ -107,20 +107,20 @@ class TestOracleYearlyChunking:
             tolerance_pct=0.0,
         )
 
-        assert status_counts_full == COMPARISON_SUCCESS
-        assert status_counts_chunked == COMPARISON_SUCCESS
+        assert status_counts_full == CHECK_SUCCESS
+        assert status_counts_chunked == CHECK_SUCCESS
         assert (
             stats_counts_chunked.final_diff_score == stats_counts_full.final_diff_score
         )
 
-        assert status_sample_full == COMPARISON_SUCCESS
-        assert status_sample_chunked == COMPARISON_SUCCESS
+        assert status_sample_full == CHECK_SUCCESS
+        assert status_sample_chunked == CHECK_SUCCESS
         assert (
             stats_sample_chunked.final_diff_score == stats_sample_full.final_diff_score
         )
 
     def test_oracle_chunking_30_days_negative_sample(self, oracle_engine):
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=oracle_engine,
             timezone='UTC',
@@ -129,7 +129,7 @@ class TestOracleYearlyChunking:
         target_ref = DataReference('test_ora_chunking_yearly_target', 'test')
 
         status_sample_full, _, stats_sample_full, details_sample_full = (
-            comparator.compare_sample(
+            checker.check_sample(
                 source_table=source_ref,
                 target_table=target_ref,
                 date_column='created_at',
@@ -139,7 +139,7 @@ class TestOracleYearlyChunking:
             )
         )
         status_sample_chunked, _, stats_sample_chunked, details_sample_chunked = (
-            comparator.compare_sample(
+            checker.check_sample(
                 source_table=source_ref,
                 target_table=target_ref,
                 date_column='created_at',
@@ -150,8 +150,8 @@ class TestOracleYearlyChunking:
             )
         )
 
-        assert status_sample_full == COMPARISON_FAILED
-        assert status_sample_chunked == COMPARISON_FAILED
+        assert status_sample_full == CHECK_FAILED
+        assert status_sample_chunked == CHECK_FAILED
         assert (
             stats_sample_chunked.final_diff_score == stats_sample_full.final_diff_score
         )

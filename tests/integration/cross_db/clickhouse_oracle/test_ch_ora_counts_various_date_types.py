@@ -1,12 +1,12 @@
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
 class TestClickHouseOracleCountsWithVariousDateTypes:
-    """Cross-database count-based comparison tests with various date/time types"""
+    """Cross-database count-based check tests with various date/time types"""
 
     @pytest.fixture(autouse=True)
     def setup_various_date_type_data(
@@ -102,13 +102,13 @@ class TestClickHouseOracleCountsWithVariousDateTypes:
         """Test count comparison using DATE column type"""
         table_name = 'test_ch_ora_date_types'
 
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=clickhouse_engine,
             target_engine=oracle_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_counts(
+        status, report, stats, details = checker.check_counts(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_date',  # DATE type
@@ -116,21 +116,21 @@ class TestClickHouseOracleCountsWithVariousDateTypes:
             tolerance_pct=0.0,
         )
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         assert stats.final_score == 100.0
-        print(f'DATE column count comparison passed: {stats.final_score:.2f}%')
+        print(f'DATE column count check passed: {stats.final_score:.2f}%')
 
     def test_counts_with_datetime_column(self, clickhouse_engine, oracle_engine):
         """Test count comparison using ClickHouse DateTime vs Oracle TIMESTAMP"""
         table_name = 'test_ch_ora_date_types'
 
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=clickhouse_engine,
             target_engine=oracle_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_counts(
+        status, report, stats, details = checker.check_counts(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_datetime',  # ClickHouse DateTime / Oracle TIMESTAMP
@@ -138,23 +138,23 @@ class TestClickHouseOracleCountsWithVariousDateTypes:
             tolerance_pct=0.0,
         )
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         assert stats.final_score == 100.0
         print(
-            f'DateTime/TIMESTAMP column count comparison passed: {stats.final_score:.2f}%'
+            f'DateTime/TIMESTAMP column count check passed: {stats.final_score:.2f}%'
         )
 
     def test_counts_with_datetime64_column(self, clickhouse_engine, oracle_engine):
         """Test count comparison using ClickHouse DateTime64 vs Oracle TIMESTAMP"""
         table_name = 'test_ch_ora_date_types'
 
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=clickhouse_engine,
             target_engine=oracle_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_counts(
+        status, report, stats, details = checker.check_counts(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_datetime64',  # ClickHouse DateTime64 / Oracle TIMESTAMP
@@ -162,23 +162,23 @@ class TestClickHouseOracleCountsWithVariousDateTypes:
             tolerance_pct=0.0,
         )
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         assert stats.final_score == 100.0
         print(
-            f'DateTime64/TIMESTAMP column count comparison passed: {stats.final_score:.2f}%'
+            f'DateTime64/TIMESTAMP column count check passed: {stats.final_score:.2f}%'
         )
 
     def test_counts_with_mixed_timezone(self, clickhouse_engine, oracle_engine):
-        """Test count comparison with explicit timezone setting"""
+        """Test count check with explicit timezone setting"""
         table_name = 'test_ch_ora_date_types'
 
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=clickhouse_engine,
             target_engine=oracle_engine,
             timezone='Europe/Athens',  # Named timezone
         )
 
-        status, report, stats, details = comparator.compare_counts(
+        status, report, stats, details = checker.check_counts(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_datetime',
@@ -188,5 +188,5 @@ class TestClickHouseOracleCountsWithVariousDateTypes:
 
         # Oracle thin client doesn't support named time zones, but should still work
         # with offset-based timezone conversion
-        assert status == COMPARISON_SUCCESS
-        print(f'Mixed timezone count comparison passed: {stats.final_score:.2f}%')
+        assert status == CHECK_SUCCESS
+        print(f'Mixed timezone count check passed: {stats.final_score:.2f}%')

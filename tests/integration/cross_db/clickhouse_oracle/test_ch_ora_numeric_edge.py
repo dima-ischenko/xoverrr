@@ -1,16 +1,16 @@
 """
-Test numeric type comparison between ClickHouse and Oracle.
+Test numeric type check between ClickHouse and Oracle.
 """
 
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import COMPARISON_FAILED, COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_FAILED, CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
 class TestClickHouseOracleNumericEdge:
-    """Tests for numeric type comparison between ClickHouse and Oracle"""
+    """Tests for numeric type check between ClickHouse and Oracle"""
 
     @pytest.fixture
     def numeric_large_data(self, clickhouse_engine, oracle_engine, table_helper):
@@ -374,7 +374,7 @@ class TestClickHouseOracleNumericEdge:
 
         yield table_name
 
-    def test_numeric_types_large_comparison(
+    def test_numeric_types_large_check(
         self, clickhouse_engine, oracle_engine, numeric_large_data
     ):
         # pytest.skip('issue #48')
@@ -382,13 +382,13 @@ class TestClickHouseOracleNumericEdge:
         Compare numeric types with large values between ClickHouse and Oracle.
         ClickHouse uses Decimal, Oracle uses NUMBER.
         """
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=clickhouse_engine,
             target_engine=oracle_engine,
-            timezone='UTC',  # Use UTC for consistent comparison
+            timezone='UTC',  # Use UTC for a consistent check
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference(numeric_large_data, 'test'),
             target_table=DataReference(numeric_large_data, 'test'),
             date_column='created_at',
@@ -397,7 +397,7 @@ class TestClickHouseOracleNumericEdge:
         )
         print(report)
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         print(f'Large numeric values test passed: {stats.final_score:.2f}%')
 
     def test_numeric_scientific_notation(
@@ -407,13 +407,13 @@ class TestClickHouseOracleNumericEdge:
         """
         Test that scientific notation is handled correctly between ClickHouse and Oracle.
         """
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=clickhouse_engine,
             target_engine=oracle_engine,
             timezone='UTC',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference(numeric_scientific_data, 'test'),
             target_table=DataReference(numeric_scientific_data, 'test'),
             date_column='created_at',
@@ -423,7 +423,7 @@ class TestClickHouseOracleNumericEdge:
 
         print(report)
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         print(f'Scientific notation test passed: {stats.final_score:.2f}%')
 
     def test_numeric_edge_precision(
@@ -436,13 +436,13 @@ class TestClickHouseOracleNumericEdge:
         - Numbers with many decimal places
         - Very small numbers
         """
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=clickhouse_engine,
             target_engine=oracle_engine,
             timezone='UTC',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference(numeric_edge_precision_data, 'test'),
             target_table=DataReference(numeric_edge_precision_data, 'test'),
             date_column='created_at',
@@ -452,7 +452,7 @@ class TestClickHouseOracleNumericEdge:
 
         print(report)
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         print(f'Edge precision test passed: {stats.final_score:.2f}%')
 
     def test_numeric_with_arithmetic_operations(
@@ -463,14 +463,14 @@ class TestClickHouseOracleNumericEdge:
         Test that arithmetic operations in queries produce consistent results
         between ClickHouse and Oracle.
         """
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=clickhouse_engine,
             target_engine=oracle_engine,
             timezone='UTC',
         )
 
         # Compare arithmetic expressions - note ClickHouse and Oracle have different syntax
-        status, report, stats, details = comparator.compare_custom_query(
+        status, report, stats, details = checker.check_query(
             source_query=f"""
                 SELECT 
                     id,
@@ -506,7 +506,7 @@ class TestClickHouseOracleNumericEdge:
         print('=' * 80)
         print(report)
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         print(f'Arithmetic operations test passed: {stats.final_score:.2f}%')
 
     def test_numeric_null_handling(
@@ -517,13 +517,13 @@ class TestClickHouseOracleNumericEdge:
         Test that NULL values in numeric columns are handled consistently
         between ClickHouse and Oracle.
         """
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=clickhouse_engine,
             target_engine=oracle_engine,
             timezone='UTC',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference(numeric_null_data, 'test'),
             target_table=DataReference(numeric_null_data, 'test'),
             date_column='created_at',
@@ -536,7 +536,7 @@ class TestClickHouseOracleNumericEdge:
         print('=' * 80)
         print(report)
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         assert stats.passed_rows == stats.comparable_rows
         print(f'NULL handling test passed: {stats.final_score:.2f}%')
 
@@ -548,13 +548,13 @@ class TestClickHouseOracleNumericEdge:
         Test Decimal precision handling between ClickHouse Decimal and Oracle NUMBER.
         ClickHouse has fixed precision Decimal, Oracle NUMBER has arbitrary precision.
         """
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=clickhouse_engine,
             target_engine=oracle_engine,
             timezone='UTC',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference(numeric_decimal_precision_data, 'test'),
             target_table=DataReference(numeric_decimal_precision_data, 'test'),
             date_column='created_at',
@@ -569,5 +569,5 @@ class TestClickHouseOracleNumericEdge:
 
         # Note: Some precision differences may exist between ClickHouse Decimal and Oracle NUMBER
         # Consider tolerance if needed
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         print(f'Decimal precision test passed: {stats.final_score:.2f}%')

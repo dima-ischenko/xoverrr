@@ -1,16 +1,16 @@
 import pytest
 
-from xoverrr.core import DataQualityComparator
+from xoverrr.core import DataQualityChecker
 
 
-def _comparator_without_init() -> DataQualityComparator:
-    return DataQualityComparator.__new__(DataQualityComparator)
+def _comparator_without_init() -> DataQualityChecker:
+    return DataQualityChecker.__new__(DataQualityChecker)
 
 
 def test_iter_date_chunks_returns_single_range_without_chunking():
-    comparator = _comparator_without_init()
+    checker = _comparator_without_init()
 
-    chunks = comparator._iter_date_chunks(
+    chunks = checker._iter_date_chunks(
         date_column='created_at',
         start_date='2024-01-01',
         end_date='2024-01-31',
@@ -21,9 +21,9 @@ def test_iter_date_chunks_returns_single_range_without_chunking():
 
 
 def test_iter_date_chunks_splits_range_by_days():
-    comparator = _comparator_without_init()
+    checker = _comparator_without_init()
 
-    chunks = comparator._iter_date_chunks(
+    chunks = checker._iter_date_chunks(
         date_column='created_at',
         start_date='2024-01-01',
         end_date='2024-01-31',
@@ -39,10 +39,10 @@ def test_iter_date_chunks_splits_range_by_days():
 
 
 def test_iter_date_chunks_raises_on_non_positive_chunk_size():
-    comparator = _comparator_without_init()
+    checker = _comparator_without_init()
 
     with pytest.raises(ValueError, match='chunk_size_days must be greater than 0'):
-        comparator._iter_date_chunks(
+        checker._iter_date_chunks(
             date_column='created_at',
             start_date='2024-01-01',
             end_date='2024-01-31',

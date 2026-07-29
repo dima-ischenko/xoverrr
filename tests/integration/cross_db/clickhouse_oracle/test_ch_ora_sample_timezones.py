@@ -1,13 +1,13 @@
 """
 Test for bug fix: Mixed timezone offsets in timestamptz columns should be handled correctly.
-Oracle ↔ ClickHouse comparisons must handle timezone conversions properly.
+Oracle ↔ ClickHouse checks must handle timezone conversions properly.
 """
 
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
 class TestClickHouseOracleMixedTimezoneOffsets:
@@ -77,17 +77,17 @@ class TestClickHouseOracleMixedTimezoneOffsets:
 
         yield
 
-    def test_comparison_with_non_utc_tz(self, oracle_engine, clickhouse_engine):
+    def test_check_with_non_utc_tz(self, oracle_engine, clickhouse_engine):
         # pytest.skip('issue #33')
         table_name = 'test_mixed_timezones_ch_ora'
 
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=clickhouse_engine,
             target_engine=oracle_engine,
             timezone='Europe/Paris',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='record_date',
@@ -97,7 +97,7 @@ class TestClickHouseOracleMixedTimezoneOffsets:
             tolerance_pct=0.0,
         )
         print(report)
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         assert stats.final_diff_score == 0.0
 
     def test_clickhouse_to_oracle_with_utc(self, clickhouse_engine, oracle_engine):
@@ -105,13 +105,13 @@ class TestClickHouseOracleMixedTimezoneOffsets:
         # pytest.skip('issue #33')
         table_name = 'test_mixed_timezones_ch_ora'
 
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=clickhouse_engine,
             target_engine=oracle_engine,
             timezone='UTC',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='record_date',
@@ -121,14 +121,14 @@ class TestClickHouseOracleMixedTimezoneOffsets:
             tolerance_pct=0.0,
         )
         print(report)
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         assert stats.final_diff_score == 0.0
 
-    def test_oracle_tz_naive_comparison(
+    def test_oracle_tz_naive_check(
         self, oracle_engine, clickhouse_engine, table_helper
     ):
         """
-        Test comparison with Oracle tz-naive TIMESTAMP columns.
+        Test check with Oracle tz-naive TIMESTAMP columns.
         Can use any timezone since both are tz-naive.
         """
         table_name = 'test_ch_ora_tz_naive'
@@ -172,13 +172,13 @@ class TestClickHouseOracleMixedTimezoneOffsets:
             """,
         )
 
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=clickhouse_engine,
             target_engine=oracle_engine,
             timezone='UTC',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='record_date',
@@ -186,4 +186,4 @@ class TestClickHouseOracleMixedTimezoneOffsets:
             tolerance_pct=0.0,
         )
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS

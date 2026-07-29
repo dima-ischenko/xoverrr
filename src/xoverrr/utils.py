@@ -53,7 +53,7 @@ def append_report_run_header(
         lines.append(f'target db type: {target_db_type}')
 
 
-def build_comparison_stats(
+def build_check_stats(
     total_source_rows: int,
     total_target_rows: int,
     dup_source_rows: int,
@@ -63,11 +63,11 @@ def build_comparison_stats(
     comparable_rows: int,
     passed_rows: int,
     issue_counts: Optional[List[int]] = None,
-) -> 'ComparisonStats':
+) -> 'CheckStats':
     issue_counts = issue_counts or []
 
     if comparable_rows == 0:
-        return ComparisonStats(
+        return CheckStats(
             total_source_rows=total_source_rows,
             total_target_rows=total_target_rows,
             dup_source_rows=dup_source_rows,
@@ -109,7 +109,7 @@ def build_comparison_stats(
         + issue_rows_pct * 0.5
     )
 
-    return ComparisonStats(
+    return CheckStats(
         total_source_rows=total_source_rows,
         total_target_rows=total_target_rows,
         dup_source_rows=dup_source_rows,
@@ -132,7 +132,7 @@ def build_comparison_stats(
 
 def normalize_column_names(columns: List[str]) -> List[str]:
     """
-    Normalize column names to lowercase for consistent comparison.
+    Normalize column names to lowercase for a consistent check.
 
     Parameters:
         columns: List of column names to normalize
@@ -144,8 +144,8 @@ def normalize_column_names(columns: List[str]) -> List[str]:
 
 
 @dataclass
-class ComparisonStats:
-    """Class for storing comparison statistics"""
+class CheckStats:
+    """Class for storing check statistics"""
 
     total_source_rows: int
     total_target_rows: int
@@ -173,7 +173,7 @@ class ComparisonStats:
 
 
 @dataclass
-class ComparisonDiffDetails:
+class CheckDetails:
     issue_breakdown: pd.DataFrame
     issue_examples: pd.DataFrame
 
@@ -193,10 +193,10 @@ def build_sniff_issue_stats(
     total_rows: int,
     passed_rows: int,
     issue_rows: int,
-) -> ComparisonStats:
-    """Build ComparisonStats for source-only sniff_query checks."""
+) -> CheckStats:
+    """Build CheckStats for source-only sniff_query checks."""
     if total_rows == 0:
-        return ComparisonStats(
+        return CheckStats(
             total_source_rows=0,
             total_target_rows=0,
             dup_source_rows=0,
@@ -217,7 +217,7 @@ def build_sniff_issue_stats(
         )
 
     issue_rows_pct = (issue_rows / total_rows) * 100
-    return ComparisonStats(
+    return CheckStats(
         total_source_rows=total_rows,
         total_target_rows=0,
         dup_source_rows=0,
@@ -238,7 +238,7 @@ def build_sniff_issue_stats(
     )
 
 
-def sniff_issue_row_count(stats: ComparisonStats) -> int:
+def sniff_issue_row_count(stats: CheckStats) -> int:
     """Issue (failed) row count for sniff_query stats."""
     return max(0, stats.total_source_rows - stats.passed_rows)
 
@@ -262,7 +262,7 @@ def resolve_sniff_query_passed_column(columns: List[str]) -> str:
 def evaluate_sniff_query_data(
     df: pd.DataFrame,
     max_examples: int = DEFAULT_MAX_EXAMPLES,
-) -> Tuple[ComparisonStats, ComparisonDiffDetails]:
+) -> Tuple[CheckStats, CheckDetails]:
     """
     Classify rows from a sniff_query using ``xsniff_passed``.
 
@@ -288,7 +288,7 @@ def evaluate_sniff_query_data(
         .reset_index(name='count')
     )
 
-    details = ComparisonDiffDetails(
+    details = CheckDetails(
         issue_breakdown=issue_breakdown,
         issue_examples=pd.DataFrame(),
         dup_source_keys_examples=tuple(),
@@ -405,7 +405,7 @@ def compare_dataframes(
     target_df: pd.DataFrame,
     key_columns: List[str],
     max_examples: int = DEFAULT_MAX_EXAMPLES,
-) -> tuple[ComparisonStats, ComparisonDiffDetails]:
+) -> tuple[CheckStats, CheckDetails]:
     """
     Efficient comparison of two dataframes by primary key when discrepancies ratio quite small,
     to analyze the difference in primary keys values and column values
@@ -427,8 +427,8 @@ def compare_dataframes(
     Returns:
     --------
     Dict with
-        1) ComparisonStats Object with comparison statistics
-        2) ComparisonDiffDetails Object with additional details, like the examples and per column diff data
+        1) CheckStats object with check statistics
+        2) CheckDetails Object with additional details, like the examples and per column diff data
     """
     app_logger.info('start')
 
@@ -517,7 +517,7 @@ def compare_dataframes(
 
     if not common_keys_cnt:
         # Special case when there is no matched primary keys at all
-        comparison_stats = build_comparison_stats(
+        check_stats = build_check_stats(
             total_source_rows=len(source_df),
             total_target_rows=len(target_df),
             dup_source_rows=source_dup_cnt,
@@ -529,7 +529,7 @@ def compare_dataframes(
             issue_counts=[],
         )
 
-        comparison_diff_detais = ComparisonDiffDetails(
+        check_details = CheckDetails(
             issue_breakdown=pd.DataFrame(),
             issue_examples=pd.DataFrame(),
             dup_source_keys_examples=source_dup_keys_examples,
@@ -541,7 +541,7 @@ def compare_dataframes(
         )
         app_logger.info('end')
 
-        return comparison_stats, comparison_diff_detais
+        return check_stats, check_details
 
     # get number of that totally equal in two datasets
     total_matched_records_cnt = common_keys_cnt - xor_common_keys_cnt
@@ -550,7 +550,7 @@ def compare_dataframes(
         xor_df_multi, key_columns, non_key_columns, common_keys_cnt, max_examples
     )
 
-    comparison_stats = build_comparison_stats(
+    check_stats = build_check_stats(
         total_source_rows=len(source_df),
         total_target_rows=len(target_df),
         dup_source_rows=source_dup_cnt,
@@ -562,7 +562,7 @@ def compare_dataframes(
         issue_counts=diff_col_counters['issue_count'].tolist(),
     )
 
-    comparison_diff_detais = ComparisonDiffDetails(
+    check_details = CheckDetails(
         issue_breakdown=diff_col_counters,
         issue_examples=diff_col_examples,
         dup_source_keys_examples=source_dup_keys_examples,
@@ -574,7 +574,7 @@ def compare_dataframes(
     )
 
     app_logger.info('end')
-    return comparison_stats, comparison_diff_detais
+    return check_stats, check_details
 
 
 def _validate_input_data(
@@ -595,11 +595,11 @@ def _create_keys_set(df: pd.DataFrame, key_columns: List[str]) -> set:
     return set(df[key_columns].itertuples(index=False, name=None))
 
 
-def generate_comparison_sample_report(
+def generate_check_sample_report(
     source_table: str,
     target_table: str,
-    stats: ComparisonStats,
-    details: ComparisonDiffDetails,
+    stats: CheckStats,
+    details: CheckDetails,
     timezone: str,
     run_id: str,
     run_started_at: str,
@@ -612,7 +612,7 @@ def generate_comparison_sample_report(
     source_db_type: Optional[str] = None,
     target_db_type: Optional[str] = None,
 ) -> str:
-    """Generate comparison report (logger output looks uuugly)"""
+    """Generate check report (logger output looks uuugly)"""
     rl = []
     append_report_run_header(
         rl,
@@ -622,7 +622,7 @@ def generate_comparison_sample_report(
         source_db_type=source_db_type,
         target_db_type=target_db_type,
     )
-    rl.append('DATA SAMPLE COMPARISON REPORT: ')
+    rl.append('DATA SAMPLE CHECK REPORT: ')
     if source_table and target_table:
         rl.append(f'{source_table}')
         rl.append('VS')
@@ -716,11 +716,11 @@ def generate_comparison_sample_report(
     return '\n'.join(rl)
 
 
-def generate_comparison_count_report(
+def generate_check_count_report(
     source_table: str,
     target_table: str,
-    stats: ComparisonStats,
-    details: ComparisonDiffDetails,
+    stats: CheckStats,
+    details: CheckDetails,
     total_source_count: int,
     total_target_count: int,
     discrepancies_counters_pct: int,
@@ -738,7 +738,7 @@ def generate_comparison_count_report(
     source_db_type: Optional[str] = None,
     target_db_type: Optional[str] = None,
 ) -> None:
-    """Generates comparison report (logger output looks uuugly)"""
+    """Generates check report (logger output looks uuugly)"""
     rl = []
     append_report_run_header(
         rl,
@@ -748,7 +748,7 @@ def generate_comparison_count_report(
         source_db_type=source_db_type,
         target_db_type=target_db_type,
     )
-    rl.append(f'COUNT COMPARISON REPORT:')
+    rl.append(f'COUNT CHECK REPORT:')
     rl.append(f'{source_table}')
     rl.append(f'VS')
     rl.append(f'{target_table}')
@@ -929,18 +929,18 @@ def create_result_message(
     source_total: int,
     target_total: int,
     discrepancies: pd.DataFrame,
-    comparison_type: str,
+    check_type: str,
 ) -> str:
     """Create standardized result message"""
     if discrepancies.empty:
-        return f'{comparison_type} match: Source={source_total}, Target={target_total}'
+        return f'{check_type} match: Source={source_total}, Target={target_total}'
 
     issue_count = len(discrepancies)
     diff = source_total - target_total
     diff_msg = f' (Δ={diff})' if diff != 0 else ''
 
     return (
-        f'{comparison_type} mismatch: Source={source_total}, Target={target_total}{diff_msg}, '
+        f'{check_type} mismatch: Source={source_total}, Target={target_total}{diff_msg}, '
         f'{issue_count} discrepancies found'
     )
 

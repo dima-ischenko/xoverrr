@@ -1,16 +1,16 @@
 """
-Test NULL values comparison between Oracle and PostgreSQL.
+Test NULL values check between Oracle and PostgreSQL.
 """
 
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
-class TestNullValuesComparison:
-    """Tests for NULL values comparison"""
+class TestNullValuesCheck:
+    """Tests for NULL values check"""
 
     @pytest.fixture(autouse=True)
     def setup_null_data(self, oracle_engine, postgres_engine, table_helper):
@@ -62,19 +62,19 @@ class TestNullValuesComparison:
 
         yield
 
-    def test_null_values_comparison(self, oracle_engine, postgres_engine):
+    def test_null_values_check(self, oracle_engine, postgres_engine):
         """
         Compare tables with NULL values in different columns.
         """
         table_name = 'test_edge_nulls'
 
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='created_at',
@@ -82,5 +82,5 @@ class TestNullValuesComparison:
             tolerance_pct=0.0,
         )
 
-        assert status == COMPARISON_SUCCESS
-        print(f'NULL values comparison passed: {stats.final_score:.2f}%')
+        assert status == CHECK_SUCCESS
+        print(f'NULL values check passed: {stats.final_score:.2f}%')
