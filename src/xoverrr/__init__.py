@@ -1,31 +1,31 @@
-from .constants import (COMPARISON_FAILED, COMPARISON_SKIPPED,
-                        COMPARISON_SUCCESS, COMPARISON_TYPE_SNIFF_QUERY,
+from .constants import (CHECK_FAILED, CHECK_SKIPPED,
+                        CHECK_SUCCESS, CHECK_TYPE_SNIFF_QUERY,
                         FLAG_VALUE_NO, FLAG_VALUE_YES, XSNIFF_PASSED_COLUMN,
                         XSNIFF_PASSED_VALUE_NO, XSNIFF_PASSED_VALUE_YES,
                         XRECENTLY_CHANGED_COLUMN)
-from .core import DataQualityComparator, DataReference
-from .reporting import ComparisonResult, generate_count_report, generate_sample_report, generate_sniff_query_report
-from .utils import ComparisonStats, ComparisonDiffDetails
+from .core import DataQualityChecker, DataReference
+from .reporting import CheckResult, generate_count_report, generate_sample_report, generate_sniff_query_report
+from .utils import CheckStats, CheckDetails
 
 __all__ = [
-    'DataQualityComparator',
+    'DataQualityChecker',
     'DataReference',
-    'ComparisonStats',
-    'ComparisonDiffDetails',
-    'ComparisonResult',
+    'CheckStats',
+    'CheckDetails',
+    'CheckResult',
     'generate_sample_report',
     'generate_count_report',
     'generate_sniff_query_report',
-    'COMPARISON_SUCCESS',
-    'COMPARISON_FAILED',
-    'COMPARISON_SKIPPED',
+    'CHECK_SUCCESS',
+    'CHECK_FAILED',
+    'CHECK_SKIPPED',
     'FLAG_VALUE_YES',
     'FLAG_VALUE_NO',
     'XRECENTLY_CHANGED_COLUMN',
     'XSNIFF_PASSED_COLUMN',
     'XSNIFF_PASSED_VALUE_YES',
     'XSNIFF_PASSED_VALUE_NO',
-    'COMPARISON_TYPE_SNIFF_QUERY',
+    'CHECK_TYPE_SNIFF_QUERY',
 ]
 
 from .version import __version__

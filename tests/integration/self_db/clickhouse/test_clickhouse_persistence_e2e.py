@@ -1,8 +1,8 @@
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
 class TestClickHousePersistenceE2E:
@@ -50,14 +50,14 @@ class TestClickHousePersistenceE2E:
         trg_table = 'test_persist_clickhouse_trg'
         results_table = 'test_persist_clickhouse_results'
 
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=clickhouse_engine,
             target_engine=clickhouse_engine,
             results_engine=clickhouse_engine,
             timezone='UTC',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference(src_table, 'test'),
             target_table=DataReference(trg_table, 'test'),
             date_column='created_at',
@@ -65,14 +65,14 @@ class TestClickHousePersistenceE2E:
             custom_primary_key=['id'],
             tolerance_pct=0.0,
             persist_result=DataReference(results_table),
-            comparison_tags={'adapter': 'clickhouse', 'kind': 'self_db'},
+            check_tags={'adapter': 'clickhouse', 'kind': 'self_db'},
             report_output_format='json',
         )
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         assert stats.final_diff_score == 0.0
         assert details is not None
-        assert '"comparison_type": "sample"' in report
+        assert '"check_type": "sample"' in report
 
         with clickhouse_engine.begin() as conn:
             row = conn.execute(
@@ -91,8 +91,8 @@ class TestClickHousePersistenceE2E:
             ).fetchone()
 
         assert row is not None
-        assert row[0] == COMPARISON_SUCCESS
-        assert row[1] is not None and 'DATA SAMPLE COMPARISON REPORT' in row[1]
+        assert row[0] == CHECK_SUCCESS
+        assert row[1] is not None and 'DATA SAMPLE CHECK REPORT' in row[1]
         assert int(row[2]) == 3
         assert int(row[3]) == 3
         assert float(row[4]) == pytest.approx(100.0, rel=1e-6)

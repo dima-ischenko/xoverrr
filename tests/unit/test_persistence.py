@@ -7,39 +7,39 @@ from sqlalchemy import create_engine
 from xoverrr import constants as ct
 from xoverrr.models import DataReference
 from xoverrr.persistence import (
-    ComparisonResultPersister,
-    ComparisonRunTimings,
+    CheckResultPersister,
+    CheckRunTimings,
     build_run_id,
     parse_persist_result_option,
     validate_run_id,
 )
 from xoverrr.reporting import (
-    build_comparison_result,
-    format_comparison_result,
+    build_check_result,
+    format_check_result,
     validate_report_output_format,
 )
-from xoverrr.utils import ComparisonDiffDetails, ComparisonStats
+from xoverrr.utils import CheckDetails, CheckStats
 
 RUN_STARTED_AT = '2026-01-01 00:00:00'
 RUN_FINISHED_AT = '2026-01-01 00:00:05'
 RUN_ID = 'internal-run-id'
 
 
-def _build_timings() -> ComparisonRunTimings:
-    return ComparisonRunTimings(
+def _build_timings() -> CheckRunTimings:
+    return CheckRunTimings(
         run_started_at=RUN_STARTED_AT,
         run_finished_at=RUN_FINISHED_AT,
         source_query_started_at='2026-01-01 00:00:01',
         source_query_finished_at='2026-01-01 00:00:02',
         target_query_started_at='2026-01-01 00:00:02',
         target_query_finished_at='2026-01-01 00:00:03',
-        dataset_compare_started_at='2026-01-01 00:00:03',
-        dataset_compare_finished_at='2026-01-01 00:00:04',
+        dataset_check_started_at='2026-01-01 00:00:03',
+        dataset_check_finished_at='2026-01-01 00:00:04',
     )
 
 
-def _build_stats() -> ComparisonStats:
-    return ComparisonStats(
+def _build_stats() -> CheckStats:
+    return CheckStats(
         total_source_rows=10,
         total_target_rows=10,
         dup_source_rows=0,
@@ -60,8 +60,8 @@ def _build_stats() -> ComparisonStats:
     )
 
 
-def _build_details() -> ComparisonDiffDetails:
-    return ComparisonDiffDetails(
+def _build_details() -> CheckDetails:
+    return CheckDetails(
         issue_breakdown=pd.DataFrame(columns=['column_name', 'issue_count']),
         issue_examples=pd.DataFrame(),
         dup_source_keys_examples=tuple(),
@@ -75,8 +75,8 @@ def _build_details() -> ComparisonDiffDetails:
     )
 
 
-def test_format_comparison_result_returns_json_report():
-    result = build_comparison_result(
+def test_format_check_result_returns_json_report():
+    result = build_check_result(
         run_id=RUN_ID,
         timestamp=RUN_STARTED_AT,
         timezone='UTC',
@@ -84,26 +84,26 @@ def test_format_comparison_result_returns_json_report():
         report='FULL TEXT REPORT',
         stats=_build_stats(),
         details=_build_details(),
-        comparison_type=ct.COMPARISON_TYPE_SAMPLE,
-        comparison_name='unit_test_compare',
+        check_type=ct.CHECK_TYPE_SAMPLE,
+        check_name='unit_test_compare',
         source_table='public.source_table',
         target_table='public.target_table',
     )
 
-    report = format_comparison_result(
+    report = format_check_result(
         result, report_output_format=ct.REPORT_OUTPUT_FORMAT_JSON
     )
 
     payload = json.loads(report)
     assert 'run_id' not in payload
-    assert payload['comparison_type'] == ct.COMPARISON_TYPE_SAMPLE
+    assert payload['check_type'] == ct.CHECK_TYPE_SAMPLE
     assert payload['status'] == 'success'
     assert payload['report'] == 'FULL TEXT REPORT'
     assert payload['stats']['final_score'] == 100.0
 
 
-def test_format_comparison_result_returns_text_report():
-    result = build_comparison_result(
+def test_format_check_result_returns_text_report():
+    result = build_check_result(
         run_id=RUN_ID,
         timestamp=RUN_STARTED_AT,
         timezone='UTC',
@@ -111,12 +111,12 @@ def test_format_comparison_result_returns_text_report():
         report='FULL TEXT REPORT',
         stats=_build_stats(),
         details=_build_details(),
-        comparison_type=ct.COMPARISON_TYPE_SAMPLE,
+        check_type=ct.CHECK_TYPE_SAMPLE,
         source_table='public.source_table',
         target_table='public.target_table',
     )
 
-    report = format_comparison_result(
+    report = format_check_result(
         result, report_output_format=ct.REPORT_OUTPUT_FORMAT_TEXT
     )
 
@@ -125,11 +125,11 @@ def test_format_comparison_result_returns_text_report():
 
 def test_persist_writes_to_results_engine():
     results_engine = create_engine('sqlite:///:memory:')
-    persister = ComparisonResultPersister(
+    persister = CheckResultPersister(
         results_engine=results_engine,
         results_table='dq_results',
     )
-    result = build_comparison_result(
+    result = build_check_result(
         run_id=RUN_ID,
         timestamp=RUN_STARTED_AT,
         timezone='UTC',
@@ -137,7 +137,7 @@ def test_persist_writes_to_results_engine():
         report='COUNT REPORT',
         stats=_build_stats(),
         details=_build_details(),
-        comparison_type=ct.COMPARISON_TYPE_COUNT,
+        check_type=ct.CHECK_TYPE_COUNT,
         source_table='public.a',
         target_table='public.b',
     )
@@ -147,7 +147,7 @@ def test_persist_writes_to_results_engine():
     stored = pd.read_sql('select * from dq_results', results_engine)
     assert len(stored) == 1
     assert stored.iloc[0]['run_id'] == RUN_ID
-    assert stored.iloc[0]['comparison_type'] == ct.COMPARISON_TYPE_COUNT
+    assert stored.iloc[0]['check_type'] == ct.CHECK_TYPE_COUNT
     assert stored.iloc[0]['status'] == 'failed'
     assert stored.iloc[0]['report'] == 'COUNT REPORT'
     assert stored.iloc[0]['stats_total_source_rows'] == 10
@@ -169,7 +169,7 @@ def test_persist_writes_to_results_engine():
 
 def test_persist_rounds_stats_floats_to_report_precision():
     results_engine = create_engine('sqlite:///:memory:')
-    persister = ComparisonResultPersister(
+    persister = CheckResultPersister(
         results_engine=results_engine,
         results_table='dq_results_rounded',
     )
@@ -178,15 +178,15 @@ def test_persist_rounds_stats_floats_to_report_precision():
     stats.final_diff_score = 16.666666666666668
     stats.issue_rows_pct = 33.333333333333336
 
-    result = build_comparison_result(
+    result = build_check_result(
         run_id=RUN_ID,
         timestamp=RUN_STARTED_AT,
         timezone='UTC',
-        status=ct.COMPARISON_FAILED,
+        status=ct.CHECK_FAILED,
         report='FAILED REPORT',
         stats=stats,
         details=_build_details(),
-        comparison_type=ct.COMPARISON_TYPE_SAMPLE,
+        check_type=ct.CHECK_TYPE_SAMPLE,
         source_table='public.a',
         target_table='public.b',
     )
@@ -201,11 +201,11 @@ def test_persist_rounds_stats_floats_to_report_precision():
 
 def test_persist_writes_timing_columns():
     results_engine = create_engine('sqlite:///:memory:')
-    persister = ComparisonResultPersister(
+    persister = CheckResultPersister(
         results_engine=results_engine,
         results_table='dq_results_timings',
     )
-    result = build_comparison_result(
+    result = build_check_result(
         run_id=RUN_ID,
         timestamp=RUN_STARTED_AT,
         timezone='UTC',
@@ -213,7 +213,7 @@ def test_persist_writes_timing_columns():
         report='TIMED REPORT',
         stats=_build_stats(),
         details=_build_details(),
-        comparison_type=ct.COMPARISON_TYPE_SAMPLE,
+        check_type=ct.CHECK_TYPE_SAMPLE,
         source_table='public.a',
         target_table='public.b',
         timings=_build_timings(),
@@ -229,8 +229,8 @@ def test_persist_writes_timing_columns():
     assert row['source_query_finished_at'] == '2026-01-01 00:00:02'
     assert row['target_query_started_at'] == '2026-01-01 00:00:02'
     assert row['target_query_finished_at'] == '2026-01-01 00:00:03'
-    assert row['dataset_compare_started_at'] == '2026-01-01 00:00:03'
-    assert row['dataset_compare_finished_at'] == '2026-01-01 00:00:04'
+    assert row['dataset_check_started_at'] == '2026-01-01 00:00:03'
+    assert row['dataset_check_finished_at'] == '2026-01-01 00:00:04'
 
 
 def test_validate_report_output_format_rejects_unknown_format():
@@ -289,13 +289,13 @@ def test_oracle_persist_type_map_uses_native_types():
     )
 
 
-def test_persist_uses_comparison_timezone_column():
+def test_persist_uses_check_timezone_column():
     results_engine = create_engine('sqlite:///:memory:')
-    persister = ComparisonResultPersister(
+    persister = CheckResultPersister(
         results_engine=results_engine,
         results_table='dq_results_tz',
     )
-    result = build_comparison_result(
+    result = build_check_result(
         run_id=RUN_ID,
         timestamp=RUN_STARTED_AT,
         timezone='Europe/Athens',
@@ -303,7 +303,7 @@ def test_persist_uses_comparison_timezone_column():
         report='TZ REPORT',
         stats=_build_stats(),
         details=_build_details(),
-        comparison_type=ct.COMPARISON_TYPE_SAMPLE,
+        check_type=ct.CHECK_TYPE_SAMPLE,
         source_table='public.a',
         target_table='public.b',
     )
@@ -312,7 +312,7 @@ def test_persist_uses_comparison_timezone_column():
 
     stored = pd.read_sql('select * from dq_results_tz', results_engine)
     assert 'timezone' not in stored.columns
-    assert stored.iloc[0]['comparison_timezone'] == 'Europe/Athens'
+    assert stored.iloc[0]['check_timezone'] == 'Europe/Athens'
 
 
 def test_parse_persist_result_option():
@@ -333,11 +333,11 @@ def test_parse_persist_result_option():
 
 def test_persist_with_datareference_target_and_tags():
     results_engine = create_engine('sqlite:///:memory:')
-    persister = ComparisonResultPersister(
+    persister = CheckResultPersister(
         results_engine=results_engine,
         results_table='dq_results_default',
     )
-    result = build_comparison_result(
+    result = build_check_result(
         run_id=RUN_ID,
         timestamp=RUN_STARTED_AT,
         timezone='UTC',
@@ -345,9 +345,9 @@ def test_persist_with_datareference_target_and_tags():
         report='TAGGED REPORT',
         stats=_build_stats(),
         details=_build_details(),
-        comparison_type=ct.COMPARISON_TYPE_SAMPLE,
-        comparison_name='orders_daily_compare',
-        comparison_tags={'env': 'dev', 'domain': 'orders'},
+        check_type=ct.CHECK_TYPE_SAMPLE,
+        check_name='orders_daily_compare',
+        check_tags={'env': 'dev', 'domain': 'orders'},
         source_table='public.orders_src',
         target_table='public.orders_trg',
     )
@@ -363,8 +363,8 @@ def test_persist_with_datareference_target_and_tags():
     )
     assert len(stored) == 1
     assert stored.iloc[0]['run_id'] == RUN_ID
-    assert stored.iloc[0]['comparison_name'] == 'orders_daily_compare'
-    assert json.loads(stored.iloc[0]['comparison_tags_json']) == {
+    assert stored.iloc[0]['check_name'] == 'orders_daily_compare'
+    assert json.loads(stored.iloc[0]['check_tags_json']) == {
         'env': 'dev',
         'domain': 'orders',
     }

@@ -1,16 +1,16 @@
 """
-Test HR data comparison between Oracle and PostgreSQL.
+Test HR data check between Oracle and PostgreSQL.
 """
 
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
 class TestOraclePostgresHRData:
-    """HR data comparison between Oracle and PostgreSQL"""
+    """HR data check between Oracle and PostgreSQL"""
 
     @pytest.fixture(autouse=True)
     def setup_hr_data(self, oracle_engine, postgres_engine, table_helper):
@@ -68,19 +68,19 @@ class TestOraclePostgresHRData:
 
         yield
 
-    def test_hr_data_comparison(self, oracle_engine, postgres_engine):
+    def test_hr_data_check(self, oracle_engine, postgres_engine):
         """
-        Test HR data comparison between Oracle and PostgreSQL.
+        Test HR data check between Oracle and PostgreSQL.
         """
         table_name = 'test_ora_pg_hr'
 
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='hire_date',
@@ -90,22 +90,22 @@ class TestOraclePostgresHRData:
             tolerance_pct=0.0,
         )
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         assert stats.final_diff_score == 0.0
         print(
-            f'Oracle   PostgreSQL HR data comparison passed: {stats.final_score:.2f}%'
+            f'Oracle   PostgreSQL HR data check passed: {stats.final_score:.2f}%'
         )
 
-    def test_hr_data_comparison_uppercase(self, oracle_engine, postgres_engine):
+    def test_hr_data_check_uppercase(self, oracle_engine, postgres_engine):
         # pytest.skip("issue #31")
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
             timezone='Europe/Athens',
         )
         table_name = 'test_ora_pg_hr'
 
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='HIRE_DATE',
@@ -116,5 +116,5 @@ class TestOraclePostgresHRData:
             tolerance_pct=0.0,
         )
 
-        assert status == COMPARISON_SUCCESS
-        print(f'Custom query comparison passed: {stats.final_score:.2f}%')
+        assert status == CHECK_SUCCESS
+        print(f'Custom query check passed: {stats.final_score:.2f}%')

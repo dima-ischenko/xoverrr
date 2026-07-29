@@ -1,16 +1,16 @@
 """
-Test DATE type comparison between Oracle and PostgreSQL.
+Test DATE type check between Oracle and PostgreSQL.
 """
 
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
-class TestDateTypeComparison:
-    """Tests for DATE type comparison"""
+class TestDateTypeCheck:
+    """Tests for DATE type check"""
 
     @pytest.fixture(autouse=True)
     def setup_date_data(self, oracle_engine, postgres_engine, table_helper):
@@ -58,17 +58,17 @@ class TestDateTypeComparison:
 
         yield
 
-    def test_date_type_comparison(self, oracle_engine, postgres_engine):
+    def test_date_type_check(self, oracle_engine, postgres_engine):
         """
         Compare DATE type between Oracle and PostgreSQL.
         """
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference('test_dates', 'test'),
             target_table=DataReference('test_dates', 'test'),
             date_column='event_date',
@@ -76,6 +76,6 @@ class TestDateTypeComparison:
             tolerance_pct=0.0,
         )
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         assert stats.final_diff_score == 0.0
-        print(f'Date type comparison passed: {stats.final_score:.2f}%')
+        print(f'Date type check passed: {stats.final_score:.2f}%')

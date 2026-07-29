@@ -1,16 +1,16 @@
 """
-Test count-based comparison between ClickHouse and Oracle.
+Test count-based check between ClickHouse and Oracle.
 """
 
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
-class TestClickHouseOracleCountsComparison:
-    """Cross-database count-based comparison tests"""
+class TestClickHouseOracleCountsCheck:
+    """Cross-database count-based check tests"""
 
     @pytest.fixture(autouse=True)
     def setup_count_data(self, clickhouse_engine, oracle_engine, table_helper):
@@ -64,19 +64,19 @@ class TestClickHouseOracleCountsComparison:
 
         yield
 
-    def test_counts_comparison(self, clickhouse_engine, oracle_engine):
+    def test_counts_check(self, clickhouse_engine, oracle_engine):
         """
-        Test count-based comparison between ClickHouse and Oracle.
+        Test count-based check between ClickHouse and Oracle.
         """
         table_name = 'test_ch_ora_counts'
 
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=clickhouse_engine,
             target_engine=oracle_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_counts(
+        status, report, stats, details = checker.check_counts(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_date',
@@ -84,5 +84,5 @@ class TestClickHouseOracleCountsComparison:
             tolerance_pct=0.0,
         )
         print(report)
-        assert status == COMPARISON_SUCCESS
-        print(f'ClickHouse   Oracle count comparison passed: {stats.final_score:.2f}%')
+        assert status == CHECK_SUCCESS
+        print(f'ClickHouse   Oracle count check passed: {stats.final_score:.2f}%')

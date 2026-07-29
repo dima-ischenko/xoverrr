@@ -1,15 +1,15 @@
 """
-Test Oracle self-comparison with identical data.
+Test Oracle self-check with identical data.
 """
 
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
-class TestOracleSelfComparison:
+class TestOracleSelfCheck:
     """
     Tests comparing Oracle with itself (same engine).
     """
@@ -42,17 +42,17 @@ class TestOracleSelfComparison:
 
         yield
 
-    def test_oracle_self_comparison_identical(self, oracle_engine):
+    def test_oracle_self_check_identical(self, oracle_engine):
         """
         Compare identical tables within same Oracle database.
         """
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=oracle_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference('test_oracle_self', 'test'),
             target_table=DataReference('test_oracle_self', 'test'),
             date_column='created_at',
@@ -61,9 +61,9 @@ class TestOracleSelfComparison:
             tolerance_pct=0.0,
         )
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         assert stats.final_diff_score == 0.0
-        print(f'Oracle self-comparison passed: {stats.final_score:.2f}%')
+        print(f'Oracle self-check passed: {stats.final_score:.2f}%')
 
     def test_oracle_table_vs_view(self, oracle_engine, table_helper):
         """
@@ -80,13 +80,13 @@ class TestOracleSelfComparison:
             """,
         )
 
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=oracle_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference('test_oracle_self', 'test'),  # таблица
             target_table=DataReference('v_test_oracle_self', 'test'),  # вьюха
             date_column='created_at',
@@ -94,5 +94,5 @@ class TestOracleSelfComparison:
             tolerance_pct=0.0,
         )
 
-        assert status == COMPARISON_SUCCESS
-        print(f'Oracle table vs view comparison passed: {stats.final_score:.2f}%')
+        assert status == CHECK_SUCCESS
+        print(f'Oracle table vs view check passed: {stats.final_score:.2f}%')

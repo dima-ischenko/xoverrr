@@ -1,16 +1,16 @@
 """
-Test timestamp with timezone comparison between Oracle and PostgreSQL.
+Test timestamp with timezone check between Oracle and PostgreSQL.
 """
 
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
 class TestTimestampWithTimezone:
-    """Tests for timestamp with timezone comparison"""
+    """Tests for timestamp with timezone check"""
 
     @pytest.fixture(autouse=True)
     def setup_timestamp_data(self, oracle_engine, postgres_engine, table_helper):
@@ -64,13 +64,13 @@ class TestTimestampWithTimezone:
         """
         Compare timestamp with timezone between Oracle and PostgreSQL.
         """
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
             timezone='+05:00',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference('test_timestamps', 'test'),
             target_table=DataReference('test_timestamps', 'test'),
             date_column='created_at',
@@ -80,6 +80,6 @@ class TestTimestampWithTimezone:
             exclude_recent_hours=24,
         )
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         assert stats.final_diff_score == 0.0
-        print(f'Timestamp with timezone comparison passed: {stats.final_score:.2f}%')
+        print(f'Timestamp with timezone check passed: {stats.final_score:.2f}%')

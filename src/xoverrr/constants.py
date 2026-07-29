@@ -12,22 +12,22 @@ RESERVED_WORDS = ['date', 'comment', 'file', 'number', 'mode', 'successful']
 
 DEFAULT_TZ = 'UTC'
 
-# Comparison result statuses
-COMPARISON_SUCCESS = 'success'
-COMPARISON_FAILED = 'failed'
-COMPARISON_SKIPPED = 'skipped'
+# Check result statuses
+CHECK_SUCCESS = 'success'
+CHECK_FAILED = 'failed'
+CHECK_SKIPPED = 'skipped'
 
-# Comparison types
-COMPARISON_TYPE_COUNT = 'count'
-COMPARISON_TYPE_SAMPLE = 'sample'
-COMPARISON_TYPE_CUSTOM_QUERY = 'custom_query'
-COMPARISON_TYPE_SNIFF_QUERY = 'sniff_query'
+# Check types
+CHECK_TYPE_COUNT = 'count'
+CHECK_TYPE_SAMPLE = 'sample'
+CHECK_TYPE_CUSTOM_QUERY = 'custom_query'
+CHECK_TYPE_SNIFF_QUERY = 'sniff_query'
 
-# Shared y/n flag convention for x-prefixed comparison columns.
+# Shared y/n flag convention for x-prefixed check columns.
 FLAG_VALUE_YES = 'y'
 FLAG_VALUE_NO = 'n'
 
-# Recently changed exclusion column (compare_sample / compare_custom_query).
+# Recently changed exclusion column (check_sample / check_query).
 XRECENTLY_CHANGED_COLUMN = 'xrecently_changed'
 
 # Pass/fail flag column for sniff_query (row-level or scalar).

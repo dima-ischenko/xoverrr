@@ -1,16 +1,16 @@
 """
-Test numeric type comparison between Oracle and PostgreSQL.
+Test numeric type check between Oracle and PostgreSQL.
 """
 
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
-class TestNumericTypesComparison:
-    """Tests for numeric type comparison"""
+class TestNumericTypesCheck:
+    """Tests for numeric type check"""
 
     @pytest.fixture(autouse=True)
     def setup_numeric_data(self, oracle_engine, postgres_engine, table_helper):
@@ -62,19 +62,19 @@ class TestNumericTypesComparison:
 
         yield
 
-    def test_numeric_types_comparison(self, oracle_engine, postgres_engine):
+    def test_numeric_types_check(self, oracle_engine, postgres_engine):
         """
         Compare numeric types: Oracle NUMBER vs PostgreSQL NUMERIC.
         """
         table_name = 'test_types_numeric'
 
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='created_at',
@@ -82,5 +82,5 @@ class TestNumericTypesComparison:
             tolerance_pct=0.0,
         )
 
-        assert status == COMPARISON_SUCCESS
-        print(f'Numeric types comparison passed: {stats.final_score:.2f}%')
+        assert status == CHECK_SUCCESS
+        print(f'Numeric types check passed: {stats.final_score:.2f}%')

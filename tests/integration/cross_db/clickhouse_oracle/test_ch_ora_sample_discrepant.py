@@ -1,16 +1,16 @@
 """
-Test sample comparison with intentional discrepancies between ClickHouse and Oracle.
+Test sample check with intentional discrepancies between ClickHouse and Oracle.
 """
 
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
 class TestClickHouseOracleDataWithDiscrepancies:
-    """Cross-database sample comparison with discrepancies"""
+    """Cross-database sample check with discrepancies"""
 
     @pytest.fixture(autouse=True)
     def setup_data_with_discrepancies(
@@ -66,21 +66,21 @@ class TestClickHouseOracleDataWithDiscrepancies:
 
         yield
 
-    def test_sample_comparison_with_discrepancies(
+    def test_sample_check_with_discrepancies(
         self, clickhouse_engine, oracle_engine
     ):
         """
-        Test sample comparison with intentional discrepancies.
+        Test sample check with intentional discrepancies.
         """
         table_name = 'test_ch_ora_discrepancies'
 
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=clickhouse_engine,
             target_engine=oracle_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='transaction_date',
@@ -90,8 +90,8 @@ class TestClickHouseOracleDataWithDiscrepancies:
             tolerance_pct=35.0,
         )
         print(report)
-        assert status == COMPARISON_SUCCESS  # Should pass with tolerance
+        assert status == CHECK_SUCCESS  # Should pass with tolerance
         assert stats.final_diff_score > 0.0
         print(
-            f'ClickHouse   Oracle with discrepancies comparison passed: {stats.final_score:.2f}%'
+            f'ClickHouse   Oracle with discrepancies check passed: {stats.final_score:.2f}%'
         )

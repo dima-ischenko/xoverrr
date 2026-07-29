@@ -4,8 +4,8 @@ Year-range custom-query chunking integration tests for PostgreSQL.
 
 import pytest
 
-from xoverrr.constants import COMPARISON_FAILED, COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator
+from xoverrr.constants import CHECK_FAILED, CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker
 
 
 class TestPostgresCustomQueryYearlyChunking:
@@ -55,7 +55,7 @@ class TestPostgresCustomQueryYearlyChunking:
         yield
 
     def test_custom_query_chunking_yearly_positive(self, postgres_engine):
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             postgres_engine, postgres_engine, timezone='UTC'
         )
         query = """
@@ -66,7 +66,7 @@ class TestPostgresCustomQueryYearlyChunking:
         """
         params = {'start_date': '2024-01-01', 'end_date': '2024-12-31'}
 
-        status_full, _, stats_full, _ = comparator.compare_custom_query(
+        status_full, _, stats_full, _ = checker.check_query(
             source_query=query,
             source_params=params,
             target_query=query,
@@ -74,7 +74,7 @@ class TestPostgresCustomQueryYearlyChunking:
             custom_primary_key=['id'],
             tolerance_pct=0.0,
         )
-        status_chunked, _, stats_chunked, _ = comparator.compare_custom_query(
+        status_chunked, _, stats_chunked, _ = checker.check_query(
             source_query=query,
             source_params=params,
             target_query=query,
@@ -83,12 +83,12 @@ class TestPostgresCustomQueryYearlyChunking:
             chunk_size_days=30,
             tolerance_pct=0.0,
         )
-        assert status_full == COMPARISON_SUCCESS
-        assert status_chunked == COMPARISON_SUCCESS
+        assert status_full == CHECK_SUCCESS
+        assert status_chunked == CHECK_SUCCESS
         assert stats_chunked.final_diff_score == stats_full.final_diff_score
 
     def test_custom_query_chunking_yearly_negative(self, postgres_engine):
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             postgres_engine, postgres_engine, timezone='UTC'
         )
         source_query = """
@@ -105,7 +105,7 @@ class TestPostgresCustomQueryYearlyChunking:
         """
         params = {'start_date': '2024-01-01', 'end_date': '2024-12-31'}
 
-        status_full, _, stats_full, details_full = comparator.compare_custom_query(
+        status_full, _, stats_full, details_full = checker.check_query(
             source_query=source_query,
             source_params=params,
             target_query=target_query,
@@ -114,7 +114,7 @@ class TestPostgresCustomQueryYearlyChunking:
             tolerance_pct=0.0,
         )
         status_chunked, _, stats_chunked, details_chunked = (
-            comparator.compare_custom_query(
+            checker.check_query(
                 source_query=source_query,
                 source_params=params,
                 target_query=target_query,
@@ -124,8 +124,8 @@ class TestPostgresCustomQueryYearlyChunking:
                 tolerance_pct=0.0,
             )
         )
-        assert status_full == COMPARISON_FAILED
-        assert status_chunked == COMPARISON_FAILED
+        assert status_full == CHECK_FAILED
+        assert status_chunked == CHECK_FAILED
         assert stats_chunked.final_diff_score == stats_full.final_diff_score
         assert (
             int(

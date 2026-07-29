@@ -1,16 +1,16 @@
 """
-Test count-based comparison between Oracle and PostgreSQL.
+Test count-based check between Oracle and PostgreSQL.
 """
 
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
-class TestOraclePostgresCountsComparison:
-    """Cross-database count-based comparison tests Oracle ↔ PostgreSQL"""
+class TestOraclePostgresCountsCheck:
+    """Cross-database count-based check tests Oracle ↔ PostgreSQL"""
 
     @pytest.fixture(autouse=True)
     def setup_count_data(self, oracle_engine, postgres_engine, table_helper):
@@ -62,19 +62,19 @@ class TestOraclePostgresCountsComparison:
 
         yield
 
-    def test_counts_comparison(self, oracle_engine, postgres_engine):
+    def test_counts_check(self, oracle_engine, postgres_engine):
         """
-        Test count-based comparison between Oracle and PostgreSQL.
+        Test count-based check between Oracle and PostgreSQL.
         """
         table_name = 'test_ora_pg_counts'
 
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_counts(
+        status, report, stats, details = checker.check_counts(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_date',
@@ -82,6 +82,6 @@ class TestOraclePostgresCountsComparison:
             tolerance_pct=0.0,
         )
         print(report)
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         assert stats.final_score == 100.0
-        print(f'Oracle   PostgreSQL count comparison passed: {stats.final_score:.2f}%')
+        print(f'Oracle   PostgreSQL count check passed: {stats.final_score:.2f}%')

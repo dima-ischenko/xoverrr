@@ -1,15 +1,15 @@
 """
-Test PostgreSQL self-comparison with identical data.
+Test PostgreSQL self-check with identical data.
 """
 
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import COMPARISON_SUCCESS, COMPARISON_SKIPPED
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_SUCCESS, CHECK_SKIPPED
+from xoverrr.core import DataQualityChecker, DataReference
 
 
-class TestPostgresSelfComparison:
+class TestPostgresSelfCheck:
     """
     Tests comparing PostgreSQL with itself (same engine).
     """
@@ -130,19 +130,19 @@ class TestPostgresSelfComparison:
 
         yield
 
-    def test_postgres_self_comparison_identical(
+    def test_postgres_self_check_identical(
         self, postgres_engine, setup_postgres_data
     ):
         """
         Compare identical tables within same PostgreSQL database.
         """
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=postgres_engine,
             target_engine=postgres_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference('test_custom_data2', 'test'),
             target_table=DataReference('test_custom_data2', 'test'),
             date_column='created_at',
@@ -151,23 +151,23 @@ class TestPostgresSelfComparison:
             tolerance_pct=0.0,
         )
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         assert stats.final_diff_score == 0.0
-        print(f'PostgreSQL self-comparison passed: {stats.final_score:.2f}%')
+        print(f'PostgreSQL self-check passed: {stats.final_score:.2f}%')
 
-    def test_postgres_self_comparison_identical_view(
+    def test_postgres_self_check_identical_view(
         self, postgres_engine, setup_postgres_data
     ):
         """
         Compare identical tables within same PostgreSQL database.
         """
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=postgres_engine,
             target_engine=postgres_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference('test_custom_data2', 'test'),
             target_table=DataReference('vtest_custom_data2', 'test'),
             date_column='created_at',
@@ -176,24 +176,24 @@ class TestPostgresSelfComparison:
             tolerance_pct=0.0,
         )
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         assert stats.final_diff_score == 0.0
-        print(f'PostgreSQL self-comparison passed: {stats.final_score:.2f}%')
+        print(f'PostgreSQL self-check passed: {stats.final_score:.2f}%')
 
-    def test_postgres_self_comparison_identical_mview(
+    def test_postgres_self_check_identical_mview(
         self, postgres_engine, setup_postgres_data_mv
     ):
         """
         Compare identical tables within same PostgreSQL database.
         """
         # pytest.skip('issue #50')
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=postgres_engine,
             target_engine=postgres_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference('test_custom_data3', 'test'),
             target_table=DataReference('mvtest_custom_data3', 'test'),
             date_column='created_at',
@@ -202,20 +202,20 @@ class TestPostgresSelfComparison:
             tolerance_pct=0.0,
         )
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         assert stats.final_diff_score == 0.0
-        print(f'PostgreSQL self-comparison passed: {stats.final_score:.2f}%')
+        print(f'PostgreSQL self-check passed: {stats.final_score:.2f}%')
 
-    def test_postgres_self_comparison_empty_one_side(
+    def test_postgres_self_check_empty_one_side(
         self, postgres_engine, setup_postgres_data_empty_one_side
     ):
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=postgres_engine,
             target_engine=postgres_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference('test_custom_data_empty_one_side', 'test'),
             target_table=DataReference('vtest_custom_data_empty_one_side', 'test'),
             date_column='created_at',
@@ -225,4 +225,4 @@ class TestPostgresSelfComparison:
             exclude_recent_hours=9000000, #exclude all data in fact
         )
 
-        assert status == COMPARISON_SKIPPED 
+        assert status == CHECK_SKIPPED 

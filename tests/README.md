@@ -144,7 +144,7 @@ python -m pytest tests/integration -v
 python -m pytest tests/integration/data_types/test_data_types.py -v
 
 # Run specific test method
-python -m pytest tests/integration/test_edge_cases.py::TestCustomQueryComparison::test_custom_query_comparison -v
+python -m pytest tests/integration/test_edge_cases.py::TestCustomQueryCheck::test_custom_query_check -v
 ```
 
 ## Test Database Credentials

@@ -12,9 +12,9 @@ from .adapters.postgres import PostgresAdapter
 from .constants import DATETIME_FORMAT
 from .logger import app_logger
 from .models import DBMSType, DataReference
-from .reporting import ComparisonResult
+from .reporting import CheckResult
 from .constants import STATS_REPORT_FLOAT_DECIMALS
-from .utils import ComparisonDiffDetails, ComparisonStats
+from .utils import CheckDetails, CheckStats
 
 PERSIST_PRIMARY_KEY = 'run_id'
 RUN_ID_LENGTH = 16
@@ -27,8 +27,8 @@ TIMING_PERSIST_FIELDS = (
     'source_query_finished_at',
     'target_query_started_at',
     'target_query_finished_at',
-    'dataset_compare_started_at',
-    'dataset_compare_finished_at',
+    'dataset_check_started_at',
+    'dataset_check_finished_at',
 )
 
 
@@ -49,13 +49,13 @@ def validate_run_id(run_id: Optional[str]) -> str:
 
 
 def build_run_id() -> str:
-    """Build a random non-empty run identifier for a comparison run."""
+    """Build a random non-empty run identifier for a check run."""
     return uuid.uuid4().hex[:RUN_ID_LENGTH]
 
 
 @dataclass
-class ComparisonRunTimings:
-    """Wall-clock timestamps for a single comparison run (DATETIME_FORMAT strings)."""
+class CheckRunTimings:
+    """Wall-clock timestamps for a single check run (DATETIME_FORMAT strings)."""
 
     run_started_at: Optional[str] = None
     run_finished_at: Optional[str] = None
@@ -63,8 +63,8 @@ class ComparisonRunTimings:
     source_query_finished_at: Optional[str] = None
     target_query_started_at: Optional[str] = None
     target_query_finished_at: Optional[str] = None
-    dataset_compare_started_at: Optional[str] = None
-    dataset_compare_finished_at: Optional[str] = None
+    dataset_check_started_at: Optional[str] = None
+    dataset_check_finished_at: Optional[str] = None
 
     @staticmethod
     def now() -> str:
@@ -78,12 +78,12 @@ class ComparisonRunTimings:
     def mark_query_end(self, side: QuerySide) -> None:
         setattr(self, f'{side}_query_finished_at', self.now())
 
-    def mark_dataset_compare_start(self) -> None:
-        if self.dataset_compare_started_at is None:
-            self.dataset_compare_started_at = self.now()
+    def mark_dataset_check_start(self) -> None:
+        if self.dataset_check_started_at is None:
+            self.dataset_check_started_at = self.now()
 
-    def mark_dataset_compare_end(self) -> None:
-        self.dataset_compare_finished_at = self.now()
+    def mark_dataset_check_end(self) -> None:
+        self.dataset_check_finished_at = self.now()
 
     def finish_run(self) -> None:
         self.run_finished_at = self.now()
@@ -101,15 +101,15 @@ PERSIST_COL_INT = 'int'
 PERSIST_COL_FLOAT = 'float'
 
 # Persisted column name (avoids reserved TIMEZONE keyword in Oracle).
-PERSIST_TIMEZONE_COLUMN = 'comparison_timezone'
+PERSIST_TIMEZONE_COLUMN = 'check_timezone'
 
 BASE_PERSIST_COLUMN_TYPES = {
     'run_id': PERSIST_COL_SHORT_STRING,
     **{field: PERSIST_COL_DATETIME for field in TIMING_PERSIST_FIELDS},
-    'comparison_type': PERSIST_COL_STRING,
+    'check_type': PERSIST_COL_STRING,
     'status': PERSIST_COL_STRING,
-    'comparison_name': PERSIST_COL_NAME,
-    'comparison_tags_json': PERSIST_COL_TEXT,
+    'check_name': PERSIST_COL_NAME,
+    'check_tags_json': PERSIST_COL_TEXT,
     'source_table': PERSIST_COL_TABLE_REF,
     'target_table': PERSIST_COL_TABLE_REF,
     PERSIST_TIMEZONE_COLUMN: PERSIST_COL_TZ_NAME,
@@ -122,13 +122,13 @@ BASE_PERSIST_COLUMN_TYPES = {
 def _stats_persist_fields(field_type: type) -> list[str]:
     return [
         field.name
-        for field in dataclasses.fields(ComparisonStats)
+        for field in dataclasses.fields(CheckStats)
         if field.type is field_type
     ]
 
 
 def _details_persist_fields() -> list[str]:
-    return [field.name for field in dataclasses.fields(ComparisonDiffDetails)]
+    return [field.name for field in dataclasses.fields(CheckDetails)]
 
 
 STATS_INTEGER_FIELDS = _stats_persist_fields(int)
@@ -201,8 +201,8 @@ def _coerce_persist_record(
 def _extract_base_persist_value(payload: Dict, column: str):
     if column == PERSIST_TIMEZONE_COLUMN:
         return payload.get('timezone')
-    if column == 'comparison_tags_json':
-        return _to_json_string(payload.get('comparison_tags'))
+    if column == 'check_tags_json':
+        return _to_json_string(payload.get('check_tags'))
     if column == 'source_query':
         return _render_query_with_params(
             payload.get('source_query'), payload.get('source_params')
@@ -218,7 +218,7 @@ def _extract_base_persist_value(payload: Dict, column: str):
 
 @dataclass(frozen=True)
 class PersistResultOptions:
-    """Normalized ``persist_result`` argument from comparison methods."""
+    """Normalized ``persist_result`` argument from check methods."""
 
     enabled: bool
     table_ref: Optional[DataReference] = None
@@ -233,13 +233,13 @@ def parse_persist_result_option(
     return PersistResultOptions(enabled=bool(persist_result))
 
 
-class ComparisonResultPersister:
-    """Persist comparison output to file and/or SQL table."""
+class CheckResultPersister:
+    """Persist check output to file and/or SQL table."""
 
     def __init__(
         self,
         results_engine: Optional[Engine] = None,
-        results_table: str = 'xoverrr_comparison_results',
+        results_table: str = 'xoverrr_check_results',
         results_schema: Optional[str] = None,
     ):
         self.results_engine = results_engine
@@ -253,7 +253,7 @@ class ComparisonResultPersister:
 
     def persist(
         self,
-        result: ComparisonResult,
+        result: CheckResult,
         persist_result: bool = False,
         persist_result_ref: Optional[DataReference] = None,
     ) -> None:
@@ -262,7 +262,7 @@ class ComparisonResultPersister:
             self._persist_to_db(result, persist_result_ref)
 
     def _persist_to_db(
-        self, result: ComparisonResult, persist_result_ref: Optional[DataReference]
+        self, result: CheckResult, persist_result_ref: Optional[DataReference]
     ) -> None:
         try:
             full_payload = result.to_dict()
@@ -281,14 +281,14 @@ class ComparisonResultPersister:
             )
             adapter.insert_persistence_record(self.results_engine, table_ref, record)
             table_name = persist_result_ref.full_name if persist_result_ref else self.results_table
-            app_logger.info(f'Comparison result persisted to {table_name}')
+            app_logger.info(f'Check result persisted to {table_name}')
         except Exception as exc:
             app_logger.warning(
-                f'Unable to persist comparison result to storage engine: {exc}'
+                f'Unable to persist check result to storage engine: {exc}'
             )
 
     def _build_db_record(
-        self, result: ComparisonResult, full_payload: Dict
+        self, result: CheckResult, full_payload: Dict
     ) -> Dict:
         stats = full_payload.get('stats') or {}
         details = _normalize_details_for_persist(full_payload.get('details'))

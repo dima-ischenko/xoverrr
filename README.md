@@ -1,6 +1,6 @@
 # xoverrr (pronounced “crossover”)
 
-A tool for cross-database and intra-source data comparison with detailed discrepancy analysis and reporting.
+A tool for cross-database and intra-source data quality checks with detailed discrepancy analysis and reporting.
 
 Supported databases: **Oracle**, **PostgreSQL** (+ Greenplum), **ClickHouse**.
 
@@ -8,7 +8,7 @@ Supported databases: **Oracle**, **PostgreSQL** (+ Greenplum), **ClickHouse**.
 
 ## Features
 
-- **Four comparison strategies** — row samples, daily counts, custom SQL, and source-only sniff checks
+- **Four check strategies** — row samples, daily counts, custom SQL, and source-only sniff checks
 - **Multi-DBMS** — tables and views; extensible via adapters
 - **SQLAlchemy engines** — pass any supported source / target / results connection
 - **Replication-lag aware** — optionally skip “fresh” rows that may still be catching up
@@ -24,10 +24,10 @@ Supported databases: **Oracle**, **PostgreSQL** (+ Greenplum), **ClickHouse**.
 
 ## Quick start
 
-**Sample comparison** (Greenplum/PostgreSQL → Oracle):
+**Sample check** (Greenplum/PostgreSQL → Oracle):
 
 ```python
-from xoverrr import DataQualityComparator, DataReference, COMPARISON_SUCCESS
+from xoverrr import DataQualityChecker, DataReference, CHECK_SUCCESS
 from sqlalchemy import create_engine
 from datetime import date, timedelta
 
@@ -36,8 +36,8 @@ source_engine = create_engine('postgresql://user:pass@localhost:5432/source_db')
 target_engine = create_engine('oracle+oracledb://user:pass@localhost:1521/target_db')
 results_engine = create_engine('postgresql://user:pass@localhost:5432/dq_audit')
 
-# 2. Comparator
-comparator = DataQualityComparator(
+# 2. Checker
+checker = DataQualityChecker(
     source_engine=source_engine,
     target_engine=target_engine,
     timezone='Europe/Athens',
@@ -51,7 +51,7 @@ end_date = date.today()
 start_date = end_date - timedelta(days=7)
 
 # 4. Run
-status, report, stats, details = comparator.compare_sample(
+status, report, stats, details = checker.check_sample(
     source_table=source_table,
     target_table=target_table,
     date_column="hire_date",
@@ -64,27 +64,27 @@ status, report, stats, details = comparator.compare_sample(
     exclude_recent_hours=3,
     max_examples=5,
     persist_result=DataReference("dq_results", "test"),
-    comparison_name="employees_daily",
-    comparison_tags={"env": "prod", "domain": "hr"},
+    check_name="employees_daily",
+    check_tags={"env": "prod", "domain": "hr"},
     report_output_format='text',  # 'json' or 'text'
 )
 
 # 5. Result
 print(report)
-if status == COMPARISON_SUCCESS:
+if status == CHECK_SUCCESS:
     print("Data quality check passed")
 else:
     print("Data quality check failed")
 ```
 
-Every comparison method returns the same tuple:
+Every check method returns the same tuple:
 
 | Value | Meaning |
 |-------|---------|
-| `status` | `COMPARISON_SUCCESS` / `COMPARISON_FAILED` / `COMPARISON_SKIPPED` |
+| `status` | `CHECK_SUCCESS` / `CHECK_FAILED` / `CHECK_SKIPPED` |
 | `report` | Text report or JSON string (`report_output_format`) |
-| `stats` | `ComparisonStats` — scores and row counts |
-| `details` | `ComparisonDiffDetails` — examples and per-column diffs |
+| `stats` | `CheckStats` — scores and row counts |
+| `details` | `CheckDetails` — examples and per-column diffs |
 
 ---
 
@@ -92,21 +92,21 @@ Every comparison method returns the same tuple:
 
 | Method | When to use | Needs target DB? |
 |--------|-------------|------------------|
-| `compare_sample` | Compare row values between two tables/views | Yes |
-| `compare_counts` | Fast volume check by day (missing / extra rows) | Yes |
-| `compare_custom_query` | Complex joins, renamed columns, custom SQL | Yes |
+| `check_sample` | Compare row values between two tables/views | Yes |
+| `check_counts` | Fast volume check by day (missing / extra rows) | Yes |
+| `check_query` | Complex joins, renamed columns, custom SQL | Yes |
 | `sniff_query` | Source-only rule: “does this data look wrong?” | No |
 
 ---
 
-## Comparison methods
+## Check methods
 
-### 1. Data sample (`compare_sample`)
+### 1. Data sample (`check_sample`)
 
 Compares row sets and column values over a date range.
 
 ```python
-status, report, stats, details = comparator.compare_sample(
+status, report, stats, details = checker.check_sample(
     source_table=DataReference("table_name", "schema_name"),
     target_table=DataReference("table_name", "schema_name"),
     date_column="created_at",
@@ -137,19 +137,19 @@ status, report, stats, details = comparator.compare_sample(
 | `exclude_recent_hours` | Drop rows modified in the last N hours |
 | `max_examples` | Cap on discrepancy examples in the report |
 | `persist_result` | `False`, `True` (default table), or `DataReference` |
-| `comparison_name` / `comparison_tags` | Labels for dashboards |
+| `check_name` / `check_tags` | Labels for dashboards |
 | `report_output_format` | `'text'` (default) or `'json'` |
 
 If `custom_primary_key` is omitted, the PK is inferred from metadata (must exist on at least one side).
 
 ---
 
-### 2. Counts (`compare_counts`)
+### 2. Counts (`check_counts`)
 
 Daily aggregates — good for large volumes and spotting missing/extra rows.
 
 ```python
-status, report, stats, details = comparator.compare_counts(
+status, report, stats, details = checker.check_counts(
     source_table=DataReference("users", "schema1"),
     target_table=DataReference("users", "schema2"),
     date_column="created_at",
@@ -160,16 +160,16 @@ status, report, stats, details = comparator.compare_counts(
 )
 ```
 
-**Main parameters:** `source_table`, `target_table`, `date_column`, `date_range`, `chunk_size_days`, `tolerance_pct`, `max_examples`, plus the shared `persist_result` / `comparison_name` / `comparison_tags` / `report_output_format` options described above.
+**Main parameters:** `source_table`, `target_table`, `date_column`, `date_range`, `chunk_size_days`, `tolerance_pct`, `max_examples`, plus the shared `persist_result` / `check_name` / `check_tags` / `report_output_format` options described above.
 
 ---
 
-### 3. Custom query (`compare_custom_query`)
+### 3. Custom query (`check_query`)
 
 Compare arbitrary SQL on both sides. Primary key is **required**.
 
 ```python
-status, report, stats, details = comparator.compare_custom_query(
+status, report, stats, details = checker.check_query(
     source_query="""
         SELECT id AS user_id, name AS user_name, created_at AS created_date
         FROM scott.source_table
@@ -192,7 +192,7 @@ status, report, stats, details = comparator.compare_custom_query(
 **Chunking:** when both `source_params` and `target_params` include `start_date` / `end_date`, set `chunk_size_days` to split the range:
 
 ```python
-status, report, stats, details = comparator.compare_custom_query(
+status, report, stats, details = checker.check_query(
     source_query="""
         SELECT id, name, created_at
         FROM scott.source_table
@@ -213,7 +213,7 @@ status, report, stats, details = comparator.compare_custom_query(
 )
 ```
 
-To skip recently changed rows in custom SQL, add the same flag used by sample comparison:
+To skip recently changed rows in custom SQL, add the same flag used by sample check:
 
 ```sql
 CASE WHEN updated_at > (sysdate - 3/24) THEN 'y' END AS xrecently_changed
@@ -227,7 +227,7 @@ Source-only check. Mark each row with `xsniff_passed` (`y` = passed, `n` = faile
 No target engine or primary key required:
 
 ```python
-comparator = DataQualityComparator(
+checker = DataQualityChecker(
     source_engine=source_engine,
     timezone='UTC',
 )
@@ -236,7 +236,7 @@ comparator = DataQualityComparator(
 **Row-level** — one flag per row:
 
 ```python
-status, report, stats, details = comparator.sniff_query(
+status, report, stats, details = checker.sniff_query(
     source_query="""
         SELECT
             order_id,
@@ -256,7 +256,7 @@ status, report, stats, details = comparator.sniff_query(
 **Scalar pass/fail** — a single `xsniff_passed` value:
 
 ```python
-status, report, stats, details = comparator.sniff_query(
+status, report, stats, details = checker.sniff_query(
     source_query="""
         SELECT CASE
             WHEN EXISTS (SELECT 1 FROM sales.orders WHERE amount <= 0) THEN 'n'
@@ -271,7 +271,7 @@ status, report, stats, details = comparator.sniff_query(
 Empty result means pass (`final_score = 100`). Any returned row means fail (`issue_rows_pct = 100` for that result set):
 
 ```python
-status, report, stats, details = comparator.sniff_query(
+status, report, stats, details = checker.sniff_query(
     source_query="""
         SELECT
             order_id,
@@ -314,10 +314,10 @@ final_score = 100 − final_diff_score
 Scores are 0–100%. Higher `final_score` = better quality.  
 Pass/fail uses tolerance:
 
-- `final_diff_score > tolerance_pct` → `COMPARISON_FAILED`
-- otherwise → `COMPARISON_SUCCESS`
+- `final_diff_score > tolerance_pct` → `CHECK_FAILED`
+- otherwise → `CHECK_SUCCESS`
 
-### `compare_sample` / `compare_custom_query`
+### `check_sample` / `check_query`
 
 ```
 final_diff_score =
@@ -328,7 +328,7 @@ final_diff_score =
   + (issue_rows_pct × 0.5)
 ```
 
-### `compare_counts`
+### `check_counts`
 
 ```
 sum_of_absolute_differences = abs(source_count − target_count)  per day
@@ -357,16 +357,16 @@ With the issues-only filter pattern (`WHERE …` + literal `'n' AS xsniff_passed
 
 Available on all methods. Splits a date range into N-day windows, runs each chunk, then aggregates metrics and examples. Useful for long ranges or large tables.
 
-- `compare_custom_query`: both sides must pass `start_date` and `end_date` in params
+- `check_query`: both sides must pass `start_date` and `end_date` in params
 - `sniff_query`: chunking uses `start_date` / `end_date` in `source_params`
 
 ### Status values
 
 | Status | Meaning |
 |--------|---------|
-| `COMPARISON_SUCCESS` | Within tolerance |
-| `COMPARISON_FAILED` | Over tolerance, or a technical error |
-| `COMPARISON_SKIPPED` | Nothing to compare (e.g. both sides empty) |
+| `CHECK_SUCCESS` | Within tolerance |
+| `CHECK_FAILED` | Over tolerance, or a technical error |
+| `CHECK_SKIPPED` | Nothing to compare (e.g. both sides empty) |
 
 ### Result persistence
 
@@ -374,14 +374,14 @@ With `results_engine` set and `persist_result=True` (or a custom `DataReference`
 
 ### Logging
 
-Each run has an internal `run_id` (also stored when persistence is on; not in public JSON from `ComparisonResult.to_dict()`):
+Each run has an internal `run_id` (also stored when persistence is on; not in public JSON from `CheckResult.to_dict()`):
 
 ```
-2024-01-15 10:30:45 - INFO - xoverrr.core - Comparison run started: run_id=a3f2c8b91d4e5678 comparison_name=employees_daily comparison_type=sample
-2024-01-15 10:30:45 - INFO - xoverrr.core._compare_samples - Query executed in 2.34s
-2024-01-15 10:30:46 - INFO - xoverrr.core._compare_samples - Source: 150000 rows, Target: 149950 rows
+2024-01-15 10:30:45 - INFO - xoverrr.core - Check run started: run_id=a3f2c8b91d4e5678 check_name=employees_daily check_type=sample
+2024-01-15 10:30:45 - INFO - xoverrr.core._check_samples - Query executed in 2.34s
+2024-01-15 10:30:46 - INFO - xoverrr.core._check_samples - Source: 150000 rows, Target: 149950 rows
 2024-01-15 10:30:47 - INFO - xoverrr.utils.compare_dataframes - Comparison completed in 1.2s
-2024-01-15 10:30:47 - INFO - xoverrr.core - Comparison run finished: run_id=a3f2c8b91d4e5678 status=COMPARISON_SUCCESS
+2024-01-15 10:30:47 - INFO - xoverrr.core - Check run finished: run_id=a3f2c8b91d4e5678 status=CHECK_SUCCESS
 ```
 
 ### Performance notes
@@ -402,7 +402,7 @@ run_id: a3f2c8b91d4e5678
 version: *.*.*
 source db type: postgresql
 target db type: oracle
-DATA SAMPLE COMPARISON REPORT:
+DATA SAMPLE CHECK REPORT:
 hr.employees
 VS
 hr.employees
@@ -476,7 +476,7 @@ ISSUE BREAKDOWN:
 
 ### Oracle thin client & `TIMESTAMP WITH TIME ZONE`
 
-With the Oracle thin client and `compare_custom_query`, `TIMESTAMP WITH TIME ZONE` columns lose timezone context in the result set.
+With the Oracle thin client and `check_query`, `TIMESTAMP WITH TIME ZONE` columns lose timezone context in the result set.
 
 **Workaround** — cast to `TIMESTAMP` in SQL:
 

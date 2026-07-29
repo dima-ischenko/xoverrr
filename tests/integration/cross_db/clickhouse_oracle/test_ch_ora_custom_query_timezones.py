@@ -1,13 +1,13 @@
 """
 Test for bug fix: Mixed timezone offsets in timestamptz columns should be handled correctly.
-Oracle ↔ ClickHouse comparisons must handle timezone conversions properly.
+Oracle ↔ ClickHouse checks must handle timezone conversions properly.
 """
 
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
 class TestClickHouseOracleQueryMixedTimezoneOffsets:
@@ -76,10 +76,10 @@ class TestClickHouseOracleQueryMixedTimezoneOffsets:
         self, oracle_engine, clickhouse_engine
     ):
         """
-        Test custom query comparison with proper timezone handling.
+        Test custom query check with proper timezone handling.
         """
         # pytest.skip('issue #33')
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=clickhouse_engine,
             target_engine=oracle_engine,
             timezone='UTC',
@@ -98,7 +98,7 @@ class TestClickHouseOracleQueryMixedTimezoneOffsets:
               AND record_date < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1
         """
 
-        status, report, stats, details = comparator.compare_custom_query(
+        status, report, stats, details = checker.check_query(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-08'},
             target_query=target_query,
@@ -107,7 +107,7 @@ class TestClickHouseOracleQueryMixedTimezoneOffsets:
             tolerance_pct=0.0,
         )
         print(report)
-        # assert status == COMPARISON_SUCCESS
+        # assert status == CHECK_SUCCESS
         print(
             f'Oracle   ClickHouse custom query with UTC passed: {stats.final_score:.2f}%'
         )

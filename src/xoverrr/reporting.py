@@ -1,7 +1,7 @@
 """
-Report generation module for xoverrr comparison results.
+Report generation module for xoverrr check results.
 
-Provides functions to format comparison statistics and details into
+Provides functions to format check statistics and details into
 human-readable reports and structured data formats (JSON, dict).
 """
 
@@ -15,37 +15,37 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 import pandas as pd
 
 from .constants import DATETIME_FORMAT, REPORT_OUTPUT_FORMAT_JSON, REPORT_OUTPUT_FORMATS, REPORT_OUTPUT_FORMAT_TEXT
-from .utils import ComparisonDiffDetails, ComparisonStats, append_report_run_header, format_report_collection, sniff_issue_row_count
+from .utils import CheckDetails, CheckStats, append_report_run_header, format_report_collection, sniff_issue_row_count
 
 if TYPE_CHECKING:
-    from .persistence import ComparisonRunTimings
+    from .persistence import CheckRunTimings
 
 
 @dataclass
-class ComparisonResult:
+class CheckResult:
     """
-    Unified container for all comparison output data.
+    Unified container for all check output data.
     
     This class combines status, statistics, details, and metadata
     into a single serializable object suitable for dashboards and APIs.
     """
     timestamp: str
     run_id: str
-    comparison_type: str  # COMPARISON_TYPE_SAMPLE, COMPARISON_TYPE_COUNT, ...
+    check_type: str  # CHECK_TYPE_SAMPLE, CHECK_TYPE_COUNT, ...
     status: str
-    comparison_name: Optional[str] = None
-    comparison_tags: Optional[Dict[str, Any]] = None
+    check_name: Optional[str] = None
+    check_tags: Optional[Dict[str, Any]] = None
     report: Optional[str] = None
     source_table: Optional[str] = None
     target_table: Optional[str] = None
     timezone: Optional[str] = None
-    stats: Optional[ComparisonStats] = None
-    details: Optional[ComparisonDiffDetails] = None
+    stats: Optional[CheckStats] = None
+    details: Optional[CheckDetails] = None
     source_query: Optional[str] = None
     source_params: Optional[Dict] = None
     target_query: Optional[str] = None
     target_params: Optional[Dict] = None
-    timings: Optional[ComparisonRunTimings] = None
+    timings: Optional[CheckRunTimings] = None
 
     def __post_init__(self):
         from .persistence import validate_run_id
@@ -94,10 +94,10 @@ class ComparisonResult:
         
         result = {
             'timestamp': self.timestamp,
-            'comparison_type': self.comparison_type,
+            'check_type': self.check_type,
             'status': self.status,
-            'comparison_name': self.comparison_name,
-            'comparison_tags': self.comparison_tags,
+            'check_name': self.check_name,
+            'check_tags': self.check_tags,
             'report': self.report,
             'source_table': self.source_table,
             'target_table': self.target_table,
@@ -155,33 +155,33 @@ def validate_report_output_format(report_output_format: str) -> None:
         )
 
 
-def build_comparison_result(
+def build_check_result(
     *,
     run_id: str,
     timestamp: str,
     timezone: str,
     status: str,
     report: Optional[str],
-    stats: Optional[ComparisonStats],
-    details: Optional[ComparisonDiffDetails],
-    comparison_type: str,
-    comparison_name: Optional[str] = None,
-    comparison_tags: Optional[Dict[str, Any]] = None,
+    stats: Optional[CheckStats],
+    details: Optional[CheckDetails],
+    check_type: str,
+    check_name: Optional[str] = None,
+    check_tags: Optional[Dict[str, Any]] = None,
     source_table: Optional[str] = None,
     target_table: Optional[str] = None,
     source_query: Optional[str] = None,
     source_params: Optional[Dict] = None,
     target_query: Optional[str] = None,
     target_params: Optional[Dict] = None,
-    timings: Optional[ComparisonRunTimings] = None,
-) -> ComparisonResult:
-    return ComparisonResult(
+    timings: Optional[CheckRunTimings] = None,
+) -> CheckResult:
+    return CheckResult(
         timestamp=timestamp,
         run_id=run_id,
-        comparison_type=comparison_type,
+        check_type=check_type,
         status=status,
-        comparison_name=comparison_name,
-        comparison_tags=comparison_tags,
+        check_name=check_name,
+        check_tags=check_tags,
         report=report,
         source_table=source_table,
         target_table=target_table,
@@ -196,8 +196,8 @@ def build_comparison_result(
     )
 
 
-def format_comparison_result(
-    result: ComparisonResult,
+def format_check_result(
+    result: CheckResult,
     report_output_format: str = REPORT_OUTPUT_FORMAT_JSON,
 ) -> Optional[str]:
     if report_output_format == REPORT_OUTPUT_FORMAT_JSON:
@@ -208,8 +208,8 @@ def format_comparison_result(
 def generate_sample_report(
     source_table: Optional[str],
     target_table: Optional[str],
-    stats: ComparisonStats,
-    details: ComparisonDiffDetails,
+    stats: CheckStats,
+    details: CheckDetails,
     timezone: str,
     run_id: str,
     run_started_at: str,
@@ -222,14 +222,14 @@ def generate_sample_report(
     target_db_type: Optional[str] = None,
 ) -> str:
     """
-    Generate a human-readable text report for sample comparison.
+    Generate a human-readable text report for a sample check.
     
     Args:
         source_table: Source table name (None for custom queries)
         target_table: Target table name (None for custom queries)
-        stats: Comparison statistics
+        stats: Check statistics
         details: Discrepancy details with examples
-        timezone: Timezone used for comparison
+        timezone: Timezone used for the check
         source_query: Source SQL query (for custom queries)
         source_params: Source query parameters
         target_query: Target SQL query
@@ -248,12 +248,12 @@ def generate_sample_report(
         target_db_type=target_db_type,
     )
     if source_table and target_table:
-        lines.append('DATA SAMPLE COMPARISON REPORT:')
+        lines.append('DATA SAMPLE CHECK REPORT:')
         lines.append(f'{source_table}')
         lines.append('VS')
         lines.append(f'{target_table}')
     else:
-        lines.append('DATA SAMPLE COMPARISON REPORT:')
+        lines.append('DATA SAMPLE CHECK REPORT:')
     
     lines.append('=' * 80)
 
@@ -334,8 +334,8 @@ def generate_sample_report(
 
 
 def generate_sniff_query_report(
-    stats: ComparisonStats,
-    details: ComparisonDiffDetails,
+    stats: CheckStats,
+    details: CheckDetails,
     timezone: str,
     run_id: str,
     run_started_at: str,
@@ -345,7 +345,7 @@ def generate_sniff_query_report(
     library_version: Optional[str] = None,
     source_db_type: Optional[str] = None,
 ) -> str:
-    """Generate a human-readable text report for sniff_query checks."""
+    """Generate a human-readable text report for sniff checks."""
     lines = []
     append_report_run_header(
         lines,
@@ -354,7 +354,7 @@ def generate_sniff_query_report(
         library_version=library_version,
         source_db_type=source_db_type,
     )
-    lines.append('SNIFF QUERY REPORT:')
+    lines.append('SNIFF CHECK REPORT:')
     lines.append('=' * 80)
 
     if date_chunks and len(date_chunks) > 1:
@@ -403,8 +403,8 @@ def generate_sniff_query_report(
 def generate_count_report(
     source_table: str,
     target_table: str,
-    stats: ComparisonStats,
-    details: ComparisonDiffDetails,
+    stats: CheckStats,
+    details: CheckDetails,
     total_source_count: int,
     total_target_count: int,
     discrepancies_pct: float,
@@ -422,19 +422,19 @@ def generate_count_report(
     target_db_type: Optional[str] = None,
 ) -> str:
     """
-    Generate a human-readable text report for count-based comparison.
+    Generate a human-readable text report for a count-based check.
     
     Args:
         source_table: Source table name
         target_table: Target table name
-        stats: Comparison statistics
+        stats: Check statistics
         details: Discrepancy details
         total_source_count: Total rows in source
         total_target_count: Total rows in target
         discrepancies_pct: Overall discrepancy pct
         diff_count: Sum of absolute differences
         equal_count: Sum of common minimum counts
-        timezone: Timezone used for comparison
+        timezone: Timezone used for the check
         source_query: Source SQL query (optional)
         source_params: Source query parameters
         target_query: Target SQL query
@@ -452,7 +452,7 @@ def generate_count_report(
         source_db_type=source_db_type,
         target_db_type=target_db_type,
     )
-    lines.append('COUNT COMPARISON REPORT:')
+    lines.append('COUNT CHECK REPORT:')
     lines.append(f'{source_table}')
     lines.append('VS')
     lines.append(f'{target_table}')

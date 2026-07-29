@@ -1,12 +1,12 @@
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
 class TestClickHouseOracleIdenticalData:
-    """Cross-database identical data sample comparison tests"""
+    """Cross-database identical data sample check tests"""
 
     @pytest.fixture(autouse=True)
     def setup_identical_data(self, clickhouse_engine, oracle_engine, table_helper):
@@ -65,19 +65,19 @@ class TestClickHouseOracleIdenticalData:
 
         yield
 
-    def test_identical_data_sample_comparison(self, clickhouse_engine, oracle_engine):
+    def test_identical_data_sample_check(self, clickhouse_engine, oracle_engine):
         """
-        Test sample comparison between identical data in ClickHouse and Oracle.
+        Test sample check between identical data in ClickHouse and Oracle.
         """
         table_name = 'test_ch_ora_identical'
 
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=clickhouse_engine,
             target_engine=oracle_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        status, report, stats, details = checker.check_sample(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='transaction_date',
@@ -87,8 +87,8 @@ class TestClickHouseOracleIdenticalData:
             tolerance_pct=0.0,
         )
         print(report)
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         assert stats.final_diff_score == 0.0
         print(
-            f'ClickHouse   Oracle identical data comparison passed: {stats.final_score:.2f}%'
+            f'ClickHouse   Oracle identical data check passed: {stats.final_score:.2f}%'
         )
