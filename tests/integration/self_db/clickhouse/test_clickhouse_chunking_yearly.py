@@ -90,7 +90,7 @@ class TestClickHouseYearlyChunking:
             tolerance_pct=0.0,
         )
 
-        status_sample_full, _, stats_sample_full, _ = checker.check_sample(
+        status_sample_full, _, stats_sample_full, _ = checker.check_samples(
             source_table=table_ref,
             target_table=table_ref,
             date_column='created_at',
@@ -98,7 +98,7 @@ class TestClickHouseYearlyChunking:
             date_range=('2024-01-01', '2024-12-31'),
             tolerance_pct=0.0,
         )
-        status_sample_chunked, _, stats_sample_chunked, _ = checker.check_sample(
+        status_sample_chunked, _, stats_sample_chunked, _ = checker.check_samples(
             source_table=table_ref,
             target_table=table_ref,
             date_column='created_at',
@@ -130,7 +130,7 @@ class TestClickHouseYearlyChunking:
         target_ref = DataReference('test_ch_chunking_yearly_target', 'test')
 
         status_sample_full, _, stats_sample_full, details_sample_full = (
-            checker.check_sample(
+            checker.check_samples(
                 source_table=source_ref,
                 target_table=target_ref,
                 date_column='created_at',
@@ -140,7 +140,7 @@ class TestClickHouseYearlyChunking:
             )
         )
         status_sample_chunked, _, stats_sample_chunked, details_sample_chunked = (
-            checker.check_sample(
+            checker.check_samples(
                 source_table=source_ref,
                 target_table=target_ref,
                 date_column='created_at',

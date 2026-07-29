@@ -78,7 +78,7 @@ class TestClickHouseNullValues:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_sample(
+        status, report, stats, details = checker.check_samples(
             source_table=DataReference('test_ch_nulls', 'test'),
             target_table=DataReference('test_ch_nulls', 'test'),
             date_column='created_at',

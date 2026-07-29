@@ -100,7 +100,7 @@ class TestPostgresChunkedCheck:
         target_ref = DataReference('test_chunked_target', 'test')
 
         status_non_chunked, _, stats_non_chunked, details_non_chunked = (
-            checker.check_sample(
+            checker.check_samples(
                 source_table=source_ref,
                 target_table=target_ref,
                 date_column='created_at',
@@ -110,7 +110,7 @@ class TestPostgresChunkedCheck:
             )
         )
 
-        status_chunked, _, stats_chunked, details_chunked = checker.check_sample(
+        status_chunked, _, stats_chunked, details_chunked = checker.check_samples(
             source_table=source_ref,
             target_table=target_ref,
             date_column='created_at',

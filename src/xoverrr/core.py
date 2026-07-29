@@ -23,9 +23,8 @@ from .utils import (CheckDetails, CheckStats,
                     build_check_stats, build_sniff_issue_stats,
                     clean_recently_changed_data,
                     compare_dataframes, cross_fill_missing_dates,
-                    evaluate_sniff_query_data,
-                    generate_check_count_report,
-                    generate_check_sample_report, normalize_column_names,
+                    evaluate_check_sniff_query_data,
+                    normalize_column_names,
                     prepare_dataframe, sniff_issue_row_count,
                     validate_dataframe_size)
 from .reporting import (
@@ -33,7 +32,7 @@ from .reporting import (
     format_check_result,
     generate_count_report,
     generate_sample_report,
-    generate_sniff_query_report,
+    generate_check_sniff_query_report,
     validate_report_output_format,
 )
 from .version import __version__
@@ -135,7 +134,7 @@ class DataQualityChecker:
         validate_report_output_format(report_output_format)
         persist_options = parse_persist_result_option(persist_result)
         run_id, run_started_at = self._start_check_run(
-            ct.CHECK_TYPE_COUNT, check_name
+            ct.CHECK_TYPE_COUNTS, check_name
         )
 
         start_date, end_date = date_range or (None, None)
@@ -161,7 +160,7 @@ class DataQualityChecker:
                 report=draft_report,
                 stats=stats,
                 details=details,
-                check_type=ct.CHECK_TYPE_COUNT,
+                check_type=ct.CHECK_TYPE_COUNTS,
                 check_name=check_name,
                 check_tags=check_tags,
                 source_table=source_table.full_name,
@@ -173,14 +172,14 @@ class DataQualityChecker:
             return status, report, stats, details
 
         except Exception as e:
-            app_logger.exception(f'Count check failed: {str(e)}')
+            app_logger.exception(f'Counts check failed: {str(e)}')
             status = ct.CHECK_FAILED
             report = self._finalize_check(
                 status=status,
                 report=None,
                 stats=None,
                 details=None,
-                check_type=ct.CHECK_TYPE_COUNT,
+                check_type=ct.CHECK_TYPE_COUNTS,
                 check_name=check_name,
                 check_tags=check_tags,
                 source_table=source_table.full_name,
@@ -191,7 +190,7 @@ class DataQualityChecker:
             self._update_stats(status, source_table)
             return status, report, None, None
 
-    def check_sample(
+    def check_samples(
         self,
         source_table: DataReference,
         target_table: DataReference,
@@ -234,7 +233,7 @@ class DataQualityChecker:
         validate_report_output_format(report_output_format)
         persist_options = parse_persist_result_option(persist_result)
         run_id, run_started_at = self._start_check_run(
-            ct.CHECK_TYPE_SAMPLE, check_name
+            ct.CHECK_TYPE_SAMPLES, check_name
         )
 
         exclude_hours = exclude_recent_hours or self.default_exclude_recent_hours
@@ -274,7 +273,7 @@ class DataQualityChecker:
                 report=draft_report,
                 stats=stats,
                 details=details,
-                check_type=ct.CHECK_TYPE_SAMPLE,
+                check_type=ct.CHECK_TYPE_SAMPLES,
                 check_name=check_name,
                 check_tags=check_tags,
                 source_table=source_table.full_name,
@@ -286,14 +285,14 @@ class DataQualityChecker:
             return status, report, stats, details
 
         except Exception as e:
-            app_logger.exception(f'Sample check failed: {str(e)}')
+            app_logger.exception(f'Samples check failed: {str(e)}')
             status = ct.CHECK_FAILED
             report = self._finalize_check(
                 status=status,
                 report=None,
                 stats=None,
                 details=None,
-                check_type=ct.CHECK_TYPE_SAMPLE,
+                check_type=ct.CHECK_TYPE_SAMPLES,
                 check_name=check_name,
                 check_tags=check_tags,
                 source_table=source_table.full_name,
@@ -454,7 +453,7 @@ class DataQualityChecker:
                 return status, report, stats, details
 
         except Exception as e:
-            app_logger.error(f'Count check failed: {str(e)}')
+            app_logger.error(f'Counts check failed: {str(e)}')
             raise
 
     def _check_samples(
@@ -615,10 +614,10 @@ class DataQualityChecker:
             )
 
         except Exception as e:
-            app_logger.error(f'Sample check failed: {str(e)}')
+            app_logger.error(f'Samples check failed: {str(e)}')
             raise
 
-    def sniff_query(
+    def check_sniff_query(
         self,
         source_query: str,
         source_params: Optional[Dict] = None,
@@ -654,12 +653,12 @@ class DataQualityChecker:
                 (source_query, source_params), source_engine
             )
             source_adapter = self._get_adapter(self.source_db_type)
-            source_chunks = self._resolve_source_check_query_chunks(
+            source_chunks = self._resolve_source_query_chunks(
                 source_params, chunk_size_days
             )
 
             if len(source_chunks) == 1:
-                stats, details = self._execute_source_check_query_chunk(
+                stats, details = self._execute_source_query_chunk(
                     source_query=source_query,
                     source_params=source_chunks[0],
                     source_engine=source_engine,
@@ -669,7 +668,7 @@ class DataQualityChecker:
                     timezone=timezone,
                 )
             else:
-                stats, details = self._sniff_query_iterative(
+                stats, details = self._check_sniff_query_iterative(
                     source_query=source_query,
                     source_chunks=source_chunks,
                     source_engine=source_engine,
@@ -695,7 +694,7 @@ class DataQualityChecker:
                     if stats.final_diff_score > tolerance_pct
                     else ct.CHECK_SUCCESS
                 )
-                draft_report = generate_sniff_query_report(
+                draft_report = generate_check_sniff_query_report(
                     stats,
                     details,
                     self.timezone,
@@ -747,7 +746,7 @@ class DataQualityChecker:
             self._update_stats(status, None)
             return status, report, None, None
 
-    def check_query(
+    def check_custom_queries(
         self,
         source_query: str,
         source_params: Dict,
@@ -766,7 +765,7 @@ class DataQualityChecker:
         """
         Compare data from custom queries with specified key columns.
 
-        For source-only issue checks, use :meth:`sniff_query`.
+        For source-only issue checks, use :meth:`check_sniff_query`.
         """
         self._require_target_engine()
         source_engine = self.source_engine
@@ -782,7 +781,7 @@ class DataQualityChecker:
         validate_report_output_format(report_output_format)
         persist_options = parse_persist_result_option(persist_result)
         run_id, run_started_at = self._start_check_run(
-            ct.CHECK_TYPE_CUSTOM_QUERY, check_name
+            ct.CHECK_TYPE_CUSTOM_QUERIES, check_name
         )
 
         try:
@@ -822,7 +821,7 @@ class DataQualityChecker:
                     timezone=timezone,
                 )
             else:
-                stats, details = self._check_query_iterative(
+                stats, details = self._check_custom_queries_iterative(
                     source_query=source_query,
                     target_query=target_query,
                     chunk_ranges=date_chunks,
@@ -847,7 +846,7 @@ class DataQualityChecker:
                     if stats.final_diff_score > tolerance_pct
                     else ct.CHECK_SUCCESS
                 )
-                draft_report = generate_check_sample_report(
+                draft_report = generate_sample_report(
                     None,
                     None,
                     stats,
@@ -868,7 +867,7 @@ class DataQualityChecker:
                 report=draft_report,
                 stats=stats,
                 details=details,
-                check_type=ct.CHECK_TYPE_CUSTOM_QUERY,
+                check_type=ct.CHECK_TYPE_CUSTOM_QUERIES,
                 check_name=check_name,
                 check_tags=check_tags,
                 source_table=None,
@@ -884,14 +883,14 @@ class DataQualityChecker:
             return status, report, stats, details
 
         except Exception:
-            app_logger.exception('Custom query check failed')
+            app_logger.exception('Custom queries check failed')
             status = ct.CHECK_FAILED
             report = self._finalize_check(
                 status=status,
                 report=None,
                 stats=None,
                 details=None,
-                check_type=ct.CHECK_TYPE_CUSTOM_QUERY,
+                check_type=ct.CHECK_TYPE_CUSTOM_QUERIES,
                 check_name=check_name,
                 check_tags=check_tags,
                 source_table=None,
@@ -1001,7 +1000,7 @@ class DataQualityChecker:
             chunk_ranges.append((source_chunk_params, target_chunk_params))
         return chunk_ranges
 
-    def _resolve_source_check_query_chunks(
+    def _resolve_source_query_chunks(
         self,
         source_params: Dict,
         chunk_size_days: Optional[int],
@@ -1028,7 +1027,7 @@ class DataQualityChecker:
             chunk_params.append(params)
         return chunk_params
 
-    def _execute_source_check_query_chunk(
+    def _execute_source_query_chunk(
         self,
         source_query: str,
         source_params: Dict,
@@ -1058,14 +1057,14 @@ class DataQualityChecker:
 
         self._run_timings.mark_dataset_check_start()
         try:
-            return evaluate_sniff_query_data(
+            return evaluate_check_sniff_query_data(
                 source_data,
                 max_examples=max_examples or ct.DEFAULT_MAX_EXAMPLES,
             )
         finally:
             self._run_timings.mark_dataset_check_end()
 
-    def _sniff_query_iterative(
+    def _check_sniff_query_iterative(
         self,
         source_query: str,
         source_chunks: List[Dict],
@@ -1085,7 +1084,7 @@ class DataQualityChecker:
         has_data = False
 
         for source_chunk_params in source_chunks:
-            chunk_stats, chunk_details = self._execute_source_check_query_chunk(
+            chunk_stats, chunk_details = self._execute_source_query_chunk(
                 source_query=source_query,
                 source_params=source_chunk_params,
                 source_engine=source_engine,
@@ -1198,7 +1197,7 @@ class DataQualityChecker:
             max_examples,
         )
 
-    def _check_query_iterative(
+    def _check_custom_queries_iterative(
         self,
         source_query: str,
         target_query: str,
@@ -1691,7 +1690,7 @@ class DataQualityChecker:
             skipped_target_columns=target_only_cols,
         )
 
-        report = generate_check_sample_report(
+        report = generate_sample_report(
             source_table.full_name,
             target_table.full_name,
             stats,
@@ -1791,7 +1790,7 @@ class DataQualityChecker:
     def _require_target_engine(self) -> Engine:
         if self.target_engine is None:
             raise ValueError(
-                'target_engine is required for check_sample, check_counts, '
-                'and check_query'
+                'target_engine is required for check_samples, check_counts, '
+                'and check_custom_queries'
             )
         return self.target_engine

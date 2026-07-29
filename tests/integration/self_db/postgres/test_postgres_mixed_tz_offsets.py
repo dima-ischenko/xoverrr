@@ -129,7 +129,7 @@ class TestPostgresMixedTimezoneOffsets:
             timezone='UTC',  # Explicit UTC for tz-aware comparisons
         )
 
-        status, report, stats, details = checker.check_sample(
+        status, report, stats, details = checker.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_date',
@@ -158,7 +158,7 @@ class TestPostgresMixedTimezoneOffsets:
             timezone='Europe/Athens',  # Non-UTC timezone
         )
 
-        status, report, stats, details = checker.check_sample(
+        status, report, stats, details = checker.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_date',
@@ -224,7 +224,7 @@ class TestPostgresMixedTimezoneOffsets:
             timezone='Asia/Tokyo',  # Required for tz-aware columns
         )
 
-        status, report, stats, details = checker.check_sample(
+        status, report, stats, details = checker.check_samples(
             source_table=DataReference(source_table, 'test'),
             target_table=DataReference(target_table, 'test'),
             date_column='event_date',
@@ -253,7 +253,7 @@ class TestPostgresMixedTimezoneOffsets:
             timezone='Europe/Paris',  # Local timezone for tz-naive
         )
 
-        status_local, _, _, _ = comparator_local.check_sample(
+        status_local, _, _, _ = comparator_local.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_date',
@@ -276,7 +276,7 @@ class TestPostgresMixedTimezoneOffsets:
             timezone='US/Pacific',
         )
 
-        status_utc, _, _, _ = comparator_utc.check_sample(
+        status_utc, _, _, _ = comparator_utc.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_date',
@@ -307,7 +307,7 @@ class TestPostgresMixedTimezoneOffsets:
         )
 
         # Test filtering on the boundary date
-        status, report, stats, details = checker.check_sample(
+        status, report, stats, details = checker.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_date',

@@ -51,7 +51,7 @@ end_date = date.today()
 start_date = end_date - timedelta(days=7)
 
 # 4. Run
-status, report, stats, details = checker.check_sample(
+status, report, stats, details = checker.check_samples(
     source_table=source_table,
     target_table=target_table,
     date_column="hire_date",
@@ -92,21 +92,21 @@ Every check method returns the same tuple:
 
 | Method | When to use | Needs target DB? |
 |--------|-------------|------------------|
-| `check_sample` | Compare row values between two tables/views | Yes |
+| `check_samples` | Compare row values between two tables/views | Yes |
 | `check_counts` | Fast volume check by day (missing / extra rows) | Yes |
-| `check_query` | Complex joins, renamed columns, custom SQL | Yes |
-| `sniff_query` | Source-only rule: “does this data look wrong?” | No |
+| `check_custom_queries` | Complex joins, renamed columns, custom SQL | Yes |
+| `check_sniff_query` | Source-only rule: “does this data look wrong?” | No |
 
 ---
 
 ## Check methods
 
-### 1. Data sample (`check_sample`)
+### 1. Data sample (`check_samples`)
 
 Compares row sets and column values over a date range.
 
 ```python
-status, report, stats, details = checker.check_sample(
+status, report, stats, details = checker.check_samples(
     source_table=DataReference("table_name", "schema_name"),
     target_table=DataReference("table_name", "schema_name"),
     date_column="created_at",
@@ -164,12 +164,12 @@ status, report, stats, details = checker.check_counts(
 
 ---
 
-### 3. Custom query (`check_query`)
+### 3. Custom query (`check_custom_queries`)
 
 Compare arbitrary SQL on both sides. Primary key is **required**.
 
 ```python
-status, report, stats, details = checker.check_query(
+status, report, stats, details = checker.check_custom_queries(
     source_query="""
         SELECT id AS user_id, name AS user_name, created_at AS created_date
         FROM scott.source_table
@@ -192,7 +192,7 @@ status, report, stats, details = checker.check_query(
 **Chunking:** when both `source_params` and `target_params` include `start_date` / `end_date`, set `chunk_size_days` to split the range:
 
 ```python
-status, report, stats, details = checker.check_query(
+status, report, stats, details = checker.check_custom_queries(
     source_query="""
         SELECT id, name, created_at
         FROM scott.source_table
@@ -221,7 +221,7 @@ CASE WHEN updated_at > (sysdate - 3/24) THEN 'y' END AS xrecently_changed
 
 ---
 
-### 4. Sniff query (`sniff_query`)
+### 4. Sniff query (`check_sniff_query`)
 
 Source-only check. Mark each row with `xsniff_passed` (`y` = passed, `n` = failed).  
 No target engine or primary key required:
@@ -236,7 +236,7 @@ checker = DataQualityChecker(
 **Row-level** — one flag per row:
 
 ```python
-status, report, stats, details = checker.sniff_query(
+status, report, stats, details = checker.check_sniff_query(
     source_query="""
         SELECT
             order_id,
@@ -256,7 +256,7 @@ status, report, stats, details = checker.sniff_query(
 **Scalar pass/fail** — a single `xsniff_passed` value:
 
 ```python
-status, report, stats, details = checker.sniff_query(
+status, report, stats, details = checker.check_sniff_query(
     source_query="""
         SELECT CASE
             WHEN EXISTS (SELECT 1 FROM sales.orders WHERE amount <= 0) THEN 'n'
@@ -271,7 +271,7 @@ status, report, stats, details = checker.sniff_query(
 Empty result means pass (`final_score = 100`). Any returned row means fail (`issue_rows_pct = 100` for that result set):
 
 ```python
-status, report, stats, details = checker.sniff_query(
+status, report, stats, details = checker.check_sniff_query(
     source_query="""
         SELECT
             order_id,
@@ -317,7 +317,7 @@ Pass/fail uses tolerance:
 - `final_diff_score > tolerance_pct` → `CHECK_FAILED`
 - otherwise → `CHECK_SUCCESS`
 
-### `check_sample` / `check_query`
+### `check_samples` / `check_custom_queries`
 
 ```
 final_diff_score =
@@ -338,7 +338,7 @@ final_diff_score = 100 × sum_of_absolute_differences
                        / (sum_of_absolute_differences + sum_of_common_counts)
 ```
 
-### `sniff_query`
+### `check_sniff_query`
 
 ```
 issue_rows_pct = (rows with xsniff_passed = 'n') / (checked rows) × 100
@@ -357,8 +357,8 @@ With the issues-only filter pattern (`WHERE …` + literal `'n' AS xsniff_passed
 
 Available on all methods. Splits a date range into N-day windows, runs each chunk, then aggregates metrics and examples. Useful for long ranges or large tables.
 
-- `check_query`: both sides must pass `start_date` and `end_date` in params
-- `sniff_query`: chunking uses `start_date` / `end_date` in `source_params`
+- `check_custom_queries`: both sides must pass `start_date` and `end_date` in params
+- `check_sniff_query`: chunking uses `start_date` / `end_date` in `source_params`
 
 ### Status values
 
@@ -377,7 +377,7 @@ With `results_engine` set and `persist_result=True` (or a custom `DataReference`
 Each run has an internal `run_id` (also stored when persistence is on; not in public JSON from `CheckResult.to_dict()`):
 
 ```
-2024-01-15 10:30:45 - INFO - xoverrr.core - Check run started: run_id=a3f2c8b91d4e5678 check_name=employees_daily check_type=sample
+2024-01-15 10:30:45 - INFO - xoverrr.core - Check run started: run_id=a3f2c8b91d4e5678 check_name=employees_daily check_type=samples
 2024-01-15 10:30:45 - INFO - xoverrr.core._check_samples - Query executed in 2.34s
 2024-01-15 10:30:46 - INFO - xoverrr.core._check_samples - Source: 150000 rows, Target: 149950 rows
 2024-01-15 10:30:47 - INFO - xoverrr.utils.compare_dataframes - Comparison completed in 1.2s
@@ -402,7 +402,7 @@ run_id: a3f2c8b91d4e5678
 version: *.*.*
 source db type: postgresql
 target db type: oracle
-DATA SAMPLE CHECK REPORT:
+SAMPLES CHECK REPORT:
 hr.employees
 VS
 hr.employees
@@ -476,7 +476,7 @@ ISSUE BREAKDOWN:
 
 ### Oracle thin client & `TIMESTAMP WITH TIME ZONE`
 
-With the Oracle thin client and `check_query`, `TIMESTAMP WITH TIME ZONE` columns lose timezone context in the result set.
+With the Oracle thin client and `check_custom_queries`, `TIMESTAMP WITH TIME ZONE` columns lose timezone context in the result set.
 
 **Workaround** — cast to `TIMESTAMP` in SQL:
 

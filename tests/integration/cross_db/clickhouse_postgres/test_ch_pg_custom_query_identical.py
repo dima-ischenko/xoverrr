@@ -95,7 +95,7 @@ class TestCustomQueryCheckPGClickHouse:
               AND created_at < toDate(:end_date) + INTERVAL 1 day
         """
 
-        status, report, stats, details = checker.check_query(
+        status, report, stats, details = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-06'},
             target_query=target_query,
@@ -130,7 +130,7 @@ class TestCustomQueryCheckPGClickHouse:
               AND created_at < toDate(:end_date) + INTERVAL 1 day
         """
 
-        status, report, stats, details = checker.check_query(
+        status, report, stats, details = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-06'},
             target_query=target_query,
@@ -164,7 +164,7 @@ class TestCustomQueryCheckPGClickHouse:
               AND created_at < toDate(:end_date) + INTERVAL 1 day
         """
 
-        status, report, stats, details = checker.check_query(
+        status, report, stats, details = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-06'},
             target_query=target_query,
@@ -200,7 +200,7 @@ class TestCustomQueryCheckPGClickHouse:
               AND created_at < toDate(:end_date) + INTERVAL 1 day
         """
 
-        status, report, stats, details = checker.check_query(
+        status, report, stats, details = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-06'},
             target_query=target_query,
@@ -234,7 +234,7 @@ class TestCustomQueryCheckPGClickHouse:
               AND created_at < toDate(:end_date) + INTERVAL 1 day
         """
 
-        status, report, stats, details = checker.check_query(
+        status, report, stats, details = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-06'},
             target_query=target_query,
@@ -273,7 +273,7 @@ class TestCustomQueryCheckPGClickHouse:
               AND name like :name_filter
         """
 
-        status, report, stats, details = checker.check_query(
+        status, report, stats, details = checker.check_custom_queries(
             source_query=source_query,
             source_params={
                 'start_date': '2024-01-01',
@@ -318,7 +318,7 @@ class TestCustomQueryCheckPGClickHouse:
               AND created_at < toDate(:end_date) + INTERVAL 1 day
         """
 
-        status, report, stats, details = checker.check_query(
+        status, report, stats, details = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-02', 'end_date': '2024-01-04'},
             target_query=target_query,
@@ -363,7 +363,7 @@ class TestCustomQueryCheckPGClickHouse:
             ORDER BY dt
         """
 
-        status, report, stats, details = checker.check_query(
+        status, report, stats, details = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-06'},
             target_query=target_query,

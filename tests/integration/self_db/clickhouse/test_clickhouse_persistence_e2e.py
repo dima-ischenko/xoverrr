@@ -57,7 +57,7 @@ class TestClickHousePersistenceE2E:
             timezone='UTC',
         )
 
-        status, report, stats, details = checker.check_sample(
+        status, report, stats, details = checker.check_samples(
             source_table=DataReference(src_table, 'test'),
             target_table=DataReference(trg_table, 'test'),
             date_column='created_at',
@@ -72,7 +72,7 @@ class TestClickHousePersistenceE2E:
         assert status == CHECK_SUCCESS
         assert stats.final_diff_score == 0.0
         assert details is not None
-        assert '"check_type": "sample"' in report
+        assert '"check_type": "samples"' in report
 
         with clickhouse_engine.begin() as conn:
             row = conn.execute(
@@ -92,7 +92,7 @@ class TestClickHousePersistenceE2E:
 
         assert row is not None
         assert row[0] == CHECK_SUCCESS
-        assert row[1] is not None and 'DATA SAMPLE CHECK REPORT' in row[1]
+        assert row[1] is not None and 'SAMPLES CHECK REPORT' in row[1]
         assert int(row[2]) == 3
         assert int(row[3]) == 3
         assert float(row[4]) == pytest.approx(100.0, rel=1e-6)

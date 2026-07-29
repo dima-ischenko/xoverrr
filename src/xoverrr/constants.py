@@ -18,19 +18,19 @@ CHECK_FAILED = 'failed'
 CHECK_SKIPPED = 'skipped'
 
 # Check types
-CHECK_TYPE_COUNT = 'count'
-CHECK_TYPE_SAMPLE = 'sample'
-CHECK_TYPE_CUSTOM_QUERY = 'custom_query'
+CHECK_TYPE_COUNTS = 'counts'
+CHECK_TYPE_SAMPLES = 'samples'
+CHECK_TYPE_CUSTOM_QUERIES = 'custom_queries'
 CHECK_TYPE_SNIFF_QUERY = 'sniff_query'
 
 # Shared y/n flag convention for x-prefixed check columns.
 FLAG_VALUE_YES = 'y'
 FLAG_VALUE_NO = 'n'
 
-# Recently changed exclusion column (check_sample / check_query).
+# Recently changed exclusion column (check_samples / check_custom_queries).
 XRECENTLY_CHANGED_COLUMN = 'xrecently_changed'
 
-# Pass/fail flag column for sniff_query (row-level or scalar).
+# Pass/fail flag column for check_sniff_query (row-level or scalar).
 # ``y`` = passed, ``n`` = failed.
 XSNIFF_PASSED_COLUMN = 'xsniff_passed'
 XSNIFF_PASSED_VALUE_YES = FLAG_VALUE_YES

@@ -194,7 +194,7 @@ def build_sniff_issue_stats(
     passed_rows: int,
     issue_rows: int,
 ) -> CheckStats:
-    """Build CheckStats for source-only sniff_query checks."""
+    """Build CheckStats for source-only check_sniff_query checks."""
     if total_rows == 0:
         return CheckStats(
             total_source_rows=0,
@@ -239,11 +239,11 @@ def build_sniff_issue_stats(
 
 
 def sniff_issue_row_count(stats: CheckStats) -> int:
-    """Issue (failed) row count for sniff_query stats."""
+    """Issue (failed) row count for check_sniff_query stats."""
     return max(0, stats.total_source_rows - stats.passed_rows)
 
 
-def resolve_sniff_query_passed_column(columns: List[str]) -> str:
+def resolve_check_sniff_query_passed_column(columns: List[str]) -> str:
     """
     Resolve the sniff-query pass/fail flag column.
 
@@ -259,17 +259,17 @@ def resolve_sniff_query_passed_column(columns: List[str]) -> str:
     return XSNIFF_PASSED_COLUMN
 
 
-def evaluate_sniff_query_data(
+def evaluate_check_sniff_query_data(
     df: pd.DataFrame,
     max_examples: int = DEFAULT_MAX_EXAMPLES,
 ) -> Tuple[CheckStats, CheckDetails]:
     """
-    Classify rows from a sniff_query using ``xsniff_passed``.
+    Classify rows from a check_sniff_query using ``xsniff_passed``.
 
     ``y`` means passed, ``n`` means failed.
     """
     prepared_df = prepare_dataframe(df)
-    passed_column = resolve_sniff_query_passed_column(prepared_df.columns.tolist())
+    passed_column = resolve_check_sniff_query_passed_column(prepared_df.columns.tolist())
 
     is_failed = prepared_df[passed_column] == XSNIFF_PASSED_VALUE_NO
     issue_rows = int(is_failed.sum())
@@ -595,7 +595,7 @@ def _create_keys_set(df: pd.DataFrame, key_columns: List[str]) -> set:
     return set(df[key_columns].itertuples(index=False, name=None))
 
 
-def generate_check_sample_report(
+def _legacy_generate_sample_report(
     source_table: str,
     target_table: str,
     stats: CheckStats,
@@ -622,7 +622,7 @@ def generate_check_sample_report(
         source_db_type=source_db_type,
         target_db_type=target_db_type,
     )
-    rl.append('DATA SAMPLE CHECK REPORT: ')
+    rl.append('SAMPLES CHECK REPORT: ')
     if source_table and target_table:
         rl.append(f'{source_table}')
         rl.append('VS')
@@ -716,7 +716,7 @@ def generate_check_sample_report(
     return '\n'.join(rl)
 
 
-def generate_check_count_report(
+def _legacy_generate_count_report(
     source_table: str,
     target_table: str,
     stats: CheckStats,
@@ -748,7 +748,7 @@ def generate_check_count_report(
         source_db_type=source_db_type,
         target_db_type=target_db_type,
     )
-    rl.append(f'COUNT CHECK REPORT:')
+    rl.append(f'COUNTS CHECK REPORT:')
     rl.append(f'{source_table}')
     rl.append(f'VS')
     rl.append(f'{target_table}')

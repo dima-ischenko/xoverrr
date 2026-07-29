@@ -84,7 +84,7 @@ def test_format_check_result_returns_json_report():
         report='FULL TEXT REPORT',
         stats=_build_stats(),
         details=_build_details(),
-        check_type=ct.CHECK_TYPE_SAMPLE,
+        check_type=ct.CHECK_TYPE_SAMPLES,
         check_name='unit_test_compare',
         source_table='public.source_table',
         target_table='public.target_table',
@@ -96,7 +96,7 @@ def test_format_check_result_returns_json_report():
 
     payload = json.loads(report)
     assert 'run_id' not in payload
-    assert payload['check_type'] == ct.CHECK_TYPE_SAMPLE
+    assert payload['check_type'] == ct.CHECK_TYPE_SAMPLES
     assert payload['status'] == 'success'
     assert payload['report'] == 'FULL TEXT REPORT'
     assert payload['stats']['final_score'] == 100.0
@@ -111,7 +111,7 @@ def test_format_check_result_returns_text_report():
         report='FULL TEXT REPORT',
         stats=_build_stats(),
         details=_build_details(),
-        check_type=ct.CHECK_TYPE_SAMPLE,
+        check_type=ct.CHECK_TYPE_SAMPLES,
         source_table='public.source_table',
         target_table='public.target_table',
     )
@@ -137,7 +137,7 @@ def test_persist_writes_to_results_engine():
         report='COUNT REPORT',
         stats=_build_stats(),
         details=_build_details(),
-        check_type=ct.CHECK_TYPE_COUNT,
+        check_type=ct.CHECK_TYPE_COUNTS,
         source_table='public.a',
         target_table='public.b',
     )
@@ -147,7 +147,7 @@ def test_persist_writes_to_results_engine():
     stored = pd.read_sql('select * from dq_results', results_engine)
     assert len(stored) == 1
     assert stored.iloc[0]['run_id'] == RUN_ID
-    assert stored.iloc[0]['check_type'] == ct.CHECK_TYPE_COUNT
+    assert stored.iloc[0]['check_type'] == ct.CHECK_TYPE_COUNTS
     assert stored.iloc[0]['status'] == 'failed'
     assert stored.iloc[0]['report'] == 'COUNT REPORT'
     assert stored.iloc[0]['stats_total_source_rows'] == 10
@@ -186,7 +186,7 @@ def test_persist_rounds_stats_floats_to_report_precision():
         report='FAILED REPORT',
         stats=stats,
         details=_build_details(),
-        check_type=ct.CHECK_TYPE_SAMPLE,
+        check_type=ct.CHECK_TYPE_SAMPLES,
         source_table='public.a',
         target_table='public.b',
     )
@@ -213,7 +213,7 @@ def test_persist_writes_timing_columns():
         report='TIMED REPORT',
         stats=_build_stats(),
         details=_build_details(),
-        check_type=ct.CHECK_TYPE_SAMPLE,
+        check_type=ct.CHECK_TYPE_SAMPLES,
         source_table='public.a',
         target_table='public.b',
         timings=_build_timings(),
@@ -303,7 +303,7 @@ def test_persist_uses_check_timezone_column():
         report='TZ REPORT',
         stats=_build_stats(),
         details=_build_details(),
-        check_type=ct.CHECK_TYPE_SAMPLE,
+        check_type=ct.CHECK_TYPE_SAMPLES,
         source_table='public.a',
         target_table='public.b',
     )
@@ -345,7 +345,7 @@ def test_persist_with_datareference_target_and_tags():
         report='TAGGED REPORT',
         stats=_build_stats(),
         details=_build_details(),
-        check_type=ct.CHECK_TYPE_SAMPLE,
+        check_type=ct.CHECK_TYPE_SAMPLES,
         check_name='orders_daily_compare',
         check_tags={'env': 'dev', 'domain': 'orders'},
         source_table='public.orders_src',

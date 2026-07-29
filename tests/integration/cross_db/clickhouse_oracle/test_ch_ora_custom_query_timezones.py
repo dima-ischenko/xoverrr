@@ -98,7 +98,7 @@ class TestClickHouseOracleQueryMixedTimezoneOffsets:
               AND record_date < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1
         """
 
-        status, report, stats, details = checker.check_query(
+        status, report, stats, details = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-08'},
             target_query=target_query,

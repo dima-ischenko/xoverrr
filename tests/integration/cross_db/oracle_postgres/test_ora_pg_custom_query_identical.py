@@ -87,7 +87,7 @@ class TestCustomQueryCheck:
               AND created_at < date_trunc('day', cast(:end_date as date)) + interval '1 days'
         """
 
-        status, report, stats, details = checker.check_query(
+        status, report, stats, details = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-05'},
             target_query=target_query,
@@ -123,7 +123,7 @@ class TestCustomQueryCheck:
               AND created_at < date_trunc('day', cast(:end_date as date)) + interval '1 days'
         """
 
-        status, report, stats, details = checker.check_query(
+        status, report, stats, details = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-05'},
             target_query=target_query,
@@ -158,7 +158,7 @@ class TestCustomQueryCheck:
               AND created_at < date_trunc('day', cast(:end_date as date)) + interval '1 days'
         """
 
-        status, report, stats, details = checker.check_query(
+        status, report, stats, details = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-05'},
             target_query=target_query,
@@ -192,7 +192,7 @@ class TestCustomQueryCheck:
               AND created_at < date_trunc('day', cast(:end_date as date)) + interval '1 days'
         """
 
-        status, report, stats, details = checker.check_query(
+        status, report, stats, details = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-04'},
             target_query=target_query,
@@ -226,7 +226,7 @@ class TestCustomQueryCheck:
               AND created_at < date_trunc('day', cast(:end_date as date)) + interval '1 days'
         """
 
-        status, report, stats, details = checker.check_query(
+        status, report, stats, details = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-04'},
             target_query=target_query,
@@ -262,7 +262,7 @@ class TestCustomQueryCheck:
               and name like '%lice%'
         """
 
-        status, report, stats, details = checker.check_query(
+        status, report, stats, details = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-04'},
             target_query=target_query,
@@ -302,7 +302,7 @@ class TestCustomQueryCheck:
             group by id
         """
 
-        status, report, stats, details = checker.check_query(
+        status, report, stats, details = checker.check_custom_queries(
             source_query=source_query,
             source_params={
                 'start_date': '2024-01-01',

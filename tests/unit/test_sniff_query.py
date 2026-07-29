@@ -11,8 +11,8 @@ from xoverrr.constants import (
 )
 from xoverrr.utils import (
     build_sniff_issue_stats,
-    evaluate_sniff_query_data,
-    resolve_sniff_query_passed_column,
+    evaluate_check_sniff_query_data,
+    resolve_check_sniff_query_passed_column,
     sniff_issue_row_count,
 )
 
@@ -31,7 +31,7 @@ class TestSniffQueryUtils:
             }
         )
 
-        stats, details = evaluate_sniff_query_data(df, max_examples=2)
+        stats, details = evaluate_check_sniff_query_data(df, max_examples=2)
 
         assert stats.total_source_rows == 4
         assert stats.passed_rows == 3
@@ -44,7 +44,7 @@ class TestSniffQueryUtils:
     def test_evaluate_sniff_query_pass_fail_pass(self):
         df = pd.DataFrame({XSNIFF_PASSED_COLUMN: [FLAG_VALUE_YES]})
 
-        stats, details = evaluate_sniff_query_data(df)
+        stats, details = evaluate_check_sniff_query_data(df)
 
         assert stats.total_source_rows == 1
         assert stats.passed_rows == 1
@@ -53,28 +53,28 @@ class TestSniffQueryUtils:
     def test_evaluate_sniff_query_pass_fail_fail(self):
         df = pd.DataFrame({XSNIFF_PASSED_COLUMN: [FLAG_VALUE_NO]})
 
-        stats, details = evaluate_sniff_query_data(df)
+        stats, details = evaluate_check_sniff_query_data(df)
 
         assert stats.total_source_rows == 1
         assert stats.passed_rows == 0
         assert stats.issue_rows_pct == pytest.approx(100.0)
         assert stats.final_diff_score == pytest.approx(100.0)
 
-    def test_resolve_sniff_query_passed_column_row_level(self):
+    def test_resolve_check_sniff_query_passed_column_row_level(self):
         assert (
-            resolve_sniff_query_passed_column(['id', XSNIFF_PASSED_COLUMN])
+            resolve_check_sniff_query_passed_column(['id', XSNIFF_PASSED_COLUMN])
             == XSNIFF_PASSED_COLUMN
         )
 
-    def test_resolve_sniff_query_passed_column_scalar(self):
+    def test_resolve_check_sniff_query_passed_column_scalar(self):
         assert (
-            resolve_sniff_query_passed_column([XSNIFF_PASSED_COLUMN])
+            resolve_check_sniff_query_passed_column([XSNIFF_PASSED_COLUMN])
             == XSNIFF_PASSED_COLUMN
         )
 
-    def test_resolve_sniff_query_passed_column_rejects_unknown_shape(self):
+    def test_resolve_check_sniff_query_passed_column_rejects_unknown_shape(self):
         with pytest.raises(ValueError, match=XSNIFF_PASSED_COLUMN):
-            resolve_sniff_query_passed_column(['id', 'name'])
+            resolve_check_sniff_query_passed_column(['id', 'name'])
 
     def test_build_sniff_issue_stats_empty(self):
         stats = build_sniff_issue_stats(0, 0, 0)
@@ -168,7 +168,7 @@ class TestSniffQuery:
         )
         checker = self._build_checker(monkeypatch, source_df, metadata)
 
-        status, report, stats, details = checker.sniff_query(
+        status, report, stats, details = checker.check_sniff_query(
             source_query='SELECT order_id, xsniff_passed FROM orders',
             tolerance_pct=50.0,
         )
@@ -176,7 +176,7 @@ class TestSniffQuery:
         assert status == CHECK_SUCCESS
         assert sniff_issue_row_count(stats) == 1
         assert stats.issue_rows_pct == pytest.approx(100 / 3)
-        assert 'SNIFF CHECK REPORT' in report
+        assert 'SNIFF QUERY CHECK REPORT' in report
         assert checker._finalize_calls[-1]['check_type'] == CHECK_TYPE_SNIFF_QUERY
 
     def test_sniff_query_pass_fail_scalar(self, monkeypatch):
@@ -184,7 +184,7 @@ class TestSniffQuery:
         metadata = pd.DataFrame({'column_name': [XSNIFF_PASSED_COLUMN]})
         checker = self._build_checker(monkeypatch, source_df, metadata)
 
-        status, report, stats, details = checker.sniff_query(
+        status, report, stats, details = checker.check_sniff_query(
             source_query="SELECT 'y' AS xsniff_passed",
             tolerance_pct=0.0,
         )
@@ -197,7 +197,7 @@ class TestSniffQuery:
         metadata = pd.DataFrame({'column_name': [XSNIFF_PASSED_COLUMN]})
         checker = self._build_checker(monkeypatch, source_df, metadata)
 
-        status, report, stats, details = checker.sniff_query(
+        status, report, stats, details = checker.check_sniff_query(
             source_query="SELECT 'n' AS xsniff_passed",
             tolerance_pct=0.0,
         )
@@ -214,7 +214,7 @@ class TestSniffQuery:
         with pytest.raises(ValueError, match='target_engine is required'):
             checker._require_target_engine()
 
-    def test_check_query_requires_pk(self, monkeypatch):
+    def test_check_custom_queries_requires_pk(self, monkeypatch):
         from xoverrr.core import DataQualityChecker
 
         checker = DataQualityChecker.__new__(DataQualityChecker)
@@ -233,7 +233,7 @@ class TestSniffQuery:
         )
 
         with pytest.raises(ValueError, match='custom_primary_key'):
-            checker.check_query(
+            checker.check_custom_queries(
                 source_query='SELECT id FROM source_table',
                 source_params={},
                 target_query='SELECT id FROM target_table',
