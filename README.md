@@ -267,6 +267,27 @@ status, report, stats, details = comparator.sniff_query(
 )
 ```
 
+**Issues-only filter** — `WHERE` keeps only bad rows and marks every returned row with a literal `'n'`.  
+Empty result means pass (`final_score = 100`). Any returned row means fail (`issue_rows_pct = 100` for that result set):
+
+```python
+status, report, stats, details = comparator.sniff_query(
+    source_query="""
+        SELECT
+            order_id,
+            amount,
+            'n' AS xsniff_passed
+        FROM sales.orders
+        WHERE amount <= 0
+          AND created_at >= :start_date
+    """,
+    source_params={'start_date': '2024-01-01'},
+    tolerance_pct=0.0,
+)
+```
+
+Use this when you only care that issue rows exist (and want their keys/attributes in the report). Prefer the row-level `CASE` pattern above when you need a rate over the full checked scope.
+
 **Main parameters:** `source_query`, `source_params`, `chunk_size_days` (when params include dates), `tolerance_pct`, `max_examples`, plus shared persistence / naming / report format options.
 
 Useful `stats` fields:
@@ -325,6 +346,8 @@ final_diff_score = issue_rows_pct
 ```
 
 Empty result → `final_diff_score = 0` (and score 100).
+
+With the issues-only filter pattern (`WHERE …` + literal `'n' AS xsniff_passed`), *checked rows* are only the filtered issue rows, so any non-empty result yields `issue_rows_pct = 100`.
 
 ---
 
