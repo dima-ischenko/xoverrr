@@ -204,6 +204,8 @@ class TestSniffQuery:
 
         assert status == CHECK_FAILED
         assert stats.final_score == pytest.approx(0.0)
+        assert 'ISSUE ROW EXAMPLES' in report
+        assert not details.issue_row_examples.empty
 
     def test_check_methods_require_target_engine(self):
         from xoverrr.core import DataQualityChecker

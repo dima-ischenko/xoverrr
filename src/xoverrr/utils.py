@@ -280,7 +280,9 @@ def evaluate_check_sniff_query_data(
     evaluated_columns = [
         column for column in prepared_df.columns if column != passed_column
     ]
-    issue_row_examples = prepared_df.loc[is_failed, evaluated_columns].head(max_examples)
+    # Keep all columns (including xsniff_passed) so scalar and row-level
+    # failures both have printable issue row examples.
+    issue_row_examples = prepared_df.loc[is_failed].head(max_examples)
     issue_breakdown = (
         prepared_df[passed_column]
         .value_counts(dropna=False)

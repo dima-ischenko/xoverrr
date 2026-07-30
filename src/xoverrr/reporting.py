@@ -389,9 +389,7 @@ def generate_check_sniff_query_report(
         lines.append('\nISSUE BREAKDOWN:')
         lines.append(details.issue_breakdown.to_string(index=False))
 
-    # Horizontal wide row dumps are hard to use in text reports.
-    # Keep the code for a future optional report parameter (e.g. include_issue_row_examples).
-    if False and (
+    if (
         details.issue_row_examples is not None
         and not details.issue_row_examples.empty
     ):

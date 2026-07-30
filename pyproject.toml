@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "xoverrr"
-version = "1.4.2"
+version = "1.4.3"
 description = "A tool for cross-database and intra-source data quality checks with detailed discrepancy analysis and reporting."
 readme = "README.md"
 requires-python = ">=3.9"
