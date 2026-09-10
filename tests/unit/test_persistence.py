@@ -278,7 +278,8 @@ def test_oracle_persist_type_map_uses_native_types():
     adapter = OracleAdapter()
     assert adapter.PERSIST_TYPE_MAP['datetime'] == 'TIMESTAMP'
     assert adapter.PERSIST_TYPE_MAP['float'] == 'NUMBER'
-    assert adapter.PERSIST_TYPE_MAP['table_ref'] == 'VARCHAR2(256)'
+    assert adapter.PERSIST_TYPE_MAP['text'] == 'VARCHAR2(4000)'
+    assert adapter.PERSIST_TYPE_MAP['table_ref'] == 'VARCHAR2(4000)'
     assert (
         adapter._format_persist_column('run_started_at', 'datetime', 'run_id')
         == 'run_started_at TIMESTAMP'
@@ -286,6 +287,40 @@ def test_oracle_persist_type_map_uses_native_types():
     assert (
         adapter._format_persist_column('stats_final_score', 'float', 'run_id')
         == 'stats_final_score NUMBER'
+    )
+    assert adapter._format_persist_column('report', 'text', 'run_id') == 'report CLOB'
+    assert (
+        adapter._format_persist_column('source_query', 'text', 'run_id')
+        == 'source_query VARCHAR2(4000)'
+    )
+    assert (
+        adapter._format_persist_column(
+            'details_issue_examples_json', 'text', 'run_id'
+        )
+        == 'details_issue_examples_json VARCHAR2(4000)'
+    )
+
+
+def test_oracle_persist_insert_truncates_non_report_strings():
+    from xoverrr.adapters.oracle import OracleAdapter
+
+    adapter = OracleAdapter()
+    assert adapter._persist_insert_value_expr('report', 'text') == ':report'
+    assert (
+        adapter._persist_insert_value_expr('source_query', 'text')
+        == 'SUBSTR(:source_query, 1, 4000)'
+    )
+    assert (
+        adapter._persist_insert_value_expr('check_tags_json', 'text')
+        == 'SUBSTR(:check_tags_json, 1, 4000)'
+    )
+    assert (
+        adapter._persist_insert_value_expr('stats_final_score', 'float')
+        == ':stats_final_score'
+    )
+    assert (
+        adapter._persist_insert_value_expr('run_started_at', 'datetime')
+        == ':run_started_at'
     )
 
 

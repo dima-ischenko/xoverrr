@@ -12,6 +12,18 @@ from .base import BaseDatabaseAdapter, Engine
 
 
 class OracleAdapter(BaseDatabaseAdapter):
+    PERSIST_REPORT_COLUMN = 'report' # CLOB
+    PERSIST_VARCHAR2_MAX_LENGTH = 4000
+    PERSIST_STRING_LOGICAL_TYPES = frozenset(
+        {
+            'short_string',
+            'string',
+            'name',
+            'table_ref',
+            'tz_name',
+            'text',
+        }
+    )
     PERSIST_TYPE_MAP = {
         'short_string': 'VARCHAR2(32)',
         'string': 'VARCHAR2(64)',
@@ -19,7 +31,7 @@ class OracleAdapter(BaseDatabaseAdapter):
         'table_ref': 'VARCHAR2(256)',
         'tz_name': 'VARCHAR2(128)',
         'datetime': 'TIMESTAMP',
-        'text': 'CLOB',
+        'text': 'VARCHAR2(4000)',
         'float': 'NUMBER',
         'int': 'NUMBER(19)',
     }
@@ -583,16 +595,38 @@ class OracleAdapter(BaseDatabaseAdapter):
     def _format_persist_column(
         self, name: str, col_type: str, primary_key: Optional[str]
     ) -> str:
-        sql_type = self.PERSIST_TYPE_MAP[col_type]
+        if name == self.PERSIST_REPORT_COLUMN:
+            sql_type = 'CLOB'
+        else:
+            sql_type = self.PERSIST_TYPE_MAP[col_type]
         if name == primary_key:
             return f'{name} {sql_type} PRIMARY KEY'
         return f'{name} {sql_type}'
 
+    def _persist_insert_value_expr(
+        self, column: str, col_type: Optional[str]
+    ) -> str:
+        """Bind report as CLOB; truncate other string columns to VARCHAR2(4000)."""
+        if (
+            column != self.PERSIST_REPORT_COLUMN
+            and col_type in self.PERSIST_STRING_LOGICAL_TYPES
+        ):
+            return f'SUBSTR(:{column}, 1, {self.PERSIST_VARCHAR2_MAX_LENGTH})'
+        return f':{column}'
+
     def insert_persistence_record(
-        self, engine: Engine, table_ref: DataReference, record: Dict
+        self,
+        engine: Engine,
+        table_ref: DataReference,
+        record: Dict,
+        column_types: Optional[Dict[str, str]] = None,
     ) -> None:
+        column_types = column_types or {}
         columns_sql = ', '.join(record.keys())
-        values_sql = ', '.join(f':{col}' for col in record.keys())
+        values_sql = ', '.join(
+            self._persist_insert_value_expr(col, column_types.get(col))
+            for col in record.keys()
+        )
         insert_sql = (
             f'INSERT INTO {table_ref.full_name} ({columns_sql}) VALUES ({values_sql})'
         )

@@ -233,7 +233,8 @@ checker = DataQualityChecker(
 )
 ```
 
-**Row-level** — one flag per row:
+**Row-level** — one flag per row. Use when you need an issue *rate* over the full scope;
+`tolerance_pct` then means “allow up to N% of rows with `xsniff_passed = n`”:
 
 ```python
 status, report, stats, details = checker.check_sniff_query(
@@ -253,7 +254,9 @@ status, report, stats, details = checker.check_sniff_query(
 )
 ```
 
-**Scalar pass/fail** — a single `xsniff_passed` value:
+**Scalar pass/fail** — a single `xsniff_passed` value. Outcome is typically binary
+(`final_diff_score` 0 or 100), so leave `tolerance_pct` at the default `0.0`
+(fail on any issue):
 
 ```python
 status, report, stats, details = checker.check_sniff_query(
@@ -263,12 +266,11 @@ status, report, stats, details = checker.check_sniff_query(
             ELSE 'y'
         END AS xsniff_passed
     """,
-    tolerance_pct=0.0,
 )
 ```
 
 **Issues-only filter** — `WHERE` keeps only bad rows and marks every returned row with a literal `'n'`.  
-Empty result means pass (`final_score = 100`). Any returned row means fail (`issue_rows_pct = 100` for that result set):
+Empty result means pass (`final_score = 100`). Any returned row means fail (`issue_rows_pct = 100` for that result set). Same as scalar: default `tolerance_pct=0.0` is what you want for “fail if anything is found”:
 
 ```python
 status, report, stats, details = checker.check_sniff_query(
@@ -282,7 +284,6 @@ status, report, stats, details = checker.check_sniff_query(
           AND created_at >= :start_date
     """,
     source_params={'start_date': '2024-01-01'},
-    tolerance_pct=0.0,
 )
 ```
 

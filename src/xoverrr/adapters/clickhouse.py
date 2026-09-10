@@ -315,7 +315,11 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
         return f'{name} {sql_type}'
 
     def insert_persistence_record(
-        self, engine: Engine, table_ref: DataReference, record: Dict
+        self,
+        engine: Engine,
+        table_ref: DataReference,
+        record: Dict,
+        column_types: Optional[Dict[str, str]] = None,
     ) -> None:
         columns_sql = ', '.join(record.keys())
         values_sql = ', '.join(f':{col}' for col in record.keys())

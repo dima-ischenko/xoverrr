@@ -11,6 +11,7 @@ class TestOraclePersistenceE2E:
         src_table = 'test_persist_oracle_src'
         trg_table = 'test_persist_oracle_trg'
         results_table = 'test_persist_oracle_results'
+        
 
         table_helper.drop_table(oracle_engine, results_table)
 
@@ -88,6 +89,20 @@ class TestOraclePersistenceE2E:
                 )
             ).fetchone()
 
+            column_types = {
+                name: data_type
+                for name, data_type in conn.execute(
+                    text(
+                        """
+                        SELECT column_name, data_type
+                        FROM user_tab_columns
+                        WHERE table_name = UPPER(:table_name)
+                        """
+                    ),
+                    {'table_name': results_table},
+                )
+            }
+
         assert row is not None
         assert row[0] == CHECK_SUCCESS
         assert row[1] is not None and 'SAMPLES CHECK REPORT' in row[1]
@@ -95,3 +110,60 @@ class TestOraclePersistenceE2E:
         assert int(row[3]) == 3
         assert float(row[4]) == pytest.approx(100.0, rel=1e-6)
         assert row[5] is not None and 'value' in row[5]
+        assert column_types.get('REPORT') == 'CLOB'
+        assert column_types.get('SOURCE_QUERY') == 'VARCHAR2'
+        assert column_types.get('CHECK_TAGS_JSON') == 'VARCHAR2'
+        assert column_types.get('DETAILS_EVALUATED_COLUMNS_JSON') == 'VARCHAR2'
+
+    def test_oracle_persistence_custom_query_e2e(self, oracle_engine):
+        src_table = 'test_persist_oracle_src'
+        trg_table = 'test_persist_oracle_trg'
+        results_table = 'test_persist_oracle_custom_results'
+
+        checker = DataQualityChecker(
+            source_engine=oracle_engine,
+            target_engine=oracle_engine,
+            results_engine=oracle_engine,
+            timezone='UTC',
+        )
+
+        source_query = f"""
+            SELECT id, value, created_at
+            FROM test.{src_table}
+            WHERE created_at >= date'2024-01-01'
+              AND created_at < date'2024-01-04'
+              -- {'A' * 5000}
+        """
+        target_query = f"""
+            SELECT id, value, created_at
+            FROM test.{trg_table}
+            WHERE created_at >= date'2024-01-01'
+              AND created_at < date'2024-01-04'
+              -- {'A' * 5000}
+        """
+        #query_params = {'start_date': '2024-01-01', 'end_date': '2024-01-04'}
+
+        status, _, _, _ = checker.check_custom_queries(
+            source_query=source_query,
+            source_params=None,
+            target_query=target_query,
+            target_params=None,
+            custom_primary_key=['id'],
+            tolerance_pct=0.0,
+            persist_result=DataReference(results_table),
+            report_output_format='json',
+        )
+
+        assert status == CHECK_SUCCESS
+
+        with oracle_engine.begin() as conn:
+            row = conn.execute(
+                text(
+                    f"""
+                    SELECT check_type, status, source_query, target_query
+                    FROM {results_table}
+                    """
+                )
+            ).fetchone()
+
+        assert row[:2] == ('custom_queries', CHECK_SUCCESS)        

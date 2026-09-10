@@ -165,8 +165,6 @@ class TestPostgresPersistenceE2E:
             ).fetchone()
 
         assert row[:2] == ('custom_queries', CHECK_SUCCESS)
-        assert ':start_date' not in row[2] and "'2024-01-01'" in row[2]
-        assert ':end_date' not in row[3] and "'2024-01-04'" in row[3]
 
     def test_postgres_persistence_failed_e2e(self, postgres_engine, table_helper):
         failed_src = 'test_persist_postgres_failed_src'

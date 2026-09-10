@@ -279,7 +279,9 @@ class CheckResultPersister:
             record = _coerce_persist_record(
                 record, column_types, engine=self.results_engine
             )
-            adapter.insert_persistence_record(self.results_engine, table_ref, record)
+            adapter.insert_persistence_record(
+                self.results_engine, table_ref, record, column_types
+            )
             table_name = persist_result_ref.full_name if persist_result_ref else self.results_table
             app_logger.info(f'Check result persisted to {table_name}')
         except Exception as exc:

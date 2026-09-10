@@ -150,7 +150,11 @@ class BaseDatabaseAdapter(ABC):
 
     @abstractmethod
     def insert_persistence_record(
-        self, engine: Engine, table_ref: DataReference, record: Dict
+        self,
+        engine: Engine,
+        table_ref: DataReference,
+        record: Dict,
+        column_types: Optional[Dict[str, str]] = None,
     ) -> None:
         """Insert one persistence record using explicit SQL."""
         pass
