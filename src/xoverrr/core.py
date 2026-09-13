@@ -39,7 +39,7 @@ from .version import __version__
 
 class DataQualityChecker:
     """
-    Main checker class implementing data quality checks on and between databases.
+    Main checker for intra-source and cross-database data-quality checks.
     """
 
     def __init__(
@@ -113,7 +113,7 @@ class DataQualityChecker:
         }
 
     def _update_stats(self, status: str, source_table: DataReference):
-        """Update check statistics"""
+        """Update the checker run statistics."""
         self.check_stats[status] += 1
         self.check_stats['end_time'] = pd.Timestamp.now().strftime(
             ct.DATETIME_FORMAT
@@ -223,23 +223,23 @@ class DataQualityChecker:
         report_output_format: str = ct.REPORT_OUTPUT_FORMAT_TEXT,
     ) -> Tuple[str, str, Optional[CheckStats], Optional[CheckDetails]]:
         """
-        Compare data from custom queries with specified key columns
+        Compare sample rows and column values between two tables or views.
 
         Parameters:
             source_table: `DataReference`
-                source table to check
+                Source table to check.
             target_table: `DataReference`
-                target table to check
+                Target table to check.
             custom_primary_key : `List[str]`
-                List of primary key columns for the check.
+                Primary-key columns for the check.
             exclude_columns : `Optional[List[str]] = None`
                 Columns to exclude from the check.
             include_columns : `Optional[List[str]] = None`
-                Columns to include in the check (default all cols)
+                Columns to include in the check (default: all columns).
             tolerance_pct : `float`
-                Tolerance pct for discrepancies (0–100).
+                Tolerance percentage for discrepancies (0–100).
             max_examples
-                Maximum number of discrepancy examples per column
+                Maximum number of discrepancy examples per column.
         """
         self._validate_inputs(source_table, target_table)
         self._require_target_engine()
@@ -1371,7 +1371,7 @@ class DataQualityChecker:
     def _get_metadata_cols_for_custom_query(
         self, query, engine: Engine
     ) -> pd.DataFrame:
-        """Get metadata with proper source handling"""
+        """Return column metadata for a custom query."""
         adapter = self._get_adapter(DBMSType.from_engine(engine))
 
         columns_meta = adapter.get_metadata_for_custom_query(query, engine)
@@ -1384,7 +1384,7 @@ class DataQualityChecker:
     def _get_metadata_cols(
         self, data_ref: DataReference, engine: Engine
     ) -> pd.DataFrame:
-        """Get metadata with proper source handling"""
+        """Return column metadata for a table or view."""
         adapter = self._get_adapter(DBMSType.from_engine(engine))
 
         query, params = adapter.build_metadata_columns_query(data_ref)
@@ -1396,7 +1396,7 @@ class DataQualityChecker:
         return columns_meta
 
     def _get_metadata_pk(self, data_ref: DataReference, engine: Engine) -> pd.DataFrame:
-        """Get metadata with proper source handling"""
+        """Return primary-key metadata for a table or view."""
         adapter = self._get_adapter(DBMSType.from_engine(engine))
 
         query, params = adapter.build_primary_key_query(data_ref)
@@ -1423,7 +1423,7 @@ class DataQualityChecker:
         exclude_recent_hours: Optional[int],
         query_side: str,
     ) -> Tuple[pd.DataFrame, str, Dict]:
-        """Retrieve and prepare table data"""
+        """Fetch table data and apply type conversion."""
         db_type = DBMSType.from_engine(engine)
         adapter = self._get_adapter(db_type)
         app_logger.info(db_type)
@@ -1450,7 +1450,7 @@ class DataQualityChecker:
         return df, query, params
 
     def _get_adapter(self, db_type: DBMSType) -> BaseDatabaseAdapter:
-        """Get adapter for specific DBMS"""
+        """Return the adapter for the given DBMS."""
         try:
             return self.adapters[db_type]
         except KeyError:
@@ -1756,7 +1756,7 @@ class DataQualityChecker:
         timezone: str = None,
         query_side: Optional[str] = None,
     ) -> pd.DataFrame:
-        """Execute SQL query using appropriate adapter."""
+        """Execute an SQL query using the appropriate adapter."""
         if query_side:
             self._run_timings.mark_query_start(query_side)
         try:
@@ -1772,7 +1772,7 @@ class DataQualityChecker:
     def _analyze_columns_meta(
         self, source_columns_meta: pd.DataFrame, target_columns_meta: pd.DataFrame
     ) -> tuple[pd.DataFrame, list, list]:
-        """Find common columns between source and target and return unique columns for each"""
+        """Find common columns and the columns unique to each side."""
 
         source_columns = source_columns_meta['column_name'].tolist()
         target_columns = target_columns_meta['column_name'].tolist()
@@ -1793,7 +1793,7 @@ class DataQualityChecker:
         return common_columns, source_unique, target_unique
 
     def _validate_inputs(self, source: DataReference, target: DataReference):
-        """Validate input parameters"""
+        """Validate that source and target are DataReference instances."""
         if not isinstance(source, DataReference):
             raise TypeError('source must be a DataReference')
         if not isinstance(target, DataReference):

@@ -7,7 +7,7 @@ from sqlalchemy.engine import Engine
 
 
 class ObjectType(Enum):
-    """Types of database objects"""
+    """Types of database object."""
 
     TABLE = auto()
     VIEW = auto()
@@ -16,7 +16,7 @@ class ObjectType(Enum):
 
 
 class DBMSType(Enum):
-    """Supported database management systems"""
+    """Supported database management systems."""
 
     ORACLE = auto()
     POSTGRESQL = auto()
@@ -24,7 +24,7 @@ class DBMSType(Enum):
 
     @classmethod
     def from_engine(cls, engine: Engine) -> 'DBMSType':
-        """Infer DBMS type from SQLAlchemy engine"""
+        """Infer the DBMS type from a SQLAlchemy engine."""
         dialect = engine.dialect.name.lower()
         if dialect == 'oracle':
             return cls.ORACLE
@@ -37,7 +37,7 @@ class DBMSType(Enum):
 
 @dataclass(frozen=True)
 class DataReference:
-    """Immutable reference to a database object"""
+    """Immutable reference to a database object."""
 
     name: str
     schema: Optional[str] = None
@@ -46,7 +46,7 @@ class DataReference:
         self._validate()
 
     def _validate(self):
-        """Validate table reference parameters"""
+        """Validate the table-reference parameters."""
         if not re.match(r'^[a-zA-Z0-9_]+$', self.name):
             raise ValueError(f'Invalid table name: {self.name}')
         if self.schema and not re.match(r'^[a-zA-Z0-9_]+$', self.schema):
@@ -54,5 +54,5 @@ class DataReference:
 
     @property
     def full_name(self) -> str:
-        """Get fully qualified object name"""
+        """Return the fully qualified object name."""
         return f'{self.schema}.{self.name}' if self.schema else self.name

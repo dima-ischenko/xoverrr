@@ -64,7 +64,7 @@ class PostgresAdapter(BaseDatabaseAdapter):
             raise QueryExecutionError(f'Query failed: {str(e)}')
 
     def get_object_type(self, data_ref: DataReference, engine: Engine) -> ObjectType:
-        """Determine if object is table, view, or materialized view"""
+        """Determine whether the object is a table, view, or materialised view."""
         query = """
             SELECT
                 CASE
@@ -216,7 +216,7 @@ class PostgresAdapter(BaseDatabaseAdapter):
         return query, params
 
     def build_primary_key_query(self, data_ref: DataReference) -> pd.DataFrame:
-        """Build primary key query with GreenPlum compatibility"""
+        """Build a primary-key query compatible with Greenplum."""
         query = """
             select
                 lower(pg_attribute.attname) as pk_column_name
@@ -303,7 +303,7 @@ class PostgresAdapter(BaseDatabaseAdapter):
     def _build_exclusion_condition(
         self, update_column: str, exclude_recent_hours: int
     ) -> Tuple[str, Dict]:
-        """PostgreSQL-specific implementation for recent data exclusion"""
+        """PostgreSQL-specific predicate for recent-row exclusion."""
         if update_column and exclude_recent_hours:
             exclude_recent_hours = exclude_recent_hours
 
@@ -336,7 +336,7 @@ class PostgresAdapter(BaseDatabaseAdapter):
                 .dt.strftime(DATETIME_FORMAT)
                 .str.replace(r'\s00:00:00$', '', regex=True)
             ),
-            # lower in numerics for scientific notations
+            # Lowercase numerics so that scientific notation compares consistently.
             r'numeric|decimal|bigint|int8|double precision|real': lambda x: (
                 x.astype(str)
                 .str.lower()

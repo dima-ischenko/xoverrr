@@ -31,12 +31,9 @@ def _build_timings() -> CheckRunTimings:
     return CheckRunTimings(
         run_started_at=RUN_STARTED_AT,
         run_finished_at=RUN_FINISHED_AT,
-        source_query_started_at='2026-01-01 00:00:01',
-        source_query_finished_at='2026-01-01 00:00:02',
-        target_query_started_at='2026-01-01 00:00:02',
-        target_query_finished_at='2026-01-01 00:00:03',
-        dataset_check_started_at='2026-01-01 00:00:03',
-        dataset_check_finished_at='2026-01-01 00:00:04',
+        source_query_duration_sec=1.234,
+        target_query_duration_sec=2.0,
+        dataset_check_duration_sec=0.4,
     )
 
 
@@ -210,12 +207,28 @@ def test_persist_writes_timing_columns():
     row = stored.iloc[0]
     assert row['run_started_at'] == RUN_STARTED_AT
     assert row['run_finished_at'] == RUN_FINISHED_AT
-    assert row['source_query_started_at'] == '2026-01-01 00:00:01'
-    assert row['source_query_finished_at'] == '2026-01-01 00:00:02'
-    assert row['target_query_started_at'] == '2026-01-01 00:00:02'
-    assert row['target_query_finished_at'] == '2026-01-01 00:00:03'
-    assert row['dataset_check_started_at'] == '2026-01-01 00:00:03'
-    assert row['dataset_check_finished_at'] == '2026-01-01 00:00:04'
+    assert row['source_query_duration_sec'] == 1.23
+    assert row['target_query_duration_sec'] == 2.0
+    assert row['dataset_check_duration_sec'] == 0.4
+    assert 'source_query_started_at' not in stored.columns
+    assert 'target_query_finished_at' not in stored.columns
+    assert 'dataset_check_started_at' not in stored.columns
+
+
+def test_check_run_timings_accumulates_durations():
+    timings = CheckRunTimings()
+    timings.mark_query_start('source')
+    timings.mark_query_end('source')
+    first = timings.source_query_duration_sec
+    assert first is not None
+    assert first >= 0
+    timings.mark_query_start('source')
+    timings.mark_query_end('source')
+    assert timings.source_query_duration_sec >= first
+    timings.mark_dataset_check_start()
+    timings.mark_dataset_check_end()
+    assert timings.dataset_check_duration_sec is not None
+    assert timings.dataset_check_duration_sec >= 0
 
 
 def test_validate_report_output_format_rejects_unknown_format():

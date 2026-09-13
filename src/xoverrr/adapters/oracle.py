@@ -142,7 +142,7 @@ class OracleAdapter(BaseDatabaseAdapter):
                     pass
 
     def get_object_type(self, data_ref: DataReference, engine: Engine) -> ObjectType:
-        """Determine if object is table or view in Oracle"""
+        """Determine whether the object is a table or a view in Oracle."""
         query = """
             SELECT
                 CASE
@@ -318,7 +318,7 @@ class OracleAdapter(BaseDatabaseAdapter):
 
     def build_primary_key_query(self, data_ref: DataReference) -> pd.DataFrame:
 
-        # todo add suport of unique indexes when no pk?
+        # TODO: add support for unique indexes when there is no primary key.
         query = """
             SELECT lower(cols.column_name) as pk_column_name
             FROM all_constraints cons
@@ -440,7 +440,7 @@ class OracleAdapter(BaseDatabaseAdapter):
     def _build_exclusion_condition(
         self, update_column: str, exclude_recent_hours: int
     ) -> Tuple[str, Dict]:
-        """Oracle-specific implementation for recent data exclusion"""
+        """Oracle-specific predicate for recent-row exclusion."""
         if update_column and exclude_recent_hours:
             condition = (
                 f'case when {update_column} > (sysdate - :exclude_recent_hours/24) '
@@ -453,8 +453,10 @@ class OracleAdapter(BaseDatabaseAdapter):
 
     def _get_type_conversion_rules(self, timezone: str) -> Dict[str, Callable]:
         return {
-            # errors='coerce' is needed as workaround for >= 2262 year: Out of bounds nanosecond timestamp (3023-04-04 00:00:00)
-            #  todo need specify explicit dateformat (nls params) in sessions, for the correct string conversion to datetime
+            # errors='coerce' is needed as a workaround for years >= 2262
+            # (out-of-bounds nanosecond timestamp).
+            # TODO: set an explicit date format (NLS parameters) in the session
+            # so that string-to-datetime conversion is correct.
             r'date': lambda x: (
                 pd.to_datetime(x, errors='coerce')
                 .dt.strftime(DATETIME_FORMAT)
@@ -473,7 +475,7 @@ class OracleAdapter(BaseDatabaseAdapter):
             ),
             r'number|float|double': lambda x: (
                 x.astype(str).str.replace(r'\.0+$', '', regex=True).str.lower()
-            ),  # lower case for exponential form compare
+            ),  # Lowercase for exponential-form comparison.
         }
 
     def _identify_timestamp_tz_columns(

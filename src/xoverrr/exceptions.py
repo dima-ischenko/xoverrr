@@ -1,22 +1,22 @@
 class DQCheckException(Exception):
-    """Base exception for data quality check errors"""
+    """Base exception for data-quality check errors."""
 
     pass
 
 
 class MetadataError(DQCheckException):
-    """Exception raised for metadata-related errors"""
+    """Raised when metadata cannot be read or interpreted."""
 
     pass
 
 
 class QueryExecutionError(DQCheckException):
-    """Exception raised for query execution failures"""
+    """Raised when a query fails to execute."""
 
     pass
 
 
 class TypeConversionError(DQCheckException):
-    """Exception raised for type conversion failures"""
+    """Raised when a type conversion fails."""
 
     pass

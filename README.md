@@ -9,15 +9,15 @@ Supported databases: **Oracle**, **PostgreSQL** (+ Greenplum), **ClickHouse**.
 ## Features
 
 - **Four check strategies** — row samples, daily counts, custom SQL, and source-only sniff checks
-- **Multi-DBMS** — tables and views; extensible via adapters
-- **SQLAlchemy engines** — pass any supported source / target / results connection
-- **Replication-lag aware** — optionally skip “fresh” rows that may still be catching up
-- **Auto metadata** — primary keys and column types from DBMS catalogs (or supply your own PK)
-- **Type conversion** — application-side normalization across databases
-- **Column filters** — include / exclude lists; mismatched column names skipped automatically
+- **Multi-DBMS** — tables and views, extensible via adapters
+- **SQLAlchemy engines** — pass any supported source, target, or results connection
+- **Recent-row exclusion** — optionally skip rows that may still be delayed (batch load, replication, or calculation)
+- **Auto metadata** — primary keys and column types from DBMS catalogues (or supply your own primary key)
+- **Type conversion** — application-side normalisation across databases
+- **Column filters** — include / exclude lists; mismatched column names are skipped automatically
 - **Chunked date ranges** — process long periods in N-day windows
 - **Reports** — text or JSON, with example mismatched rows
-- **Optional persistence** — write run results to a third engine for dashboards / audit
+- **Optional persistence** — write run results to a third engine for dashboards and audit
 - **Tests** — unit coverage plus Docker-backed integration tests
 
 ---
@@ -91,7 +91,7 @@ Every check method returns the same tuple:
 
 ## Which method should I use?
 
-| Method | When to use | Needs target DB? |
+| Method | When to use | Requires a target database? |
 |--------|-------------|------------------|
 | `check_samples` | Compare row values between two tables/views | Yes |
 | `check_counts` | Fast volume check by day (missing / extra rows) | Yes |
@@ -104,7 +104,7 @@ Every check method returns the same tuple:
 
 ### 1. Data sample (`check_samples`)
 
-Compares row sets and column values over a date range.
+This method compares row sets and column values over a date range.
 
 ```python
 status, report, stats, details = checker.check_samples(
@@ -129,25 +129,25 @@ status, report, stats, details = checker.check_samples(
 |-----------|-------------|
 | `source_table`, `target_table` | Tables or views to compare |
 | `date_column` | Column for date-range filtering |
-| `update_column` | Marks “fresh” rows (excluded on both sides) |
+| `update_column` | Timestamp used to detect recently changed rows (excluded on both sides) |
 | `date_range` | `(start_date, end_date)` as `YYYY-MM-DD` |
 | `chunk_size_days` | Optional N-day windows over the range |
-| `exclude_columns` / `include_columns` | Blacklist / whitelist of columns |
-| `custom_primary_key` | PK columns; auto-detected if omitted |
-| `tolerance_pct` | Fail if `final_diff_score` exceeds this (0–100) |
-| `exclude_recent_hours` | Drop rows modified in the last N hours |
-| `max_examples` | Cap on discrepancy examples in the report |
-| `persist_result` | `DataReference` of the results table; omit to skip persist |
+| `exclude_columns` / `include_columns` | A blacklist or whitelist of columns |
+| `custom_primary_key` | Primary-key columns; detected automatically if omitted |
+| `tolerance_pct` | The check fails if `final_diff_score` exceeds this (0–100) |
+| `exclude_recent_hours` | Exclude rows changed in the last N hours (batch load, replication, or calculation delay) |
+| `max_examples` | Maximum number of discrepancy examples in the report |
+| `persist_result` | `DataReference` of the results table; omit this option to skip persistence |
 | `check_name` / `check_tags` | Labels for dashboards |
 | `report_output_format` | `'text'` (default) or `'json'` |
 
-If `custom_primary_key` is omitted, the PK is inferred from metadata (must exist on at least one side).
+If `custom_primary_key` is omitted, the primary key is inferred from metadata (it must exist on at least one side).
 
 ---
 
 ### 2. Counts (`check_counts`)
 
-Daily aggregates — good for large volumes and spotting missing/extra rows.
+Daily aggregates — suitable for large volumes and for spotting missing or extra rows.
 
 ```python
 status, report, stats, details = checker.check_counts(
@@ -167,7 +167,7 @@ status, report, stats, details = checker.check_counts(
 
 ### 3. Custom query (`check_custom_queries`)
 
-Compare arbitrary SQL on both sides. Primary key is **required**.
+Compare the results of arbitrary SQL on both sides. A primary key is **required**.
 
 ```python
 status, report, stats, details = checker.check_custom_queries(
@@ -190,7 +190,7 @@ status, report, stats, details = checker.check_custom_queries(
 )
 ```
 
-**Chunking:** when both `source_params` and `target_params` include `start_date` / `end_date`, set `chunk_size_days` to split the range:
+**Chunking:** when both `source_params` and `target_params` include `start_date` and `end_date`, set `chunk_size_days` to split the range:
 
 ```python
 status, report, stats, details = checker.check_custom_queries(
@@ -214,7 +214,7 @@ status, report, stats, details = checker.check_custom_queries(
 )
 ```
 
-To skip recently changed rows in custom SQL, add the same flag used by sample check:
+To skip recently changed rows in custom SQL, add the same flag as that used by the sample check:
 
 ```sql
 CASE WHEN updated_at > (sysdate - 3/24) THEN 'y' END AS xrecently_changed
@@ -224,8 +224,8 @@ CASE WHEN updated_at > (sysdate - 3/24) THEN 'y' END AS xrecently_changed
 
 ### 4. Sniff query (`check_sniff_query`)
 
-Source-only check. Mark each row with `xsniff_passed` (`y` = passed, `n` = failed).  
-No target engine or primary key required:
+A source-only check. Mark each row with `xsniff_passed` (`y` = passed, `n` = failed).  
+No target engine or primary key is required:
 
 ```python
 checker = DataQualityChecker(
@@ -234,7 +234,7 @@ checker = DataQualityChecker(
 )
 ```
 
-**Row-level** — one flag per row. Use when you need an issue *rate* over the full scope;
+**Row-level** — one flag per row. Use this when you need an issue *rate* over the full scope;
 `tolerance_pct` then means “allow up to N% of rows with `xsniff_passed = n`”:
 
 ```python
@@ -255,7 +255,7 @@ status, report, stats, details = checker.check_sniff_query(
 )
 ```
 
-**Scalar pass/fail** — a single `xsniff_passed` value. Outcome is typically binary
+**Scalar pass/fail** — a single `xsniff_passed` value. The outcome is typically binary
 (`final_diff_score` 0 or 100), so leave `tolerance_pct` at the default `0.0`
 (fail on any issue):
 
@@ -270,8 +270,8 @@ status, report, stats, details = checker.check_sniff_query(
 )
 ```
 
-**Issues-only filter** — `WHERE` keeps only bad rows and marks every returned row with a literal `'n'`.  
-Empty result means pass (`final_score = 100`). Any returned row means fail (`issue_rows_pct = 100` for that result set). Same as scalar: default `tolerance_pct=0.0` is what you want for “fail if anything is found”:
+**Issues-only filter** — `WHERE` keeps only the failing rows and marks every returned row with a literal `'n'`.  
+An empty result means a pass (`final_score = 100`). Any returned row means a fail (`issue_rows_pct = 100` for that result set). As with the scalar pattern, keep the default `tolerance_pct=0.0` so that the check fails if any issue is found:
 
 ```python
 status, report, stats, details = checker.check_sniff_query(
@@ -288,9 +288,9 @@ status, report, stats, details = checker.check_sniff_query(
 )
 ```
 
-Use this when you only care that issue rows exist (and want their keys/attributes in the report). Prefer the row-level `CASE` pattern above when you need a rate over the full checked scope.
+Use this when you need only to establish that issue rows exist (and to include their keys and attributes in the report). Prefer the row-level `CASE` pattern above when you need a rate over the full checked scope.
 
-**Main parameters:** `source_query`, `source_params`, `chunk_size_days` (when params include dates), `tolerance_pct`, `max_examples`, plus shared persistence / naming / report format options.
+**Main parameters:** `source_query`, `source_params`, `chunk_size_days` (when the parameters include dates), `tolerance_pct`, `max_examples`, plus the shared persistence, naming, and report-format options.
 
 Useful `stats` fields:
 
@@ -313,8 +313,8 @@ All methods expose `stats.final_diff_score` and `stats.final_score`.
 final_score = 100 − final_diff_score
 ```
 
-Scores are 0–100%. Higher `final_score` = better quality.  
-Pass/fail uses tolerance:
+Scores range from 0 to 100%. A higher `final_score` indicates better quality.  
+Pass or fail is determined by the tolerance:
 
 - `final_diff_score > tolerance_pct` → `CHECK_FAILED`
 - otherwise → `CHECK_SUCCESS`
@@ -347,9 +347,9 @@ issue_rows_pct = (rows with xsniff_passed = 'n') / (checked rows) × 100
 final_diff_score = issue_rows_pct
 ```
 
-Empty result → `final_diff_score = 0` (and score 100).
+An empty result yields `final_diff_score = 0` (and a score of 100).
 
-With the issues-only filter pattern (`WHERE …` + literal `'n' AS xsniff_passed`), *checked rows* are only the filtered issue rows, so any non-empty result yields `issue_rows_pct = 100`.
+With the issues-only filter pattern (`WHERE …` plus a literal `'n' AS xsniff_passed`), *checked rows* are only the filtered issue rows, so any non-empty result yields `issue_rows_pct = 100`.
 
 ---
 
@@ -357,9 +357,9 @@ With the issues-only filter pattern (`WHERE …` + literal `'n' AS xsniff_passed
 
 ### Chunked processing (`chunk_size_days`)
 
-Available on all methods. Splits a date range into N-day windows, runs each chunk, then aggregates metrics and examples. Useful for long ranges or large tables.
+Available on all methods. It splits a date range into N-day windows, runs each chunk, then aggregates the metrics and examples. This is useful for long ranges or large tables.
 
-- `check_custom_queries`: both sides must pass `start_date` and `end_date` in params
+- `check_custom_queries`: both sides must supply `start_date` and `end_date` in their parameters
 - `check_sniff_query`: chunking uses `start_date` / `end_date` in `source_params`
 
 ### Status values
@@ -367,16 +367,16 @@ Available on all methods. Splits a date range into N-day windows, runs each chun
 | Status | Meaning |
 |--------|---------|
 | `CHECK_SUCCESS` | Within tolerance |
-| `CHECK_FAILED` | Over tolerance, or a technical error |
+| `CHECK_FAILED` | Above tolerance, or a technical error |
 | `CHECK_SKIPPED` | Nothing to compare (e.g. both sides empty) |
 
 ### Result persistence
 
-With `results_engine` set and `persist_result=DataReference(...)`, one row is written per run to that table. The schema must already exist; the table is created if missing. Columns cover status, metadata, stats, details JSON, and the text report. Persistence is skipped if `persist_result` is omitted. If persist was requested and the write fails, the check status becomes `failed`.
+With `results_engine` set and `persist_result=DataReference(...)`, one row is written per run to that table. The schema must already exist; the table is created if it is missing. The columns cover status, metadata, statistics, details JSON, and the text report. Persistence is skipped if `persist_result` is omitted. If persistence was requested and the write fails, the check status becomes `failed`.
 
 ### Logging
 
-Each run has an internal `run_id` (also stored when persistence is on; not in public JSON from `CheckResult.to_dict()`):
+Each run has an internal `run_id` (also stored when persistence is enabled; it is not included in the public JSON from `CheckResult.to_dict()`):
 
 ```
 2024-01-15 10:30:45 - INFO - xoverrr.core - Check run started: run_id=a3f2c8b91d4e5678 check_name=employees_daily check_type=samples
@@ -389,7 +389,7 @@ Each run has an internal `run_id` (also stored when persistence is on; not in pu
 ### Performance notes
 
 - DataFrame size limit: `max_dataframe_size_gb` on the checker (default 3 GB per query / chunk from one DB)
-- Rough benchmark: two samples of ~1M rows × 10 columns (~330 MB each) compared in ~3 s (Intel Core i5 / 16 GB RAM)
+- Rough benchmark: two samples of about 1 million rows × 10 columns (about 330 MB each) compared in about 3 s (Intel Core i5 / 16 GB RAM)
 
 ---
 
@@ -477,7 +477,7 @@ ISSUE BREAKDOWN:
 
 ### Oracle thin client & `TIMESTAMP WITH TIME ZONE`
 
-With the Oracle thin client and `check_custom_queries`, `TIMESTAMP WITH TIME ZONE` columns lose timezone context in the result set.
+With the Oracle thin client and `check_custom_queries`, `TIMESTAMP WITH TIME ZONE` columns lose their time-zone context in the result set.
 
 **Workaround** — cast to `TIMESTAMP` in SQL:
 

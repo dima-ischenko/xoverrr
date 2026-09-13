@@ -128,7 +128,7 @@ class CheckResult:
         
         Args:
             indent: JSON indentation spaces
-            ensure_ascii: If False, allows non-ASCII characters
+            ensure_ascii: If False, allow non-ASCII characters
             
         Returns:
             JSON string representation

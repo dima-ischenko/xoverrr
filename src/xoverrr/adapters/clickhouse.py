@@ -12,7 +12,7 @@ from .base import BaseDatabaseAdapter, Engine
 
 
 class ClickHouseAdapter(BaseDatabaseAdapter):
-    """ClickHouse adapter with parameterized queries"""
+    """ClickHouse adapter with parameterised queries."""
     PERSIST_TYPE_MAP = {
         'short_string': 'Nullable(String)',
         'string': 'Nullable(String)',
@@ -75,7 +75,7 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
             raise QueryExecutionError(f'Query failed: {str(e)}')
 
     def get_object_type(self, data_ref: DataReference, engine: Engine) -> ObjectType:
-        """Determine if object is table or view in ClickHouse"""
+        """Determine whether the object is a table or a view in ClickHouse."""
         query = """
             SELECT
                 engine as table_engine,
@@ -92,7 +92,7 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
                 type_str = result.iloc[0]['object_type']
                 engine_str = result.iloc[0]['table_engine']
 
-                # ClickHouse имеет разные типы таблиц
+                # ClickHouse has several table engines.
                 if engine_str == 'View':
                     return ObjectType.VIEW
                 elif engine_str in ['MaterializedView', 'MaterializeView']:
@@ -253,7 +253,7 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
     def _build_exclusion_condition(
         self, update_column: str, exclude_recent_hours: int
     ) -> Tuple[str, Dict]:
-        """ClickHouse-specific implementation for recent data exclusion"""
+        """ClickHouse-specific predicate for recent-row exclusion."""
         if update_column and exclude_recent_hours:
             exclude_recent_hours = exclude_recent_hours
 
@@ -279,7 +279,7 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
                 .dt.strftime(DATE_FORMAT)
                 .str.replace(r'\s00:00:00$', '', regex=True)
             ),
-            # lower for scientific notation
+            # Lowercase for scientific-notation comparison.
             r'uint64|uint8|float|decimal|int32': lambda x: (
                 x.astype(str).str.lower().replace(r'\.0+$', '', regex=True)
             ),
