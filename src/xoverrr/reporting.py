@@ -303,7 +303,6 @@ def generate_sample_report(
     lines.append(f'  Duplicated source key examples: {format_report_collection(details.dup_source_keys_examples)}')
     lines.append(f'  Duplicated target key examples: {format_report_collection(details.dup_target_keys_examples)}')
 
-    lines.append(f'  Evaluated columns: {format_report_collection(details.evaluated_columns)}')
     lines.append(f'  Skipped source columns: {format_report_collection(details.skipped_source_columns)}')
     lines.append(f'  Skipped target columns: {format_report_collection(details.skipped_target_columns)}')
 

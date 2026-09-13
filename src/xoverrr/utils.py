@@ -677,9 +677,6 @@ def _legacy_generate_sample_report(
         f'  Duplicated target key examples: {format_report_collection(details.dup_target_keys_examples)}'
     )
     rl.append(
-        f'  Evaluated columns: {format_report_collection(details.evaluated_columns)}'
-    )
-    rl.append(
         f'  Skipped source columns: {format_report_collection(details.skipped_source_columns)}'
     )
     rl.append(

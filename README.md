@@ -452,7 +452,6 @@ SUMMARY:
   Target-only key examples:
   Duplicated source key examples:
   Duplicated target key examples:
-  Evaluated columns: first_name, last_name, salary, department_id
   Skipped source columns: audit_log, temp_field
   Skipped target columns:
 
