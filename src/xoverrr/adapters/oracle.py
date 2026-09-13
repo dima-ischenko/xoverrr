@@ -31,6 +31,7 @@ class OracleAdapter(BaseDatabaseAdapter):
         'table_ref': 'VARCHAR2(256)',
         'tz_name': 'VARCHAR2(128)',
         'datetime': 'TIMESTAMP',
+        'db_now': 'TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL',
         'text': 'VARCHAR2(4000)',
         'float': 'NUMBER',
         'int': 'NUMBER(19)',

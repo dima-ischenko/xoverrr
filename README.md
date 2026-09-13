@@ -372,7 +372,7 @@ Available on all methods. Splits a date range into N-day windows, runs each chun
 
 ### Result persistence
 
-With `results_engine` set and `persist_result=DataReference(...)`, one row is written per run to that table. The table is created if missing; primary key is `run_id`. Columns cover status, metadata, stats, details JSON, and the text report. Persistence is skipped if `persist_result` is omitted. If persist was requested and the write fails, the check status becomes `failed`.
+With `results_engine` set and `persist_result=DataReference(...)`, one row is written per run to that table. The schema must already exist; the table is created if missing. Columns cover status, metadata, stats, details JSON, and the text report. Persistence is skipped if `persist_result` is omitted. If persist was requested and the write fails, the check status becomes `failed`.
 
 ### Logging
 

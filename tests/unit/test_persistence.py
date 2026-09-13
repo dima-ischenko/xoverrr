@@ -7,6 +7,7 @@ from sqlalchemy import create_engine
 from xoverrr import constants as ct
 from xoverrr.core import DataQualityChecker
 from xoverrr.models import DataReference
+from xoverrr.adapters.base import PERSIST_INSERTED_AT_COLUMN
 from xoverrr.persistence import (
     CheckResultPersister,
     CheckRunTimings,
@@ -151,6 +152,8 @@ def test_persist_writes_to_results_engine():
     assert row['report'] == 'COUNT REPORT'
     assert row['stats_final_score'] == 100.0
     assert row['source_table'] == 'public.a'
+    assert row[PERSIST_INSERTED_AT_COLUMN] is not None
+    assert pd.notna(row[PERSIST_INSERTED_AT_COLUMN])
     assert 'payload_json' not in stored.columns
     assert 'timestamp' not in stored.columns
 

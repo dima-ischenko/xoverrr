@@ -20,6 +20,7 @@ class PostgresAdapter(BaseDatabaseAdapter):
         'table_ref': 'VARCHAR(256)',
         'tz_name': 'VARCHAR(128)',
         'datetime': 'TIMESTAMP',
+        'db_now': 'TIMESTAMP DEFAULT now() NOT NULL',
         'text': 'TEXT',
         'float': 'DOUBLE PRECISION',
         'int': 'BIGINT',
@@ -366,6 +367,10 @@ class PostgresAdapter(BaseDatabaseAdapter):
                     {columns_sql}
             )
         """
+        if engine.dialect.name == 'sqlite':
+            create_table_sql = create_table_sql.replace(
+                'DEFAULT now()', 'DEFAULT CURRENT_TIMESTAMP'
+            )
         with engine.begin() as conn:
             conn.execute(text(create_table_sql))
 

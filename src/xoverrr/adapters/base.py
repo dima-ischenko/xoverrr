@@ -10,6 +10,9 @@ from ..constants import RESERVED_WORDS
 from ..logger import app_logger
 from ..models import DataReference, ObjectType
 
+# Persist-row clock column; filled by DEFAULT now()/SYSTIMESTAMP, omitted from INSERT.
+PERSIST_INSERTED_AT_COLUMN = 'inserted_at'
+
 
 class BaseDatabaseAdapter(ABC):
     """Abstract base class with updated method signatures for parameterized queries"""
@@ -153,7 +156,7 @@ class BaseDatabaseAdapter(ABC):
     def build_persistence_insert_sql(
         self, table_ref: DataReference, record: Dict
     ) -> str:
-        columns = list(record)
+        columns = [name for name in record if name != PERSIST_INSERTED_AT_COLUMN]
         columns_sql = ', '.join(columns)
         values_sql = ', '.join(f':{col}' for col in columns)
         return (

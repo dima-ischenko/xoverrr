@@ -6,6 +6,7 @@ from typing import Dict, Literal, Optional
 
 import pandas as pd
 from sqlalchemy.engine import Engine
+from .adapters.base import PERSIST_INSERTED_AT_COLUMN
 from .adapters.clickhouse import ClickHouseAdapter
 from .adapters.oracle import OracleAdapter
 from .adapters.postgres import PostgresAdapter
@@ -95,6 +96,7 @@ PERSIST_COL_NAME = 'name'
 PERSIST_COL_TABLE_REF = 'table_ref'
 PERSIST_COL_TZ_NAME = 'tz_name'
 PERSIST_COL_DATETIME = 'datetime'
+PERSIST_COL_DB_NOW = 'db_now'
 PERSIST_COL_TEXT = 'text'
 PERSIST_COL_INT = 'int'
 PERSIST_COL_FLOAT = 'float'
@@ -278,6 +280,8 @@ class CheckResultPersister:
         details = _normalize_details_for_persist(full_payload.get('details'))
         record = {}
         for column, col_type in column_types.items():
+            if col_type == PERSIST_COL_DB_NOW or column == PERSIST_INSERTED_AT_COLUMN:
+                continue
             if column == 'run_id':
                 record[column] = validate_run_id(result.run_id)
             elif column in TIMING_PERSIST_FIELDS:
@@ -316,6 +320,7 @@ class CheckResultPersister:
         add('stats_final_diff_score', PERSIST_COL_FLOAT)
         add('run_started_at', PERSIST_COL_DATETIME)
         add('run_finished_at', PERSIST_COL_DATETIME)
+        add(PERSIST_INSERTED_AT_COLUMN, PERSIST_COL_DB_NOW)
         add('check_type', PERSIST_COL_STRING)
         add('source_table', PERSIST_COL_TABLE_REF)
         add('target_table', PERSIST_COL_TABLE_REF)
