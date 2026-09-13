@@ -102,21 +102,6 @@ PERSIST_COL_FLOAT = 'float'
 # Persisted column name (avoids reserved TIMEZONE keyword in Oracle).
 PERSIST_TIMEZONE_COLUMN = 'check_timezone'
 
-BASE_PERSIST_COLUMN_TYPES = {
-    'run_id': PERSIST_COL_SHORT_STRING,
-    **{field: PERSIST_COL_DATETIME for field in TIMING_PERSIST_FIELDS},
-    'check_type': PERSIST_COL_STRING,
-    'status': PERSIST_COL_STRING,
-    'check_name': PERSIST_COL_NAME,
-    'check_tags_json': PERSIST_COL_TEXT,
-    'source_table': PERSIST_COL_TABLE_REF,
-    'target_table': PERSIST_COL_TABLE_REF,
-    PERSIST_TIMEZONE_COLUMN: PERSIST_COL_TZ_NAME,
-    'source_query': PERSIST_COL_TEXT,
-    'target_query': PERSIST_COL_TEXT,
-    'report': PERSIST_COL_TEXT,
-}
-
 
 def _stats_persist_fields(field_type: type) -> list[str]:
     return [
@@ -261,7 +246,7 @@ class CheckResultPersister:
     ) -> bool:
         try:
             column_types = self._build_column_types()
-            record = self._build_db_record(result, result.to_dict())
+            record = self._build_db_record(result, result.to_dict(), column_types)
             record = _coerce_persist_record(
                 record, column_types, engine=self.results_engine
             )
@@ -284,42 +269,74 @@ class CheckResultPersister:
             return False
 
     def _build_db_record(
-        self, result: CheckResult, full_payload: Dict
+        self,
+        result: CheckResult,
+        full_payload: Dict,
+        column_types: Dict[str, str],
     ) -> Dict:
         stats = full_payload.get('stats') or {}
         details = _normalize_details_for_persist(full_payload.get('details'))
-
-        record = {
-            column: _extract_base_persist_value(full_payload, column)
-            for column in BASE_PERSIST_COLUMN_TYPES
-            if column not in ('run_id', *TIMING_PERSIST_FIELDS)
-        }
-        record['run_id'] = validate_run_id(result.run_id)
-        if result.timings:
-            for field in TIMING_PERSIST_FIELDS:
-                record[field] = getattr(result.timings, field)
-        elif result.timestamp:
-            record['run_started_at'] = result.timestamp
-
-        for key in STATS_INTEGER_FIELDS:
-            record[f'stats_{key}'] = stats.get(key)
-
-        for key in STATS_FLOAT_FIELDS:
-            record[f'stats_{key}'] = _round_stats_float_for_persist(stats.get(key))
-
-        for key in DETAILS_JSON_FIELDS:
-            record[f'details_{key}_json'] = _to_json_string(details.get(key))
-
+        record = {}
+        for column, col_type in column_types.items():
+            if column == 'run_id':
+                record[column] = validate_run_id(result.run_id)
+            elif column in TIMING_PERSIST_FIELDS:
+                if result.timings:
+                    record[column] = getattr(result.timings, column)
+                elif column == 'run_started_at' and result.timestamp:
+                    record[column] = result.timestamp
+                else:
+                    record[column] = None
+            elif column.startswith('stats_'):
+                key = column.removeprefix('stats_')
+                value = stats.get(key)
+                if col_type == PERSIST_COL_FLOAT:
+                    record[column] = _round_stats_float_for_persist(value)
+                else:
+                    record[column] = value
+            elif column.startswith('details_') and column.endswith('_json'):
+                key = column.removeprefix('details_').removesuffix('_json')
+                record[column] = _to_json_string(details.get(key))
+            else:
+                record[column] = _extract_base_persist_value(full_payload, column)
         return record
 
     def _build_column_types(self) -> Dict[str, str]:
-        column_types = dict(BASE_PERSIST_COLUMN_TYPES)
+        """Query-friendly column order: identity and score first, step timings last."""
+        column_types: Dict[str, str] = {}
+
+        def add(name: str, col_type: str) -> None:
+            if name not in column_types:
+                column_types[name] = col_type
+
+        add('run_id', PERSIST_COL_SHORT_STRING)
+        add('check_name', PERSIST_COL_NAME)
+        add('status', PERSIST_COL_STRING)
+        add('stats_final_score', PERSIST_COL_FLOAT)
+        add('stats_final_diff_score', PERSIST_COL_FLOAT)
+        add('run_started_at', PERSIST_COL_DATETIME)
+        add('run_finished_at', PERSIST_COL_DATETIME)
+        add('check_type', PERSIST_COL_STRING)
+        add('source_table', PERSIST_COL_TABLE_REF)
+        add('target_table', PERSIST_COL_TABLE_REF)
+        add('check_tags_json', PERSIST_COL_TEXT)
+        add(PERSIST_TIMEZONE_COLUMN, PERSIST_COL_TZ_NAME)
+
         for field in STATS_INTEGER_FIELDS:
-            column_types[f'stats_{field}'] = PERSIST_COL_INT
+            add(f'stats_{field}', PERSIST_COL_INT)
         for field in STATS_FLOAT_FIELDS:
-            column_types[f'stats_{field}'] = PERSIST_COL_FLOAT
+            add(f'stats_{field}', PERSIST_COL_FLOAT)
+
+        add('source_query', PERSIST_COL_TEXT)
+        add('target_query', PERSIST_COL_TEXT)
+        add('report', PERSIST_COL_TEXT)
+
         for field in DETAILS_JSON_FIELDS:
-            column_types[f'details_{field}_json'] = PERSIST_COL_TEXT
+            add(f'details_{field}_json', PERSIST_COL_TEXT)
+
+        for field in TIMING_PERSIST_FIELDS:
+            add(field, PERSIST_COL_DATETIME)
+
         return column_types
 
     def _get_adapter_for_engine(self, engine: Engine):
