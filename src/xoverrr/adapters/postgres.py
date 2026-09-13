@@ -357,11 +357,6 @@ class PostgresAdapter(BaseDatabaseAdapter):
         column_types: Dict[str, str],
         primary_key: Optional[str] = None,
     ) -> None:
-        if table_ref.schema:
-            create_schema_sql = f'CREATE SCHEMA IF NOT EXISTS {table_ref.schema}'
-        else:
-            create_schema_sql = None
-
         columns_sql = ',\n                    '.join(
             self._format_persist_column(name, col_type, primary_key)
             for name, col_type in column_types.items()
@@ -372,8 +367,6 @@ class PostgresAdapter(BaseDatabaseAdapter):
             )
         """
         with engine.begin() as conn:
-            if create_schema_sql:
-                conn.execute(text(create_schema_sql))
             conn.execute(text(create_table_sql))
 
     def _format_persist_column(

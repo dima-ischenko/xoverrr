@@ -145,7 +145,9 @@ class BaseDatabaseAdapter(ABC):
         column_types: Dict[str, str],
         primary_key: Optional[str] = None,
     ) -> None:
-        """Create persistence table using explicit DDL if needed."""
+        """Create the persistence table if it is missing.
+
+        """
         pass
 
     def build_persistence_insert_sql(
