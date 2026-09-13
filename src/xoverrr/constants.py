@@ -5,7 +5,7 @@ DATETIME_FORMAT = f'{DATE_FORMAT} %H:%M:%S'
 # Default values
 NULL_REPLACEMENT = 'N/A'
 DEFAULT_MAX_EXAMPLES = 3
-DEFAULT_MAX_SAMPLE_SIZE_GB = 3  # Max size of dataframe to compare
+DEFAULT_MAX_DATAFRAME_SIZE_GB = 3  # Per query / chunk from one DB
 
 # SQL patterns
 RESERVED_WORDS = ['date', 'comment', 'file', 'number', 'mode', 'successful']

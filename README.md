@@ -42,6 +42,7 @@ checker = DataQualityChecker(
     target_engine=target_engine,
     timezone='Europe/Athens',
     results_engine=results_engine,  # optional
+    max_dataframe_size_gb=3,  # per query / chunk from one DB
 )
 
 # 3. Tables + date window
@@ -387,7 +388,7 @@ Each run has an internal `run_id` (also stored when persistence is on; not in pu
 
 ### Performance notes
 
-- DataFrame size hard limit: 3 GB per sample
+- DataFrame size limit: `max_dataframe_size_gb` on the checker (default 3 GB per query / chunk from one DB)
 - Rough benchmark: two samples of ~1M rows × 10 columns (~330 MB each) compared in ~3 s (Intel Core i5 / 16 GB RAM)
 
 ---

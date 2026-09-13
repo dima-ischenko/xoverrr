@@ -49,6 +49,7 @@ class DataQualityChecker:
         default_exclude_recent_hours: Optional[int] = 24,
         timezone: str = ct.DEFAULT_TZ,
         results_engine: Optional[Engine] = None,
+        max_dataframe_size_gb: float = ct.DEFAULT_MAX_DATAFRAME_SIZE_GB,
     ):
         self.source_engine = source_engine
         self.target_engine = target_engine
@@ -59,6 +60,9 @@ class DataQualityChecker:
         self.default_exclude_recent_hours = default_exclude_recent_hours
         self.timezone = timezone
         self.results_engine = results_engine
+        self.max_dataframe_size_gb = self._normalize_max_dataframe_size_gb(
+            max_dataframe_size_gb
+        )
         self.result_persister = CheckResultPersister(
             results_engine=results_engine,
         )
@@ -81,6 +85,16 @@ class DataQualityChecker:
         app_logger.info(f'Source DB: {self._report_context["source_db_type"]}')
         target_db_label = self._report_context['target_db_type'] or 'not configured'
         app_logger.info(f'Target DB: {target_db_label}')
+        app_logger.info(
+            f'Max DataFrame size: {self.max_dataframe_size_gb} GB per query'
+        )
+
+    @staticmethod
+    def _normalize_max_dataframe_size_gb(max_dataframe_size_gb: float) -> float:
+        size_gb = float(max_dataframe_size_gb)
+        if size_gb <= 0:
+            raise ValueError('max_dataframe_size_gb must be greater than 0')
+        return size_gb
 
     def reset_stats(self):
         self._reset_stats()
@@ -1749,7 +1763,7 @@ class DataQualityChecker:
             db_type = DBMSType.from_engine(engine)
             adapter = self._get_adapter(db_type)
             df = adapter._execute_query(query, engine, timezone)
-            validate_dataframe_size(df, ct.DEFAULT_MAX_SAMPLE_SIZE_GB)
+            validate_dataframe_size(df, self.max_dataframe_size_gb)
             return df
         finally:
             if query_side:
