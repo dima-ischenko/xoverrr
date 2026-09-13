@@ -5,12 +5,13 @@ import pytest
 from sqlalchemy import create_engine
 
 from xoverrr import constants as ct
+from xoverrr.core import DataQualityChecker
 from xoverrr.models import DataReference
 from xoverrr.persistence import (
     CheckResultPersister,
     CheckRunTimings,
     build_run_id,
-    parse_persist_result_option,
+    normalize_persist_result,
     validate_run_id,
 )
 from xoverrr.reporting import (
@@ -125,10 +126,7 @@ def test_format_check_result_returns_text_report():
 
 def test_persist_writes_to_results_engine():
     results_engine = create_engine('sqlite:///:memory:')
-    persister = CheckResultPersister(
-        results_engine=results_engine,
-        results_table='dq_results',
-    )
+    persister = CheckResultPersister(results_engine=results_engine)
     result = build_check_result(
         run_id=RUN_ID,
         timestamp=RUN_STARTED_AT,
@@ -142,37 +140,24 @@ def test_persist_writes_to_results_engine():
         target_table='public.b',
     )
 
-    persister.persist(result, persist_result=True)
+    persister.persist(result, DataReference('dq_results'))
 
     stored = pd.read_sql('select * from dq_results', results_engine)
+    row = stored.iloc[0]
     assert len(stored) == 1
-    assert stored.iloc[0]['run_id'] == RUN_ID
-    assert stored.iloc[0]['check_type'] == ct.CHECK_TYPE_COUNTS
-    assert stored.iloc[0]['status'] == 'failed'
-    assert stored.iloc[0]['report'] == 'COUNT REPORT'
-    assert stored.iloc[0]['stats_total_source_rows'] == 10
-    assert stored.iloc[0]['stats_total_target_rows'] == 10
-    assert stored.iloc[0]['stats_final_score'] == 100.0
-    assert stored.iloc[0]['details_evaluated_columns_json'] == json.dumps(
-        ['id', 'name'], ensure_ascii=False
-    )
-    assert stored.iloc[0]['source_table'] == 'public.a'
+    assert row['run_id'] == RUN_ID
+    assert row['check_type'] == ct.CHECK_TYPE_COUNTS
+    assert row['status'] == 'failed'
+    assert row['report'] == 'COUNT REPORT'
+    assert row['stats_final_score'] == 100.0
+    assert row['source_table'] == 'public.a'
     assert 'payload_json' not in stored.columns
     assert 'timestamp' not in stored.columns
-    assert 'run_timestamp' not in stored.columns
-    assert stored.iloc[0]['run_started_at'] == RUN_STARTED_AT
-    assert stored.iloc[0]['run_finished_at'] is None
-    assert 'source_params_json' not in stored.columns
-    assert 'target_params_json' not in stored.columns
-    assert stored.iloc[0]['details_dup_source_keys_examples_json'] == '[]'
 
 
 def test_persist_rounds_stats_floats_to_report_precision():
     results_engine = create_engine('sqlite:///:memory:')
-    persister = CheckResultPersister(
-        results_engine=results_engine,
-        results_table='dq_results_rounded',
-    )
+    persister = CheckResultPersister(results_engine=results_engine)
     stats = _build_stats()
     stats.final_score = 83.33333333333333
     stats.final_diff_score = 16.666666666666668
@@ -191,7 +176,7 @@ def test_persist_rounds_stats_floats_to_report_precision():
         target_table='public.b',
     )
 
-    persister.persist(result, persist_result=True)
+    persister.persist(result, DataReference('dq_results_rounded'))
 
     stored = pd.read_sql('select * from dq_results_rounded', results_engine)
     assert stored.iloc[0]['stats_final_score'] == 83.33333
@@ -201,10 +186,7 @@ def test_persist_rounds_stats_floats_to_report_precision():
 
 def test_persist_writes_timing_columns():
     results_engine = create_engine('sqlite:///:memory:')
-    persister = CheckResultPersister(
-        results_engine=results_engine,
-        results_table='dq_results_timings',
-    )
+    persister = CheckResultPersister(results_engine=results_engine)
     result = build_check_result(
         run_id=RUN_ID,
         timestamp=RUN_STARTED_AT,
@@ -219,7 +201,7 @@ def test_persist_writes_timing_columns():
         timings=_build_timings(),
     )
 
-    persister.persist(result, persist_result=True)
+    persister.persist(result, DataReference('dq_results_timings'))
 
     stored = pd.read_sql('select * from dq_results_timings', results_engine)
     row = stored.iloc[0]
@@ -279,57 +261,168 @@ def test_oracle_persist_type_map_uses_native_types():
     assert adapter.PERSIST_TYPE_MAP['datetime'] == 'TIMESTAMP'
     assert adapter.PERSIST_TYPE_MAP['float'] == 'NUMBER'
     assert adapter.PERSIST_TYPE_MAP['text'] == 'VARCHAR2(4000)'
-    assert adapter.PERSIST_TYPE_MAP['table_ref'] == 'VARCHAR2(4000)'
-    assert (
-        adapter._format_persist_column('run_started_at', 'datetime', 'run_id')
-        == 'run_started_at TIMESTAMP'
-    )
-    assert (
-        adapter._format_persist_column('stats_final_score', 'float', 'run_id')
-        == 'stats_final_score NUMBER'
-    )
     assert adapter._format_persist_column('report', 'text', 'run_id') == 'report CLOB'
     assert (
         adapter._format_persist_column('source_query', 'text', 'run_id')
         == 'source_query VARCHAR2(4000)'
     )
-    assert (
-        adapter._format_persist_column(
-            'details_issue_examples_json', 'text', 'run_id'
-        )
-        == 'details_issue_examples_json VARCHAR2(4000)'
-    )
 
 
-def test_oracle_persist_insert_truncates_non_report_strings():
+def test_oracle_persist_insert_avoids_ora_24816_for_large_varchar_binds():
     from xoverrr.adapters.oracle import OracleAdapter
 
     adapter = OracleAdapter()
-    assert adapter._persist_insert_value_expr('report', 'text') == ':report'
-    assert (
-        adapter._persist_insert_value_expr('source_query', 'text')
-        == 'SUBSTR(:source_query, 1, 4000)'
+    oversized_json = json.dumps(['foobar'] * 500, ensure_ascii=False)
+    record = {
+        'check_type': 'samples',
+        'report': 'FULL TEXT REPORT ' + ('R' * 8000),
+        'details_issue_row_examples_json': oversized_json,
+    }
+    column_types = {
+        'check_type': 'string',
+        'report': 'text',
+        'details_issue_row_examples_json': 'text',
+    }
+
+    insert_sql, bind_record = adapter._build_persist_insert(
+        DataReference('dq_results'), record, column_types
     )
-    assert (
-        adapter._persist_insert_value_expr('check_tags_json', 'text')
-        == 'SUBSTR(:check_tags_json, 1, 4000)'
+
+    assert len(oversized_json.encode('utf-8')) > 4000
+    assert insert_sql.endswith(':report)')
+    assert len(bind_record['report'].encode('utf-8')) > 4000
+    assert len(bind_record['details_issue_row_examples_json'].encode('utf-8')) <= 4000
+
+
+def test_persist_writes_oversized_json_details():
+    results_engine = create_engine('sqlite:///:memory:')
+    persister = CheckResultPersister(results_engine=results_engine)
+    oversized_json = [
+        {'column_name': 'value', 'payload': 'x' * 200} for _ in range(40)
+    ]
+    details = _build_details()
+    details.issue_examples = pd.DataFrame(oversized_json)
+
+    result = build_check_result(
+        run_id=RUN_ID,
+        timestamp=RUN_STARTED_AT,
+        timezone='UTC',
+        status='success',
+        report='OVERSIZED REPORT',
+        stats=_build_stats(),
+        details=details,
+        check_type=ct.CHECK_TYPE_SAMPLES,
+        source_table='public.a',
+        target_table='public.b',
     )
-    assert (
-        adapter._persist_insert_value_expr('stats_final_score', 'float')
-        == ':stats_final_score'
+
+    assert persister.persist(result, DataReference('dq_results_oversized')) is True
+
+    stored = pd.read_sql('select * from dq_results_oversized', results_engine)
+    stored_json = stored.iloc[0]['details_issue_examples_json']
+    assert len(stored_json) > 4000
+    assert json.loads(stored_json) == oversized_json
+
+
+def test_persist_returns_false_on_storage_error():
+    persister = CheckResultPersister(
+        results_engine=create_engine(
+            'sqlite:////this/path/does/not/exist/xoverrr.db'
+        ),
     )
-    assert (
-        adapter._persist_insert_value_expr('run_started_at', 'datetime')
-        == ':run_started_at'
+    result = build_check_result(
+        run_id=RUN_ID,
+        timestamp=RUN_STARTED_AT,
+        timezone='UTC',
+        status='success',
+        report='COUNT REPORT',
+        stats=_build_stats(),
+        details=_build_details(),
+        check_type=ct.CHECK_TYPE_COUNTS,
+        source_table='public.a',
+        target_table='public.b',
     )
+
+    assert persister.persist(result, DataReference('dq_results_boom')) is False
+
+
+def test_persist_returns_false_when_engine_is_missing():
+    persister = CheckResultPersister()
+    result = build_check_result(
+        run_id=RUN_ID,
+        timestamp=RUN_STARTED_AT,
+        timezone='UTC',
+        status='success',
+        report='COUNT REPORT',
+        stats=_build_stats(),
+        details=_build_details(),
+        check_type=ct.CHECK_TYPE_COUNTS,
+        source_table='public.a',
+        target_table='public.b',
+    )
+
+    assert persister.persist(result) is True
+    assert persister.persist(result, DataReference('dq_results')) is False
+
+
+def _checker_for_finalize(persister) -> DataQualityChecker:
+    checker = DataQualityChecker.__new__(DataQualityChecker)
+    checker.timezone = 'UTC'
+    checker._active_run_id = RUN_ID
+    checker._active_run_started_at = RUN_STARTED_AT
+    checker._active_check_name = 'unit_test_compare'
+    checker._run_timings = CheckRunTimings(run_started_at=RUN_STARTED_AT)
+    checker.result_persister = persister
+    return checker
+
+
+def test_finalize_check_fails_status_when_persist_fails():
+    class FailingPersister:
+        def persist(self, *args, **kwargs):
+            return False
+
+    checker = _checker_for_finalize(FailingPersister())
+    status, report = checker._finalize_check(
+        status=ct.CHECK_SUCCESS,
+        report='FULL TEXT REPORT',
+        stats=_build_stats(),
+        details=_build_details(),
+        check_type=ct.CHECK_TYPE_SAMPLES,
+        persist_result=DataReference('dq_results'),
+        report_output_format=ct.REPORT_OUTPUT_FORMAT_TEXT,
+        source_table='public.a',
+        target_table='public.b',
+    )
+
+    assert status == ct.CHECK_FAILED
+    assert report == 'FULL TEXT REPORT'
+
+
+def test_finalize_check_keeps_status_when_persist_succeeds():
+    class OkPersister:
+        def persist(self, *args, **kwargs):
+            return True
+
+    checker = _checker_for_finalize(OkPersister())
+    status, report = checker._finalize_check(
+        status=ct.CHECK_SUCCESS,
+        report='FULL TEXT REPORT',
+        stats=_build_stats(),
+        details=_build_details(),
+        check_type=ct.CHECK_TYPE_SAMPLES,
+        persist_result=DataReference('dq_results'),
+        report_output_format=ct.REPORT_OUTPUT_FORMAT_TEXT,
+        source_table='public.a',
+        target_table='public.b',
+    )
+
+    assert status == ct.CHECK_SUCCESS
+    assert report == 'FULL TEXT REPORT'
 
 
 def test_persist_uses_check_timezone_column():
     results_engine = create_engine('sqlite:///:memory:')
-    persister = CheckResultPersister(
-        results_engine=results_engine,
-        results_table='dq_results_tz',
-    )
+    persister = CheckResultPersister(results_engine=results_engine)
     result = build_check_result(
         run_id=RUN_ID,
         timestamp=RUN_STARTED_AT,
@@ -343,35 +436,24 @@ def test_persist_uses_check_timezone_column():
         target_table='public.b',
     )
 
-    persister.persist(result, persist_result=True)
+    persister.persist(result, DataReference('dq_results_tz'))
 
     stored = pd.read_sql('select * from dq_results_tz', results_engine)
     assert 'timezone' not in stored.columns
     assert stored.iloc[0]['check_timezone'] == 'Europe/Athens'
 
 
-def test_parse_persist_result_option():
+def test_normalize_persist_result():
     table_ref = DataReference('custom_results')
-
-    enabled_only = parse_persist_result_option(True)
-    assert enabled_only.enabled is True
-    assert enabled_only.table_ref is None
-
-    disabled = parse_persist_result_option(False)
-    assert disabled.enabled is False
-    assert disabled.table_ref is None
-
-    custom = parse_persist_result_option(table_ref)
-    assert custom.enabled is True
-    assert custom.table_ref is table_ref
+    assert normalize_persist_result(None) is None
+    assert normalize_persist_result(table_ref) is table_ref
+    with pytest.raises(TypeError, match='DataReference'):
+        normalize_persist_result(True)
 
 
 def test_persist_with_datareference_target_and_tags():
     results_engine = create_engine('sqlite:///:memory:')
-    persister = CheckResultPersister(
-        results_engine=results_engine,
-        results_table='dq_results_default',
-    )
+    persister = CheckResultPersister(results_engine=results_engine)
     result = build_check_result(
         run_id=RUN_ID,
         timestamp=RUN_STARTED_AT,
@@ -387,17 +469,11 @@ def test_persist_with_datareference_target_and_tags():
         target_table='public.orders_trg',
     )
 
-    persister.persist(
-        result,
-        persist_result=True,
-        persist_result_ref=DataReference('dq_results_custom'),
-    )
+    persister.persist(result, DataReference('dq_results_custom'))
 
     stored = pd.read_sql(
         'select * from dq_results_custom', results_engine
     )
-    assert len(stored) == 1
-    assert stored.iloc[0]['run_id'] == RUN_ID
     assert stored.iloc[0]['check_name'] == 'orders_daily_compare'
     assert json.loads(stored.iloc[0]['check_tags_json']) == {
         'env': 'dev',

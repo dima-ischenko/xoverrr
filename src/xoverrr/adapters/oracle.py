@@ -12,7 +12,7 @@ from .base import BaseDatabaseAdapter, Engine
 
 
 class OracleAdapter(BaseDatabaseAdapter):
-    PERSIST_REPORT_COLUMN = 'report' # CLOB
+    PERSIST_REPORT_COLUMN = 'report'  # CLOB
     PERSIST_VARCHAR2_MAX_LENGTH = 4000
     PERSIST_STRING_LOGICAL_TYPES = frozenset(
         {
@@ -603,16 +603,47 @@ class OracleAdapter(BaseDatabaseAdapter):
             return f'{name} {sql_type} PRIMARY KEY'
         return f'{name} {sql_type}'
 
-    def _persist_insert_value_expr(
-        self, column: str, col_type: Optional[str]
-    ) -> str:
-        """Bind report as CLOB; truncate other string columns to VARCHAR2(4000)."""
-        if (
-            column != self.PERSIST_REPORT_COLUMN
-            and col_type in self.PERSIST_STRING_LOGICAL_TYPES
-        ):
-            return f'SUBSTR(:{column}, 1, {self.PERSIST_VARCHAR2_MAX_LENGTH})'
-        return f':{column}'
+    def _truncate_varchar2_bind(self, value):
+        if not isinstance(value, str):
+            return value
+        encoded = value.encode('utf-8')
+        if len(encoded) <= self.PERSIST_VARCHAR2_MAX_LENGTH:
+            return value
+        return encoded[: self.PERSIST_VARCHAR2_MAX_LENGTH].decode(
+            'utf-8', errors='ignore'
+        )
+
+    def _prepare_persist_bind_record(
+        self, record: Dict, column_types: Dict[str, str]
+    ) -> Dict:
+        """Put CLOB ``report`` last and trim other strings to VARCHAR2(4000).
+
+        Oracle raises ORA-24816 if a >4000-byte VARCHAR2 bind follows a LOB.
+        """
+        report = self.PERSIST_REPORT_COLUMN
+        columns = [name for name in record if name != report]
+        if report in record:
+            columns.append(report)
+
+        prepared = {}
+        for column in columns:
+            value = record[column]
+            if (
+                column != report
+                and column_types.get(column) in self.PERSIST_STRING_LOGICAL_TYPES
+            ):
+                value = self._truncate_varchar2_bind(value)
+            prepared[column] = value
+        return prepared
+
+    def _build_persist_insert(
+        self,
+        table_ref: DataReference,
+        record: Dict,
+        column_types: Dict[str, str],
+    ) -> Tuple[str, Dict]:
+        bind_record = self._prepare_persist_bind_record(record, column_types)
+        return self.build_persistence_insert_sql(table_ref, bind_record), bind_record
 
     def insert_persistence_record(
         self,
@@ -621,14 +652,8 @@ class OracleAdapter(BaseDatabaseAdapter):
         record: Dict,
         column_types: Optional[Dict[str, str]] = None,
     ) -> None:
-        column_types = column_types or {}
-        columns_sql = ', '.join(record.keys())
-        values_sql = ', '.join(
-            self._persist_insert_value_expr(col, column_types.get(col))
-            for col in record.keys()
-        )
-        insert_sql = (
-            f'INSERT INTO {table_ref.full_name} ({columns_sql}) VALUES ({values_sql})'
+        insert_sql, bind_record = self._build_persist_insert(
+            table_ref, record, column_types or {}
         )
         with engine.begin() as conn:
-            conn.execute(text(insert_sql), record)
+            conn.execute(text(insert_sql), bind_record)

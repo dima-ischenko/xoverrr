@@ -321,10 +321,6 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
         record: Dict,
         column_types: Optional[Dict[str, str]] = None,
     ) -> None:
-        columns_sql = ', '.join(record.keys())
-        values_sql = ', '.join(f':{col}' for col in record.keys())
-        insert_sql = (
-            f'INSERT INTO {table_ref.full_name} ({columns_sql}) VALUES ({values_sql})'
-        )
+        insert_sql = self.build_persistence_insert_sql(table_ref, record)
         with engine.begin() as conn:
             conn.execute(text(insert_sql), record)

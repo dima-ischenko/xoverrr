@@ -2,18 +2,17 @@ import json
 import dataclasses
 import uuid
 from dataclasses import dataclass
-from typing import Dict, Literal, Optional, Union
+from typing import Dict, Literal, Optional
 
 import pandas as pd
 from sqlalchemy.engine import Engine
 from .adapters.clickhouse import ClickHouseAdapter
 from .adapters.oracle import OracleAdapter
 from .adapters.postgres import PostgresAdapter
-from .constants import DATETIME_FORMAT
+from .constants import DATETIME_FORMAT, STATS_REPORT_FLOAT_DECIMALS
 from .logger import app_logger
 from .models import DBMSType, DataReference
 from .reporting import CheckResult
-from .constants import STATS_REPORT_FLOAT_DECIMALS
 from .utils import CheckDetails, CheckStats
 
 PERSIST_PRIMARY_KEY = 'run_id'
@@ -216,35 +215,22 @@ def _extract_base_persist_value(payload: Dict, column: str):
     return payload.get(column)
 
 
-@dataclass(frozen=True)
-class PersistResultOptions:
-    """Normalized ``persist_result`` argument from check methods."""
-
-    enabled: bool
-    table_ref: Optional[DataReference] = None
-
-
-def parse_persist_result_option(
-    persist_result: Union[bool, DataReference],
-) -> PersistResultOptions:
-    """Parse ``persist_result``: ``True``/``False`` or a custom ``DataReference`` table."""
+def normalize_persist_result(
+    persist_result: Optional[DataReference],
+) -> Optional[DataReference]:
+    """Accept a results table or ``None`` (do not persist)."""
+    if persist_result is None:
+        return None
     if isinstance(persist_result, DataReference):
-        return PersistResultOptions(enabled=True, table_ref=persist_result)
-    return PersistResultOptions(enabled=bool(persist_result))
+        return persist_result
+    raise TypeError('persist_result must be a DataReference or None')
 
 
 class CheckResultPersister:
-    """Persist check output to file and/or SQL table."""
+    """Persist check results to a SQL table."""
 
-    def __init__(
-        self,
-        results_engine: Optional[Engine] = None,
-        results_table: str = 'xoverrr_check_results',
-        results_schema: Optional[str] = None,
-    ):
+    def __init__(self, results_engine: Optional[Engine] = None):
         self.results_engine = results_engine
-        self.results_table = results_table
-        self.results_schema = results_schema
         self.adapters = {
             DBMSType.ORACLE: OracleAdapter(),
             DBMSType.POSTGRESQL: PostgresAdapter(),
@@ -254,40 +240,48 @@ class CheckResultPersister:
     def persist(
         self,
         result: CheckResult,
-        persist_result: bool = False,
-        persist_result_ref: Optional[DataReference] = None,
-    ) -> None:
-        should_persist_db = persist_result and self.results_engine is not None
-        if should_persist_db:
-            self._persist_to_db(result, persist_result_ref)
+        table_ref: Optional[DataReference] = None,
+    ) -> bool:
+        """Write ``result`` to ``table_ref``.
+
+        Returns False if a table was given and the write did not succeed.
+        """
+        table_ref = normalize_persist_result(table_ref)
+        if table_ref is None:
+            return True
+        if self.results_engine is None:
+            app_logger.warning(
+                'Unable to persist check result: results_engine is not configured'
+            )
+            return False
+        return self._persist_to_db(result, table_ref)
 
     def _persist_to_db(
-        self, result: CheckResult, persist_result_ref: Optional[DataReference]
-    ) -> None:
+        self, result: CheckResult, table_ref: DataReference
+    ) -> bool:
         try:
-            full_payload = result.to_dict()
-            record = self._build_db_record(result, full_payload)
-            table_ref = self._resolve_table_target(persist_result_ref)
-            adapter = self._get_adapter_for_engine(self.results_engine)
             column_types = self._build_column_types()
+            record = self._build_db_record(result, result.to_dict())
+            record = _coerce_persist_record(
+                record, column_types, engine=self.results_engine
+            )
+            adapter = self._get_adapter_for_engine(self.results_engine)
             adapter.ensure_persistence_table(
                 self.results_engine,
                 table_ref,
                 column_types,
                 primary_key=PERSIST_PRIMARY_KEY,
             )
-            record = _coerce_persist_record(
-                record, column_types, engine=self.results_engine
-            )
             adapter.insert_persistence_record(
                 self.results_engine, table_ref, record, column_types
             )
-            table_name = persist_result_ref.full_name if persist_result_ref else self.results_table
-            app_logger.info(f'Check result persisted to {table_name}')
+            app_logger.info(f'Check result persisted to {table_ref.full_name}')
+            return True
         except Exception as exc:
             app_logger.warning(
                 f'Unable to persist check result to storage engine: {exc}'
             )
+            return False
 
     def _build_db_record(
         self, result: CheckResult, full_payload: Dict
@@ -327,13 +321,6 @@ class CheckResultPersister:
         for field in DETAILS_JSON_FIELDS:
             column_types[f'details_{field}_json'] = PERSIST_COL_TEXT
         return column_types
-
-    def _resolve_table_target(
-        self, persist_result_ref: Optional[DataReference]
-    ) -> DataReference:
-        if persist_result_ref:
-            return persist_result_ref
-        return DataReference(self.results_table, self.results_schema)
 
     def _get_adapter_for_engine(self, engine: Engine):
         if engine.dialect.name == 'sqlite':

@@ -15,9 +15,8 @@ from .models import DataReference, DBMSType, ObjectType
 from .persistence import (
     CheckResultPersister,
     CheckRunTimings,
-    PersistResultOptions,
     build_run_id,
-    parse_persist_result_option,
+    normalize_persist_result,
 )
 from .utils import (CheckDetails, CheckStats,
                     build_check_stats, build_sniff_issue_stats,
@@ -124,7 +123,7 @@ class DataQualityChecker:
         chunk_size_days: Optional[int] = None,
         tolerance_pct: float = 0.0,
         max_examples: Optional[int] = ct.DEFAULT_MAX_EXAMPLES,
-        persist_result: Union[bool, DataReference] = False,
+        persist_result: Optional[DataReference] = None,
         check_tags: Optional[Dict] = None,
         report_output_format: str = ct.REPORT_OUTPUT_FORMAT_TEXT,
     ) -> Tuple[str, Optional[CheckStats], Optional[CheckDetails]]:
@@ -132,7 +131,7 @@ class DataQualityChecker:
         self._validate_inputs(source_table, target_table)
         self._require_target_engine()
         validate_report_output_format(report_output_format)
-        persist_options = parse_persist_result_option(persist_result)
+        persist_result = normalize_persist_result(persist_result)
         run_id, run_started_at = self._start_check_run(
             ct.CHECK_TYPE_COUNTS, check_name
         )
@@ -155,7 +154,7 @@ class DataQualityChecker:
                 run_started_at=run_started_at,
             )
 
-            report = self._finalize_check(
+            status, report = self._finalize_check(
                 status=status,
                 report=draft_report,
                 stats=stats,
@@ -165,7 +164,7 @@ class DataQualityChecker:
                 check_tags=check_tags,
                 source_table=source_table.full_name,
                 target_table=target_table.full_name,
-                persist_options=persist_options,
+                persist_result=persist_result,
                 report_output_format=report_output_format,
             )
             self._update_stats(status, source_table)
@@ -174,7 +173,7 @@ class DataQualityChecker:
         except Exception as e:
             app_logger.exception(f'Counts check failed: {str(e)}')
             status = ct.CHECK_FAILED
-            report = self._finalize_check(
+            status, report = self._finalize_check(
                 status=status,
                 report=None,
                 stats=None,
@@ -184,7 +183,7 @@ class DataQualityChecker:
                 check_tags=check_tags,
                 source_table=source_table.full_name,
                 target_table=target_table.full_name,
-                persist_options=persist_options,
+                persist_result=persist_result,
                 report_output_format=report_output_format,
             )
             self._update_stats(status, source_table)
@@ -205,7 +204,7 @@ class DataQualityChecker:
         tolerance_pct: float = 0.0,
         exclude_recent_hours: Optional[int] = None,
         max_examples: Optional[int] = ct.DEFAULT_MAX_EXAMPLES,
-        persist_result: Union[bool, DataReference] = False,
+        persist_result: Optional[DataReference] = None,
         check_tags: Optional[Dict] = None,
         report_output_format: str = ct.REPORT_OUTPUT_FORMAT_TEXT,
     ) -> Tuple[str, str, Optional[CheckStats], Optional[CheckDetails]]:
@@ -231,7 +230,7 @@ class DataQualityChecker:
         self._validate_inputs(source_table, target_table)
         self._require_target_engine()
         validate_report_output_format(report_output_format)
-        persist_options = parse_persist_result_option(persist_result)
+        persist_result = normalize_persist_result(persist_result)
         run_id, run_started_at = self._start_check_run(
             ct.CHECK_TYPE_SAMPLES, check_name
         )
@@ -268,7 +267,7 @@ class DataQualityChecker:
                 run_started_at=run_started_at,
             )
 
-            report = self._finalize_check(
+            status, report = self._finalize_check(
                 status=status,
                 report=draft_report,
                 stats=stats,
@@ -278,7 +277,7 @@ class DataQualityChecker:
                 check_tags=check_tags,
                 source_table=source_table.full_name,
                 target_table=target_table.full_name,
-                persist_options=persist_options,
+                persist_result=persist_result,
                 report_output_format=report_output_format,
             )
             self._update_stats(status, source_table)
@@ -287,7 +286,7 @@ class DataQualityChecker:
         except Exception as e:
             app_logger.exception(f'Samples check failed: {str(e)}')
             status = ct.CHECK_FAILED
-            report = self._finalize_check(
+            status, report = self._finalize_check(
                 status=status,
                 report=None,
                 stats=None,
@@ -297,7 +296,7 @@ class DataQualityChecker:
                 check_tags=check_tags,
                 source_table=source_table.full_name,
                 target_table=target_table.full_name,
-                persist_options=persist_options,
+                persist_result=persist_result,
                 report_output_format=report_output_format,
             )
             self._update_stats(status, source_table)
@@ -625,7 +624,7 @@ class DataQualityChecker:
         chunk_size_days: Optional[int] = None,
         tolerance_pct: float = 0.0,
         max_examples: Optional[int] = ct.DEFAULT_MAX_EXAMPLES,
-        persist_result: Union[bool, DataReference] = False,
+        persist_result: Optional[DataReference] = None,
         check_tags: Optional[Dict] = None,
         report_output_format: str = ct.REPORT_OUTPUT_FORMAT_TEXT,
     ) -> Tuple[str, str, Optional[CheckStats], Optional[CheckDetails]]:
@@ -640,7 +639,7 @@ class DataQualityChecker:
         source_params = source_params or {}
 
         validate_report_output_format(report_output_format)
-        persist_options = parse_persist_result_option(persist_result)
+        persist_result = normalize_persist_result(persist_result)
         run_id, run_started_at = self._start_check_run(
             ct.CHECK_TYPE_SNIFF_QUERY, check_name
         )
@@ -707,7 +706,7 @@ class DataQualityChecker:
                     source_db_type=self._report_context['source_db_type'],
                 )
 
-            report = self._finalize_check(
+            status, report = self._finalize_check(
                 status=status,
                 report=draft_report,
                 stats=stats,
@@ -719,7 +718,7 @@ class DataQualityChecker:
                 target_table=None,
                 source_query=source_query,
                 source_params=source_params,
-                persist_options=persist_options,
+                persist_result=persist_result,
                 report_output_format=report_output_format,
             )
             self._update_stats(status, None)
@@ -728,7 +727,7 @@ class DataQualityChecker:
         except Exception:
             app_logger.exception('Sniff query failed')
             status = ct.CHECK_FAILED
-            report = self._finalize_check(
+            status, report = self._finalize_check(
                 status=status,
                 report=None,
                 stats=None,
@@ -740,7 +739,7 @@ class DataQualityChecker:
                 target_table=None,
                 source_query=source_query,
                 source_params=source_params,
-                persist_options=persist_options,
+                persist_result=persist_result,
                 report_output_format=report_output_format,
             )
             self._update_stats(status, None)
@@ -758,7 +757,7 @@ class DataQualityChecker:
         exclude_columns: Optional[List[str]] = None,
         tolerance_pct: float = 0.0,
         max_examples: Optional[int] = ct.DEFAULT_MAX_EXAMPLES,
-        persist_result: Union[bool, DataReference] = False,
+        persist_result: Optional[DataReference] = None,
         check_tags: Optional[Dict] = None,
         report_output_format: str = ct.REPORT_OUTPUT_FORMAT_TEXT,
     ) -> Tuple[str, str, Optional[CheckStats], Optional[CheckDetails]]:
@@ -779,7 +778,7 @@ class DataQualityChecker:
             raise ValueError('custom_primary_key is mandatory')
 
         validate_report_output_format(report_output_format)
-        persist_options = parse_persist_result_option(persist_result)
+        persist_result = normalize_persist_result(persist_result)
         run_id, run_started_at = self._start_check_run(
             ct.CHECK_TYPE_CUSTOM_QUERIES, check_name
         )
@@ -862,7 +861,7 @@ class DataQualityChecker:
                     **self._report_context,
                 )
 
-            report = self._finalize_check(
+            status, report = self._finalize_check(
                 status=status,
                 report=draft_report,
                 stats=stats,
@@ -876,7 +875,7 @@ class DataQualityChecker:
                 source_params=source_params,
                 target_query=target_query,
                 target_params=target_params,
-                persist_options=persist_options,
+                persist_result=persist_result,
                 report_output_format=report_output_format,
             )
             self._update_stats(status, None)
@@ -885,7 +884,7 @@ class DataQualityChecker:
         except Exception:
             app_logger.exception('Custom queries check failed')
             status = ct.CHECK_FAILED
-            report = self._finalize_check(
+            status, report = self._finalize_check(
                 status=status,
                 report=None,
                 stats=None,
@@ -899,7 +898,7 @@ class DataQualityChecker:
                 source_params=source_params,
                 target_query=target_query,
                 target_params=target_params,
-                persist_options=persist_options,
+                persist_result=persist_result,
                 report_output_format=report_output_format,
             )
             self._update_stats(status, None)
@@ -913,7 +912,7 @@ class DataQualityChecker:
         stats: Optional[CheckStats],
         details: Optional[CheckDetails],
         check_type: str,
-        persist_options: PersistResultOptions,
+        persist_result: Optional[DataReference] = None,
         report_output_format: str,
         check_name: Optional[str] = None,
         check_tags: Optional[Dict] = None,
@@ -923,7 +922,7 @@ class DataQualityChecker:
         source_params: Optional[Dict] = None,
         target_query: Optional[str] = None,
         target_params: Optional[Dict] = None,
-    ) -> Optional[str]:
+    ) -> Tuple[str, Optional[str]]:
         if not getattr(self, '_active_run_id', None):
             raise RuntimeError('check run was not started; run_id is missing')
         self._run_timings.finish_run()
@@ -946,15 +945,14 @@ class DataQualityChecker:
             target_params=target_params,
             timings=self._run_timings,
         )
-        self.result_persister.persist(
-            result,
-            persist_result=persist_options.enabled,
-            persist_result_ref=persist_options.table_ref,
-        )
+        persist_ok = self.result_persister.persist(result, persist_result)
+        if not persist_ok:
+            status = ct.CHECK_FAILED
+            result.status = status
         app_logger.info(
             f'Check run finished: run_id={self._active_run_id} status={status}'
         )
-        return format_check_result(result, report_output_format)
+        return status, format_check_result(result, report_output_format)
 
     def _resolve_custom_query_chunks(
         self,

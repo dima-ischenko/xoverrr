@@ -136,7 +136,7 @@ status, report, stats, details = checker.check_samples(
 | `tolerance_pct` | Fail if `final_diff_score` exceeds this (0–100) |
 | `exclude_recent_hours` | Drop rows modified in the last N hours |
 | `max_examples` | Cap on discrepancy examples in the report |
-| `persist_result` | `False`, `True` (default table), or `DataReference` |
+| `persist_result` | `DataReference` of the results table; omit to skip persist |
 | `check_name` / `check_tags` | Labels for dashboards |
 | `report_output_format` | `'text'` (default) or `'json'` |
 
@@ -371,7 +371,7 @@ Available on all methods. Splits a date range into N-day windows, runs each chun
 
 ### Result persistence
 
-With `results_engine` set and `persist_result=True` (or a custom `DataReference`), one row is written per run. The table is created if missing; primary key is `run_id`. Columns cover status, metadata, stats, details JSON, and the text report.
+With `results_engine` set and `persist_result=DataReference(...)`, one row is written per run to that table. The table is created if missing; primary key is `run_id`. Columns cover status, metadata, stats, details JSON, and the text report. Persistence is skipped if `persist_result` is omitted. If persist was requested and the write fails, the check status becomes `failed`.
 
 ### Logging
 

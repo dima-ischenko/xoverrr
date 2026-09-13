@@ -148,6 +148,16 @@ class BaseDatabaseAdapter(ABC):
         """Create persistence table using explicit DDL if needed."""
         pass
 
+    def build_persistence_insert_sql(
+        self, table_ref: DataReference, record: Dict
+    ) -> str:
+        columns = list(record)
+        columns_sql = ', '.join(columns)
+        values_sql = ', '.join(f':{col}' for col in columns)
+        return (
+            f'INSERT INTO {table_ref.full_name} ({columns_sql}) VALUES ({values_sql})'
+        )
+
     @abstractmethod
     def insert_persistence_record(
         self,
