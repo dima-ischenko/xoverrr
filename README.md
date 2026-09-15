@@ -27,7 +27,7 @@ Supported databases: **Oracle**, **PostgreSQL** (+ Greenplum), **ClickHouse**.
 **Sample check** (Greenplum/PostgreSQL → Oracle):
 
 ```python
-from xoverrr import DataQualityChecker, DataReference, CHECK_SUCCESS
+from xoverrr import DataQualityChecker, DataReference, CheckResult, CHECK_SUCCESS
 from sqlalchemy import create_engine
 from datetime import date, timedelta
 
@@ -52,7 +52,7 @@ end_date = date.today()
 start_date = end_date - timedelta(days=7)
 
 # 4. Run
-status, report, stats, details = checker.check_samples(
+result: CheckResult = checker.check_samples(
     source_table=source_table,
     target_table=target_table,
     date_column="hire_date",
@@ -71,21 +71,39 @@ status, report, stats, details = checker.check_samples(
 )
 
 # 5. Result
-print(report)
-if status == CHECK_SUCCESS:
+print(result.run_id)
+print(result.report)
+if result.status == CHECK_SUCCESS:
     print("Data quality check passed")
 else:
     print("Data quality check failed")
 ```
 
-Every check method returns the same tuple:
+Every check method returns a `CheckResult`. Access fields on the object:
 
-| Value | Meaning |
+```python
+result = checker.check_samples(...)
+result.run_id
+result.status
+result.report
+result.stats
+result.details
+```
+
+The same four values can still be unpacked (from the method call or from the object), so previous code calls keep working:
+
+```python
+status, report, stats, details = checker.check_samples(...)
+status, report, stats, details = result
+```
+
+| Field | Meaning |
 |-------|---------|
-| `status` | `CHECK_SUCCESS` / `CHECK_FAILED` / `CHECK_SKIPPED` |
-| `report` | Text report or JSON string (`report_output_format`) |
-| `stats` | `CheckStats` — scores and row counts |
-| `details` | `CheckDetails` — examples and per-column diffs |
+| `result.status` | `CHECK_SUCCESS` / `CHECK_FAILED` / `CHECK_SKIPPED` |
+| `result.report` | Text report or JSON string (`report_output_format`) |
+| `result.stats` | `CheckStats` — scores and row counts |
+| `result.details` | `CheckDetails` — examples and per-column diffs |
+| `result.run_id` | Unique id of this run (also in JSON and persistence) |
 
 ---
 
@@ -107,7 +125,7 @@ Every check method returns the same tuple:
 This method compares row sets and column values over a date range.
 
 ```python
-status, report, stats, details = checker.check_samples(
+result = checker.check_samples(
     source_table=DataReference("table_name", "schema_name"),
     target_table=DataReference("table_name", "schema_name"),
     date_column="created_at",
@@ -150,7 +168,7 @@ If `custom_primary_key` is omitted, the primary key is inferred from metadata (i
 Daily aggregates — suitable for large volumes and for spotting missing or extra rows.
 
 ```python
-status, report, stats, details = checker.check_counts(
+result = checker.check_counts(
     source_table=DataReference("users", "schema1"),
     target_table=DataReference("users", "schema2"),
     date_column="created_at",
@@ -170,7 +188,7 @@ status, report, stats, details = checker.check_counts(
 Compare the results of arbitrary SQL on both sides. A primary key is **required**.
 
 ```python
-status, report, stats, details = checker.check_custom_queries(
+result = checker.check_custom_queries(
     source_query="""
         SELECT id AS user_id, name AS user_name, created_at AS created_date
         FROM scott.source_table
@@ -193,7 +211,7 @@ status, report, stats, details = checker.check_custom_queries(
 **Chunking:** when both `source_params` and `target_params` include `start_date` and `end_date`, set `chunk_size_days` to split the range:
 
 ```python
-status, report, stats, details = checker.check_custom_queries(
+result = checker.check_custom_queries(
     source_query="""
         SELECT id, name, created_at
         FROM scott.source_table
@@ -238,7 +256,7 @@ checker = DataQualityChecker(
 `tolerance_pct` then means “allow up to N% of rows with `xsniff_passed = n`”:
 
 ```python
-status, report, stats, details = checker.check_sniff_query(
+result = checker.check_sniff_query(
     source_query="""
         SELECT
             order_id,
@@ -260,7 +278,7 @@ status, report, stats, details = checker.check_sniff_query(
 (fail on any issue):
 
 ```python
-status, report, stats, details = checker.check_sniff_query(
+result = checker.check_sniff_query(
     source_query="""
         SELECT CASE
             WHEN EXISTS (SELECT 1 FROM sales.orders WHERE amount <= 0) THEN 'n'
@@ -274,7 +292,7 @@ status, report, stats, details = checker.check_sniff_query(
 An empty result means a pass (`final_score = 100`). Any returned row means a fail (`issue_rows_pct = 100` for that result set). As with the scalar pattern, keep the default `tolerance_pct=0.0` so that the check fails if any issue is found:
 
 ```python
-status, report, stats, details = checker.check_sniff_query(
+result = checker.check_sniff_query(
     source_query="""
         SELECT
             order_id,
@@ -305,7 +323,7 @@ Useful `stats` fields:
 
 ## Metric calculation
 
-All methods expose `stats.final_diff_score` and `stats.final_score`.
+All methods expose `result.stats.final_diff_score` and `result.stats.final_score`.
 
 **Quality score (every method):**
 
@@ -376,7 +394,7 @@ With `results_engine` set and `persist_result=DataReference(...)`, one row is wr
 
 ### Logging
 
-Each run has an internal `run_id` (also stored when persistence is enabled; it is not included in the public JSON from `CheckResult.to_dict()`):
+Each run has a `run_id` on the returned `CheckResult` (also stored when persistence is enabled, and included in `CheckResult.to_dict()` / JSON reports):
 
 ```
 2024-01-15 10:30:45 - INFO - xoverrr.core - Check run started: run_id=a3f2c8b91d4e5678 check_name=employees_daily check_type=samples

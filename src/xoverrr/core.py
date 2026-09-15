@@ -27,6 +27,7 @@ from .utils import (CheckDetails, CheckStats,
                     prepare_dataframe, sniff_issue_row_count,
                     validate_dataframe_size)
 from .reporting import (
+    CheckResult,
     build_check_result,
     format_check_result,
     generate_count_report,
@@ -140,7 +141,14 @@ class DataQualityChecker:
         persist_result: Optional[DataReference] = None,
         check_tags: Optional[Dict] = None,
         report_output_format: str = ct.REPORT_OUTPUT_FORMAT_TEXT,
-    ) -> Tuple[str, Optional[CheckStats], Optional[CheckDetails]]:
+    ) -> CheckResult:
+        """
+        Compare daily row counts between two tables or views.
+
+        Returns:
+            ``CheckResult`` including ``run_id``. Still unpacks as
+            ``status, report, stats, details`` for backward compatibility.
+        """
 
         self._validate_inputs(source_table, target_table)
         self._require_target_engine()
@@ -168,7 +176,7 @@ class DataQualityChecker:
                 run_started_at=run_started_at,
             )
 
-            status, report = self._finalize_check(
+            result = self._finalize_check(
                 status=status,
                 report=draft_report,
                 stats=stats,
@@ -181,13 +189,13 @@ class DataQualityChecker:
                 persist_result=persist_result,
                 report_output_format=report_output_format,
             )
-            self._update_stats(status, source_table)
-            return status, report, stats, details
+            self._update_stats(result.status, source_table)
+            return result
 
         except Exception as e:
             app_logger.exception(f'Counts check failed: {str(e)}')
             status = ct.CHECK_FAILED
-            status, report = self._finalize_check(
+            result = self._finalize_check(
                 status=status,
                 report=None,
                 stats=None,
@@ -200,8 +208,8 @@ class DataQualityChecker:
                 persist_result=persist_result,
                 report_output_format=report_output_format,
             )
-            self._update_stats(status, source_table)
-            return status, report, None, None
+            self._update_stats(result.status, source_table)
+            return result
 
     def check_samples(
         self,
@@ -221,7 +229,7 @@ class DataQualityChecker:
         persist_result: Optional[DataReference] = None,
         check_tags: Optional[Dict] = None,
         report_output_format: str = ct.REPORT_OUTPUT_FORMAT_TEXT,
-    ) -> Tuple[str, str, Optional[CheckStats], Optional[CheckDetails]]:
+    ) -> CheckResult:
         """
         Compare sample rows and column values between two tables or views.
 
@@ -240,6 +248,10 @@ class DataQualityChecker:
                 Tolerance percentage for discrepancies (0–100).
             max_examples
                 Maximum number of discrepancy examples per column.
+
+        Returns:
+            ``CheckResult`` including ``run_id``. Still unpacks as
+            ``status, report, stats, details`` for backward compatibility.
         """
         self._validate_inputs(source_table, target_table)
         self._require_target_engine()
@@ -281,7 +293,7 @@ class DataQualityChecker:
                 run_started_at=run_started_at,
             )
 
-            status, report = self._finalize_check(
+            result = self._finalize_check(
                 status=status,
                 report=draft_report,
                 stats=stats,
@@ -294,13 +306,13 @@ class DataQualityChecker:
                 persist_result=persist_result,
                 report_output_format=report_output_format,
             )
-            self._update_stats(status, source_table)
-            return status, report, stats, details
+            self._update_stats(result.status, source_table)
+            return result
 
         except Exception as e:
             app_logger.exception(f'Samples check failed: {str(e)}')
             status = ct.CHECK_FAILED
-            status, report = self._finalize_check(
+            result = self._finalize_check(
                 status=status,
                 report=None,
                 stats=None,
@@ -313,8 +325,8 @@ class DataQualityChecker:
                 persist_result=persist_result,
                 report_output_format=report_output_format,
             )
-            self._update_stats(status, source_table)
-            return status, report, None, None
+            self._update_stats(result.status, source_table)
+            return result
 
     def _start_check_run(
         self, check_type: str, check_name: Optional[str]
@@ -641,12 +653,16 @@ class DataQualityChecker:
         persist_result: Optional[DataReference] = None,
         check_tags: Optional[Dict] = None,
         report_output_format: str = ct.REPORT_OUTPUT_FORMAT_TEXT,
-    ) -> Tuple[str, str, Optional[CheckStats], Optional[CheckDetails]]:
+    ) -> CheckResult:
         """
         Sniff out data issues with a source-only SQL check.
 
         Row-level and scalar pass/fail checks both use ``xsniff_passed``
         (``y`` = passed, ``n`` = failed).
+
+        Returns:
+            ``CheckResult`` including ``run_id``. Still unpacks as
+            ``status, report, stats, details`` for backward compatibility.
         """
         source_engine = self.source_engine
         timezone = self.timezone
@@ -720,7 +736,7 @@ class DataQualityChecker:
                     source_db_type=self._report_context['source_db_type'],
                 )
 
-            status, report = self._finalize_check(
+            result = self._finalize_check(
                 status=status,
                 report=draft_report,
                 stats=stats,
@@ -735,13 +751,13 @@ class DataQualityChecker:
                 persist_result=persist_result,
                 report_output_format=report_output_format,
             )
-            self._update_stats(status, None)
-            return status, report, stats, details
+            self._update_stats(result.status, None)
+            return result
 
         except Exception:
             app_logger.exception('Sniff query failed')
             status = ct.CHECK_FAILED
-            status, report = self._finalize_check(
+            result = self._finalize_check(
                 status=status,
                 report=None,
                 stats=None,
@@ -756,8 +772,8 @@ class DataQualityChecker:
                 persist_result=persist_result,
                 report_output_format=report_output_format,
             )
-            self._update_stats(status, None)
-            return status, report, None, None
+            self._update_stats(result.status, None)
+            return result
 
     def check_custom_queries(
         self,
@@ -774,11 +790,15 @@ class DataQualityChecker:
         persist_result: Optional[DataReference] = None,
         check_tags: Optional[Dict] = None,
         report_output_format: str = ct.REPORT_OUTPUT_FORMAT_TEXT,
-    ) -> Tuple[str, str, Optional[CheckStats], Optional[CheckDetails]]:
+    ) -> CheckResult:
         """
         Compare data from custom queries with specified key columns.
 
         For source-only issue checks, use :meth:`check_sniff_query`.
+
+        Returns:
+            ``CheckResult`` including ``run_id``. Still unpacks as
+            ``status, report, stats, details`` for backward compatibility.
         """
         self._require_target_engine()
         source_engine = self.source_engine
@@ -875,7 +895,7 @@ class DataQualityChecker:
                     **self._report_context,
                 )
 
-            status, report = self._finalize_check(
+            result = self._finalize_check(
                 status=status,
                 report=draft_report,
                 stats=stats,
@@ -892,13 +912,13 @@ class DataQualityChecker:
                 persist_result=persist_result,
                 report_output_format=report_output_format,
             )
-            self._update_stats(status, None)
-            return status, report, stats, details
+            self._update_stats(result.status, None)
+            return result
 
         except Exception:
             app_logger.exception('Custom queries check failed')
             status = ct.CHECK_FAILED
-            status, report = self._finalize_check(
+            result = self._finalize_check(
                 status=status,
                 report=None,
                 stats=None,
@@ -915,8 +935,8 @@ class DataQualityChecker:
                 persist_result=persist_result,
                 report_output_format=report_output_format,
             )
-            self._update_stats(status, None)
-            return status, report, None, None
+            self._update_stats(result.status, None)
+            return result
 
     def _finalize_check(
         self,
@@ -936,7 +956,7 @@ class DataQualityChecker:
         source_params: Optional[Dict] = None,
         target_query: Optional[str] = None,
         target_params: Optional[Dict] = None,
-    ) -> Tuple[str, Optional[str]]:
+    ) -> CheckResult:
         if not getattr(self, '_active_run_id', None):
             raise RuntimeError('check run was not started; run_id is missing')
         self._run_timings.finish_run()
@@ -966,7 +986,10 @@ class DataQualityChecker:
         app_logger.info(
             f'Check run finished: run_id={self._active_run_id} status={status}'
         )
-        return status, format_check_result(result, report_output_format)
+        # Persist already captured the original report; expose the formatted
+        # public report so CheckResult still unpacks as status, report, stats, details.
+        result.report = format_check_result(result, report_output_format)
+        return result
 
     def _resolve_custom_query_chunks(
         self,

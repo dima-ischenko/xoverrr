@@ -94,11 +94,41 @@ def test_format_check_result_returns_json_report():
     )
 
     payload = json.loads(report)
-    assert 'run_id' not in payload
+    assert payload['run_id'] == RUN_ID
     assert payload['check_type'] == ct.CHECK_TYPE_SAMPLES
     assert payload['status'] == 'success'
     assert payload['report'] == 'FULL TEXT REPORT'
     assert payload['stats']['final_score'] == 100.0
+
+
+def test_check_result_unpacks_four_values_for_backward_compatibility():
+    stats = _build_stats()
+    details = _build_details()
+    result = build_check_result(
+        run_id=RUN_ID,
+        timestamp=RUN_STARTED_AT,
+        timezone='UTC',
+        status='success',
+        report='FULL TEXT REPORT',
+        stats=stats,
+        details=details,
+        check_type=ct.CHECK_TYPE_SAMPLES,
+        source_table='public.source_table',
+        target_table='public.target_table',
+    )
+
+    status, report, unpacked_stats, unpacked_details = result
+
+    assert result.run_id == RUN_ID
+    assert status == 'success'
+    assert report == 'FULL TEXT REPORT'
+    assert unpacked_stats is stats
+    assert unpacked_details is details
+    unpacked = list(result)
+    assert unpacked[0] == status
+    assert unpacked[1] == report
+    assert unpacked[2] is stats
+    assert unpacked[3] is details
 
 
 def test_format_check_result_returns_text_report():
@@ -398,7 +428,7 @@ def test_finalize_check_fails_status_when_persist_fails():
             return False
 
     checker = _checker_for_finalize(FailingPersister())
-    status, report = checker._finalize_check(
+    result = checker._finalize_check(
         status=ct.CHECK_SUCCESS,
         report='FULL TEXT REPORT',
         stats=_build_stats(),
@@ -410,8 +440,12 @@ def test_finalize_check_fails_status_when_persist_fails():
         target_table='public.b',
     )
 
+    status, report, stats, details = result
+    assert result.run_id == RUN_ID
     assert status == ct.CHECK_FAILED
     assert report == 'FULL TEXT REPORT'
+    assert stats is result.stats
+    assert details is result.details
 
 
 def test_finalize_check_keeps_status_when_persist_succeeds():
@@ -420,7 +454,7 @@ def test_finalize_check_keeps_status_when_persist_succeeds():
             return True
 
     checker = _checker_for_finalize(OkPersister())
-    status, report = checker._finalize_check(
+    result = checker._finalize_check(
         status=ct.CHECK_SUCCESS,
         report='FULL TEXT REPORT',
         stats=_build_stats(),
@@ -432,8 +466,12 @@ def test_finalize_check_keeps_status_when_persist_succeeds():
         target_table='public.b',
     )
 
+    status, report, stats, details = result
+    assert result.run_id == RUN_ID
     assert status == ct.CHECK_SUCCESS
     assert report == 'FULL TEXT REPORT'
+    assert len(result) == 4
+    assert result[0] == status
 
 
 def test_persist_uses_check_timezone_column():
