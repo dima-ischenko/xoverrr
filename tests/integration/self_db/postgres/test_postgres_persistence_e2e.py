@@ -64,7 +64,7 @@ class TestPostgresPersistenceE2E:
         )
 
     def test_postgres_persistence_sample_e2e(self, postgres_engine):
-        status, _, _, _ = self._build_checker(postgres_engine).check_samples(
+        result = self._build_checker(postgres_engine).check_samples(
             source_table=DataReference(SRC_TABLE, 'test'),
             target_table=DataReference(TRG_TABLE, 'test'),
             date_column='created_at',
@@ -74,6 +74,7 @@ class TestPostgresPersistenceE2E:
             persist_result=DataReference(RESULTS_TABLE_SAMPLE),
             report_output_format='json',
         )
+        status = result.status
 
         assert status == CHECK_SUCCESS
 
@@ -91,7 +92,7 @@ class TestPostgresPersistenceE2E:
         assert 'SAMPLES CHECK REPORT' in row[2]
 
     def test_postgres_persistence_counts_e2e(self, postgres_engine):
-        status, _, _, _ = self._build_checker(postgres_engine).check_counts(
+        result = self._build_checker(postgres_engine).check_counts(
             source_table=DataReference(SRC_TABLE, 'test'),
             target_table=DataReference(TRG_TABLE, 'test'),
             date_column='created_at',
@@ -100,6 +101,7 @@ class TestPostgresPersistenceE2E:
             persist_result=DataReference(RESULTS_TABLE_COUNTS),
             report_output_format='json',
         )
+        status = result.status
 
         assert status == CHECK_SUCCESS
 
@@ -131,7 +133,7 @@ class TestPostgresPersistenceE2E:
         """
         query_params = {'start_date': '2024-01-01', 'end_date': '2024-01-04'}
 
-        status, _, _, _ = self._build_checker(postgres_engine).check_custom_queries(
+        result = self._build_checker(postgres_engine).check_custom_queries(
             source_query=source_query,
             source_params=query_params,
             target_query=target_query,
@@ -141,6 +143,7 @@ class TestPostgresPersistenceE2E:
             persist_result=DataReference(RESULTS_TABLE_CUSTOM),
             report_output_format='json',
         )
+        status = result.status
 
         assert status == CHECK_SUCCESS
 
@@ -194,7 +197,7 @@ class TestPostgresPersistenceE2E:
             """,
         )
 
-        status, report, _, _ = self._build_checker(postgres_engine).check_samples(
+        result = self._build_checker(postgres_engine).check_samples(
             source_table=DataReference(failed_src, 'test'),
             target_table=DataReference(failed_trg, 'test'),
             date_column='created_at',
@@ -204,6 +207,8 @@ class TestPostgresPersistenceE2E:
             persist_result=DataReference(RESULTS_TABLE_FAILED),
             report_output_format='text',
         )
+        status = result.status
+        report = result.report
 
         assert status == CHECK_FAILED
 
@@ -262,7 +267,7 @@ class TestPostgresPersistenceE2E:
             """,
         )
 
-        status, report, _, _ = self._build_checker(postgres_engine).check_samples(
+        result = self._build_checker(postgres_engine).check_samples(
             source_table=DataReference(failed_src, 'test'),
             target_table=DataReference(failed_trg, 'test'),
             date_column='created_at',
@@ -272,6 +277,8 @@ class TestPostgresPersistenceE2E:
             persist_result=DataReference(RESULTS_TABLE_FAILED_COMPOUND),
             report_output_format='text',
         )
+        status = result.status
+        report = result.report
 
         assert status == CHECK_FAILED
 

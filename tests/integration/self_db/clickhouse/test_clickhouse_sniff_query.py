@@ -71,7 +71,7 @@ def setup_sniff_data_with_issue(clickhouse_engine, table_helper):
 
 class TestClickHouseSniffQuery:
     def test_row_level_pass(self, checker, setup_sniff_data):
-        status, _, stats, _ = checker.check_sniff_query(
+        result = checker.check_sniff_query(
             source_query=f"""
                 SELECT
                     id,
@@ -81,12 +81,14 @@ class TestClickHouseSniffQuery:
             """,
             tolerance_pct=0.0,
         )
+        status = result.status
+        stats = result.stats
 
         assert status == CHECK_SUCCESS
         assert stats.final_score == 100.0
 
     def test_row_level_fail(self, checker, setup_sniff_data_with_issue):
-        status, _, stats, _ = checker.check_sniff_query(
+        result = checker.check_sniff_query(
             source_query=f"""
                 SELECT
                     id,
@@ -96,12 +98,14 @@ class TestClickHouseSniffQuery:
             """,
             tolerance_pct=0.0,
         )
+        status = result.status
+        stats = result.stats
 
         assert status == CHECK_FAILED
         assert stats.final_score < 100.0
 
     def test_pass_fail_pass(self, checker, setup_sniff_data):
-        status, _, stats, _ = checker.check_sniff_query(
+        result = checker.check_sniff_query(
             source_query=f"""
                 SELECT if(countIf(amount < 0) > 0, '{FLAG_VALUE_NO}', '{FLAG_VALUE_YES}')
                     AS {XSNIFF_PASSED_COLUMN}
@@ -109,12 +113,14 @@ class TestClickHouseSniffQuery:
             """,
             tolerance_pct=0.0,
         )
+        status = result.status
+        stats = result.stats
 
         assert status == CHECK_SUCCESS
         assert stats.final_score == 100.0
 
     def test_pass_fail_fail(self, checker, setup_sniff_data_with_issue):
-        status, _, stats, _ = checker.check_sniff_query(
+        result = checker.check_sniff_query(
             source_query=f"""
                 SELECT if(countIf(amount < 0) > 0, '{FLAG_VALUE_NO}', '{FLAG_VALUE_YES}')
                     AS {XSNIFF_PASSED_COLUMN}
@@ -122,12 +128,14 @@ class TestClickHouseSniffQuery:
             """,
             tolerance_pct=0.0,
         )
+        status = result.status
+        stats = result.stats
 
         assert status == CHECK_FAILED
         assert stats.final_score == 0.0
 
     def test_issues_only_filter_pass(self, checker, setup_sniff_data):
-        status, _, stats, details = checker.check_sniff_query(
+        result = checker.check_sniff_query(
             source_query=f"""
                 SELECT id, amount, '{FLAG_VALUE_NO}' AS {XSNIFF_PASSED_COLUMN}
                 FROM {TABLE_NAME}
@@ -135,6 +143,9 @@ class TestClickHouseSniffQuery:
             """,
             tolerance_pct=0.0,
         )
+        status = result.status
+        stats = result.stats
+        details = result.details
 
         assert status == CHECK_SUCCESS
         assert stats.total_source_rows == 0
@@ -142,7 +153,7 @@ class TestClickHouseSniffQuery:
         assert details.issue_row_examples.empty
 
     def test_issues_only_filter_fail(self, checker, setup_sniff_data_with_issue):
-        status, _, stats, details = checker.check_sniff_query(
+        result = checker.check_sniff_query(
             source_query=f"""
                 SELECT id, amount, '{FLAG_VALUE_NO}' AS {XSNIFF_PASSED_COLUMN}
                 FROM {TABLE_NAME}
@@ -150,6 +161,9 @@ class TestClickHouseSniffQuery:
             """,
             tolerance_pct=0.0,
         )
+        status = result.status
+        stats = result.stats
+        details = result.details
 
         assert status == CHECK_FAILED
         assert stats.total_source_rows == 1

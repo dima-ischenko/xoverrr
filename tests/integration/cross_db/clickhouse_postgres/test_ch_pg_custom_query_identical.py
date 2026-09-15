@@ -95,7 +95,7 @@ class TestCustomQueryCheckPGClickHouse:
               AND created_at < toDate(:end_date) + INTERVAL 1 day
         """
 
-        status, report, stats, details = checker.check_custom_queries(
+        result = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-06'},
             target_query=target_query,
@@ -103,6 +103,10 @@ class TestCustomQueryCheckPGClickHouse:
             custom_primary_key=['id'],
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
         assert status == CHECK_SUCCESS
         assert stats.passed_rows == 6
@@ -130,7 +134,7 @@ class TestCustomQueryCheckPGClickHouse:
               AND created_at < toDate(:end_date) + INTERVAL 1 day
         """
 
-        status, report, stats, details = checker.check_custom_queries(
+        result = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-06'},
             target_query=target_query,
@@ -138,6 +142,10 @@ class TestCustomQueryCheckPGClickHouse:
             custom_primary_key=['id'],
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
         assert status == CHECK_SUCCESS
         print(f'Custom query check passed: {stats.final_score:.2f}%')
@@ -164,7 +172,7 @@ class TestCustomQueryCheckPGClickHouse:
               AND created_at < toDate(:end_date) + INTERVAL 1 day
         """
 
-        status, report, stats, details = checker.check_custom_queries(
+        result = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-06'},
             target_query=target_query,
@@ -172,6 +180,10 @@ class TestCustomQueryCheckPGClickHouse:
             custom_primary_key=['id'],
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
         assert status == CHECK_SUCCESS
         print(f'Custom query check passed: {stats.final_score:.2f}%')
@@ -200,7 +212,7 @@ class TestCustomQueryCheckPGClickHouse:
               AND created_at < toDate(:end_date) + INTERVAL 1 day
         """
 
-        status, report, stats, details = checker.check_custom_queries(
+        result = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-06'},
             target_query=target_query,
@@ -208,6 +220,10 @@ class TestCustomQueryCheckPGClickHouse:
             custom_primary_key=['id'],
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
         assert status == CHECK_SUCCESS
         print(f'Custom query check passed: {stats.final_score:.2f}%')
@@ -234,7 +250,7 @@ class TestCustomQueryCheckPGClickHouse:
               AND created_at < toDate(:end_date) + INTERVAL 1 day
         """
 
-        status, report, stats, details = checker.check_custom_queries(
+        result = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-06'},
             target_query=target_query,
@@ -242,6 +258,10 @@ class TestCustomQueryCheckPGClickHouse:
             custom_primary_key=['id'],
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
         assert status == CHECK_SUCCESS
         assert stats.passed_rows == 6
@@ -273,7 +293,7 @@ class TestCustomQueryCheckPGClickHouse:
               AND name like :name_filter
         """
 
-        status, report, stats, details = checker.check_custom_queries(
+        result = checker.check_custom_queries(
             source_query=source_query,
             source_params={
                 'start_date': '2024-01-01',
@@ -289,6 +309,10 @@ class TestCustomQueryCheckPGClickHouse:
             custom_primary_key=['id'],
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
         assert status == CHECK_SUCCESS
         assert stats.passed_rows == 1  # Only Alice matches
@@ -318,7 +342,7 @@ class TestCustomQueryCheckPGClickHouse:
               AND created_at < toDate(:end_date) + INTERVAL 1 day
         """
 
-        status, report, stats, details = checker.check_custom_queries(
+        result = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-02', 'end_date': '2024-01-04'},
             target_query=target_query,
@@ -326,6 +350,10 @@ class TestCustomQueryCheckPGClickHouse:
             custom_primary_key=['id'],
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
         assert status == CHECK_SUCCESS
         assert stats.passed_rows == 4  # IDs 2,3,4,5 (Jan 2-4)
@@ -363,7 +391,7 @@ class TestCustomQueryCheckPGClickHouse:
             ORDER BY dt
         """
 
-        status, report, stats, details = checker.check_custom_queries(
+        result = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-06'},
             target_query=target_query,
@@ -371,6 +399,10 @@ class TestCustomQueryCheckPGClickHouse:
             custom_primary_key=['dt'],
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
         assert status == CHECK_SUCCESS
         print(f'Custom query check passed: {stats.final_score:.2f}%')

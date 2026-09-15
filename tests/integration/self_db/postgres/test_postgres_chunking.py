@@ -66,14 +66,16 @@ class TestPostgresChunkedCheck:
         source_ref = DataReference('test_chunked_source', 'test')
         target_ref = DataReference('test_chunked_target', 'test')
 
-        status_non_chunked, _, stats_non_chunked, _ = checker.check_counts(
+        result = checker.check_counts(
             source_table=source_ref,
             target_table=target_ref,
             date_column='created_at',
             date_range=('2024-01-01', '2024-01-04'),
             tolerance_pct=0.0,
         )
-        status_chunked, _, stats_chunked, _ = checker.check_counts(
+        status_non_chunked = result.status
+        stats_non_chunked = result.stats
+        result = checker.check_counts(
             source_table=source_ref,
             target_table=target_ref,
             date_column='created_at',
@@ -81,6 +83,8 @@ class TestPostgresChunkedCheck:
             chunk_size_days=2,
             tolerance_pct=0.0,
         )
+        status_chunked = result.status
+        stats_chunked = result.stats
 
         assert status_non_chunked == CHECK_SUCCESS
         assert status_chunked == CHECK_SUCCESS
@@ -99,8 +103,7 @@ class TestPostgresChunkedCheck:
         source_ref = DataReference('test_chunked_source', 'test')
         target_ref = DataReference('test_chunked_target', 'test')
 
-        status_non_chunked, _, stats_non_chunked, details_non_chunked = (
-            checker.check_samples(
+        result = checker.check_samples(
                 source_table=source_ref,
                 target_table=target_ref,
                 date_column='created_at',
@@ -108,9 +111,11 @@ class TestPostgresChunkedCheck:
                 date_range=('2024-01-01', '2024-01-04'),
                 tolerance_pct=0.0,
             )
-        )
+        status_non_chunked = result.status
+        stats_non_chunked = result.stats
+        details_non_chunked = result.details
 
-        status_chunked, _, stats_chunked, details_chunked = checker.check_samples(
+        result = checker.check_samples(
             source_table=source_ref,
             target_table=target_ref,
             date_column='created_at',
@@ -119,6 +124,9 @@ class TestPostgresChunkedCheck:
             chunk_size_days=1,
             tolerance_pct=0.0,
         )
+        status_chunked = result.status
+        stats_chunked = result.stats
+        details_chunked = result.details
 
         assert status_non_chunked == CHECK_FAILED
         assert status_chunked == CHECK_FAILED

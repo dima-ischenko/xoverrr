@@ -243,12 +243,16 @@ class TestOraclePostgresNumericEdge:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_samples(
+        result = checker.check_samples(
             source_table=DataReference(numeric_large_data, 'test'),
             target_table=DataReference(numeric_large_data, 'test'),
             date_range=('2024-01-01', '2024-01-05'),
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
 
         assert status == CHECK_SUCCESS
@@ -267,11 +271,15 @@ class TestOraclePostgresNumericEdge:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_samples(
+        result = checker.check_samples(
             source_table=DataReference(numeric_scientific_data, 'test'),
             target_table=DataReference(numeric_scientific_data, 'test'),
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         print(report)
 
@@ -294,11 +302,15 @@ class TestOraclePostgresNumericEdge:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_samples(
+        result = checker.check_samples(
             source_table=DataReference(numeric_edge_precision_data, 'test'),
             target_table=DataReference(numeric_edge_precision_data, 'test'),
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         print(report)
 
@@ -320,7 +332,7 @@ class TestOraclePostgresNumericEdge:
         )
 
         # Compare arithmetic expressions
-        status, report, stats, details = checker.check_custom_queries(
+        result = checker.check_custom_queries(
             source_query=f"""
                 SELECT 
                     id,
@@ -348,6 +360,10 @@ class TestOraclePostgresNumericEdge:
             custom_primary_key=['id'],
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         print('\n' + '=' * 80)
         print('ARITHMETIC OPERATIONS TEST')

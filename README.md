@@ -79,7 +79,7 @@ else:
     print("Data quality check failed")
 ```
 
-Every check method returns a `CheckResult`. Access fields on the object:
+Every check method returns a `CheckResult`:
 
 ```python
 result = checker.check_samples(...)
@@ -88,13 +88,6 @@ result.status
 result.report
 result.stats
 result.details
-```
-
-The same four values can still be unpacked (from the method call or from the object), so previous code calls keep working:
-
-```python
-status, report, stats, details = checker.check_samples(...)
-status, report, stats, details = result
 ```
 
 | Field | Meaning |

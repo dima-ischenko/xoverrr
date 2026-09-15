@@ -118,13 +118,17 @@ class TestOraclePostgresCountsWithVariousDateTypes:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_counts(
+        result = checker.check_counts(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_date',  # DATE type
             date_range=('2024-01-01', '2024-01-04'),
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         assert status == CHECK_SUCCESS
         assert stats.final_score == 100.0
@@ -140,13 +144,17 @@ class TestOraclePostgresCountsWithVariousDateTypes:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_counts(
+        result = checker.check_counts(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_timestamp',  # TIMESTAMP type
             date_range=('2024-01-01', '2024-01-04'),
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         assert status == CHECK_SUCCESS
         assert stats.final_score == 100.0
@@ -162,13 +170,17 @@ class TestOraclePostgresCountsWithVariousDateTypes:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_counts(
+        result = checker.check_counts(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_datetime',  # DATETIME/TIMESTAMP type
             date_range=('2024-01-01', '2024-01-04'),
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         assert status == CHECK_SUCCESS
         assert stats.final_score == 100.0
@@ -187,13 +199,17 @@ class TestOraclePostgresCountsWithVariousDateTypes:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_counts(
+        result = checker.check_counts(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_timestamp_tz',  # TIMESTAMP WITH TIME ZONE type
             date_range=('2024-01-01', '2024-01-04'),
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         # This should work as both databases store timezone offset information
         assert status == CHECK_SUCCESS

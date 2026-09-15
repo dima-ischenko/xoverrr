@@ -62,7 +62,7 @@ class TestClickHousePersistenceE2E:
         )
 
     def test_clickhouse_persistence_sample_e2e(self, clickhouse_engine):
-        status, _, _, _ = self._build_checker(clickhouse_engine).check_samples(
+        result = self._build_checker(clickhouse_engine).check_samples(
             source_table=DataReference(SRC_TABLE, 'test'),
             target_table=DataReference(TRG_TABLE, 'test'),
             date_column='created_at',
@@ -72,6 +72,7 @@ class TestClickHousePersistenceE2E:
             persist_result=DataReference(RESULTS_TABLE_SAMPLE),
             report_output_format='json',
         )
+        status = result.status
 
         assert status == CHECK_SUCCESS
 
@@ -89,7 +90,7 @@ class TestClickHousePersistenceE2E:
         assert 'SAMPLES CHECK REPORT' in row[2]
 
     def test_clickhouse_persistence_counts_e2e(self, clickhouse_engine):
-        status, _, _, _ = self._build_checker(clickhouse_engine).check_counts(
+        result = self._build_checker(clickhouse_engine).check_counts(
             source_table=DataReference(SRC_TABLE, 'test'),
             target_table=DataReference(TRG_TABLE, 'test'),
             date_column='created_at',
@@ -98,6 +99,7 @@ class TestClickHousePersistenceE2E:
             persist_result=DataReference(RESULTS_TABLE_COUNTS),
             report_output_format='json',
         )
+        status = result.status
 
         assert status == CHECK_SUCCESS
 
@@ -129,7 +131,7 @@ class TestClickHousePersistenceE2E:
         """
         query_params = {'start_date': '2024-01-01', 'end_date': '2024-01-04'}
 
-        status, _, _, _ = self._build_checker(clickhouse_engine).check_custom_queries(
+        result = self._build_checker(clickhouse_engine).check_custom_queries(
             source_query=source_query,
             source_params=query_params,
             target_query=target_query,
@@ -139,6 +141,7 @@ class TestClickHousePersistenceE2E:
             persist_result=DataReference(RESULTS_TABLE_CUSTOM),
             report_output_format='json',
         )
+        status = result.status
 
         assert status == CHECK_SUCCESS
 

@@ -84,7 +84,7 @@ class TestOracleComplexDataTypes:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_samples(
+        result = checker.check_samples(
             source_table=DataReference('test_oracle_complex', 'test'),
             target_table=DataReference('test_oracle_complex', 'test'),
             date_column='created_at',
@@ -94,6 +94,10 @@ class TestOracleComplexDataTypes:
             ],  # Exclude RAW columns as they might not compare well
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         assert status == CHECK_SUCCESS
         assert stats.final_diff_score == 0.0
@@ -109,7 +113,7 @@ class TestOracleComplexDataTypes:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_samples(
+        result = checker.check_samples(
             source_table=DataReference('test_oracle_complex', 'test'),
             target_table=DataReference('test_oracle_complex', 'test'),
             date_column='created_at',
@@ -127,6 +131,10 @@ class TestOracleComplexDataTypes:
             ],  # Include specific columns
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         assert status == CHECK_SUCCESS
         print(f'Oracle with column exclusions passed: {stats.final_score:.2f}%')
@@ -141,7 +149,7 @@ class TestOracleComplexDataTypes:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_samples(
+        result = checker.check_samples(
             source_table=DataReference('test_oracle_complex', 'test'),
             target_table=DataReference('test_oracle_complex', 'test'),
             date_column='created_at',
@@ -151,6 +159,10 @@ class TestOracleComplexDataTypes:
             ),  # Future date range, should be empty
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         # Should be skipped due to empty result
         assert status == CHECK_SKIPPED

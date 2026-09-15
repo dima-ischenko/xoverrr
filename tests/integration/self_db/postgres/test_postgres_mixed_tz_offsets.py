@@ -129,7 +129,7 @@ class TestPostgresMixedTimezoneOffsets:
             timezone='UTC',  # Explicit UTC for tz-aware comparisons
         )
 
-        status, report, stats, details = checker.check_samples(
+        result = checker.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_date',
@@ -137,6 +137,10 @@ class TestPostgresMixedTimezoneOffsets:
             date_range=('2024-01-01', '2024-01-07'),
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         assert status == CHECK_SUCCESS
         assert stats.final_diff_score == 0.0
@@ -158,7 +162,7 @@ class TestPostgresMixedTimezoneOffsets:
             timezone='Europe/Athens',  # Non-UTC timezone
         )
 
-        status, report, stats, details = checker.check_samples(
+        result = checker.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_date',
@@ -172,6 +176,10 @@ class TestPostgresMixedTimezoneOffsets:
             ],  # Exclude tz-aware columns
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         # Should succeed because we excluded tz-aware columns
         assert status == CHECK_SUCCESS
@@ -224,7 +232,7 @@ class TestPostgresMixedTimezoneOffsets:
             timezone='Asia/Tokyo',  # Required for tz-aware columns
         )
 
-        status, report, stats, details = checker.check_samples(
+        result = checker.check_samples(
             source_table=DataReference(source_table, 'test'),
             target_table=DataReference(target_table, 'test'),
             date_column='event_date',
@@ -233,6 +241,10 @@ class TestPostgresMixedTimezoneOffsets:
             exclude_recent_hours=24,
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         assert status == CHECK_SUCCESS
         assert stats.final_diff_score == 0.0
@@ -253,7 +265,7 @@ class TestPostgresMixedTimezoneOffsets:
             timezone='Europe/Paris',  # Local timezone for tz-naive
         )
 
-        status_local, _, _, _ = comparator_local.check_samples(
+        result = comparator_local.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_date',
@@ -266,6 +278,7 @@ class TestPostgresMixedTimezoneOffsets:
             ],  # Only tz-naive
             tolerance_pct=0.0,
         )
+        status_local = result.status
 
         assert status_local == CHECK_SUCCESS
         print('Tz-naive columns check with local timezone passed')
@@ -276,7 +289,7 @@ class TestPostgresMixedTimezoneOffsets:
             timezone='US/Pacific',
         )
 
-        status_utc, _, _, _ = comparator_utc.check_samples(
+        result = comparator_utc.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_date',
@@ -290,6 +303,7 @@ class TestPostgresMixedTimezoneOffsets:
             ],  # Only tz-aware
             tolerance_pct=0.0,
         )
+        status_utc = result.status
 
         assert status_utc == CHECK_SUCCESS
         print('Tz-aware columns check with UTC passed')
@@ -307,7 +321,7 @@ class TestPostgresMixedTimezoneOffsets:
         )
 
         # Test filtering on the boundary date
-        status, report, stats, details = checker.check_samples(
+        result = checker.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_date',
@@ -320,6 +334,10 @@ class TestPostgresMixedTimezoneOffsets:
             ],  # Include tz-aware column
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         assert status == CHECK_SUCCESS
         # Should have the boundary record (id=6)

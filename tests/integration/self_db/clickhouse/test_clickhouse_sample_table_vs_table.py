@@ -76,13 +76,17 @@ class TestClickHouseTableVsTable:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_samples(
+        result = checker.check_samples(
             source_table=DataReference(table_name_main, 'test'),
             target_table=DataReference(table_name_copy, 'test'),
             date_column='created_at',
             date_range=('2024-01-01', '2024-01-04'),
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         assert status == CHECK_SUCCESS
         assert stats.final_diff_score == 0.0

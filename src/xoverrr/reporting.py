@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 
@@ -30,8 +30,7 @@ class CheckResult:
     into a single serializable object suitable for dashboards and APIs.
 
     Check methods return this object so callers can read ``run_id`` and
-    other fields. It still unpacks as four values for backward
-    compatibility: ``status, report, stats, details = checker.check_samples(...)``.
+    other fields, for example ``result = checker.check_samples(...)``.
     """
     timestamp: str
     run_id: str
@@ -55,26 +54,6 @@ class CheckResult:
         from .persistence import validate_run_id
 
         object.__setattr__(self, 'run_id', validate_run_id(self.run_id))
-
-    def _legacy_unpack_values(
-        self,
-    ) -> Tuple[
-        str, Optional[str], Optional[CheckStats], Optional[CheckDetails]
-    ]:
-        # Keep 4-value unpacking so existing callers do not break:
-        # status, report, stats, details = checker.check_samples(...)
-        return (self.status, self.report, self.stats, self.details)
-
-    def __iter__(
-        self,
-    ) -> Iterator[Union[str, Optional[str], Optional[CheckStats], Optional[CheckDetails]]]:
-        yield from self._legacy_unpack_values()
-
-    def __len__(self) -> int:
-        return 4
-
-    def __getitem__(self, index):
-        return self._legacy_unpack_values()[index]
     
     def to_dict(self) -> Dict[str, Any]:
         """

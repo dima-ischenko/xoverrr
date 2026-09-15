@@ -146,8 +146,8 @@ class DataQualityChecker:
         Compare daily row counts between two tables or views.
 
         Returns:
-            ``CheckResult`` including ``run_id``. Still unpacks as
-            ``status, report, stats, details`` for backward compatibility.
+            ``CheckResult`` including ``run_id``, ``status``, ``report``,
+            ``stats``, and ``details``.
         """
 
         self._validate_inputs(source_table, target_table)
@@ -250,8 +250,8 @@ class DataQualityChecker:
                 Maximum number of discrepancy examples per column.
 
         Returns:
-            ``CheckResult`` including ``run_id``. Still unpacks as
-            ``status, report, stats, details`` for backward compatibility.
+            ``CheckResult`` including ``run_id``, ``status``, ``report``,
+            ``stats``, and ``details``.
         """
         self._validate_inputs(source_table, target_table)
         self._require_target_engine()
@@ -661,8 +661,8 @@ class DataQualityChecker:
         (``y`` = passed, ``n`` = failed).
 
         Returns:
-            ``CheckResult`` including ``run_id``. Still unpacks as
-            ``status, report, stats, details`` for backward compatibility.
+            ``CheckResult`` including ``run_id``, ``status``, ``report``,
+            ``stats``, and ``details``.
         """
         source_engine = self.source_engine
         timezone = self.timezone
@@ -797,8 +797,8 @@ class DataQualityChecker:
         For source-only issue checks, use :meth:`check_sniff_query`.
 
         Returns:
-            ``CheckResult`` including ``run_id``. Still unpacks as
-            ``status, report, stats, details`` for backward compatibility.
+            ``CheckResult`` including ``run_id``, ``status``, ``report``,
+            ``stats``, and ``details``.
         """
         self._require_target_engine()
         source_engine = self.source_engine
@@ -987,7 +987,7 @@ class DataQualityChecker:
             f'Check run finished: run_id={self._active_run_id} status={status}'
         )
         # Persist already captured the original report; expose the formatted
-        # public report so CheckResult still unpacks as status, report, stats, details.
+        # public report on the returned CheckResult.
         result.report = format_check_result(result, report_output_format)
         return result
 

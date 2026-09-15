@@ -80,7 +80,7 @@ class TestOraclePostgresHRData:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_samples(
+        result = checker.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='hire_date',
@@ -89,6 +89,10 @@ class TestOraclePostgresHRData:
             exclude_recent_hours=1,
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         assert status == CHECK_SUCCESS
         assert stats.final_diff_score == 0.0
@@ -105,7 +109,7 @@ class TestOraclePostgresHRData:
         )
         table_name = 'test_ora_pg_hr'
 
-        status, report, stats, details = checker.check_samples(
+        result = checker.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='HIRE_DATE',
@@ -115,6 +119,10 @@ class TestOraclePostgresHRData:
             exclude_recent_hours=1,
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         assert status == CHECK_SUCCESS
         print(f'Custom query check passed: {stats.final_score:.2f}%')

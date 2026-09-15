@@ -108,13 +108,17 @@ class TestClickHousePostgresCountsWithVariousDateTypes:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_counts(
+        result = checker.check_counts(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_date',  # ClickHouse Date type
             date_range=('2024-01-01', '2024-01-04'),
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         assert status == CHECK_SUCCESS
         assert stats.final_score == 100.0
@@ -132,13 +136,17 @@ class TestClickHousePostgresCountsWithVariousDateTypes:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_counts(
+        result = checker.check_counts(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_datetime',  # ClickHouse DateTime type
             date_range=('2024-01-01', '2024-01-04'),
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         assert status == CHECK_SUCCESS
         assert stats.final_score == 100.0
@@ -156,13 +164,17 @@ class TestClickHousePostgresCountsWithVariousDateTypes:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_counts(
+        result = checker.check_counts(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_datetime64',  # ClickHouse DateTime64 type
             date_range=('2024-01-01', '2024-01-04'),
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         assert status == CHECK_SUCCESS
         assert stats.final_score == 100.0

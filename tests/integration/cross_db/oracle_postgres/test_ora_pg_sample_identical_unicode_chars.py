@@ -69,13 +69,17 @@ class TestUnicodeCheck:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_samples(
+        result = checker.check_samples(
             source_table=DataReference('test_unicode', 'test'),
             target_table=DataReference('test_unicode', 'test'),
             date_column='created_date',
             date_range=('2024-01-01', '2024-01-05'),
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         assert status == CHECK_SUCCESS
         print(f'Unicode check passed: {stats.final_score:.2f}%')

@@ -142,7 +142,7 @@ class TestPostgresSelfCheck:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_samples(
+        result = checker.check_samples(
             source_table=DataReference('test_custom_data2', 'test'),
             target_table=DataReference('test_custom_data2', 'test'),
             date_column='created_at',
@@ -150,6 +150,10 @@ class TestPostgresSelfCheck:
             date_range=('2024-01-01', '2024-01-03'),
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         assert status == CHECK_SUCCESS
         assert stats.final_diff_score == 0.0
@@ -167,7 +171,7 @@ class TestPostgresSelfCheck:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_samples(
+        result = checker.check_samples(
             source_table=DataReference('test_custom_data2', 'test'),
             target_table=DataReference('vtest_custom_data2', 'test'),
             date_column='created_at',
@@ -175,6 +179,10 @@ class TestPostgresSelfCheck:
             date_range=('2024-01-01', '2024-01-03'),
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         assert status == CHECK_SUCCESS
         assert stats.final_diff_score == 0.0
@@ -193,7 +201,7 @@ class TestPostgresSelfCheck:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_samples(
+        result = checker.check_samples(
             source_table=DataReference('test_custom_data3', 'test'),
             target_table=DataReference('mvtest_custom_data3', 'test'),
             date_column='created_at',
@@ -201,6 +209,10 @@ class TestPostgresSelfCheck:
             date_range=('2024-01-01', '2024-01-03'),
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         assert status == CHECK_SUCCESS
         assert stats.final_diff_score == 0.0
@@ -215,7 +227,7 @@ class TestPostgresSelfCheck:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_samples(
+        result = checker.check_samples(
             source_table=DataReference('test_custom_data_empty_one_side', 'test'),
             target_table=DataReference('vtest_custom_data_empty_one_side', 'test'),
             date_column='created_at',
@@ -224,5 +236,9 @@ class TestPostgresSelfCheck:
             tolerance_pct=0.0,
             exclude_recent_hours=9000000, #exclude all data in fact
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         assert status == CHECK_SKIPPED 

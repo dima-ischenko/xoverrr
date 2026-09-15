@@ -90,7 +90,7 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
             timezone='UTC',  # MUST be UTC
         )
 
-        status, report, stats, details = checker.check_samples(
+        result = checker.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='record_date',
@@ -99,6 +99,10 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
             exclude_recent_hours=24,
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
         assert status == CHECK_SUCCESS, 'Failed with UTC timezone'
         assert stats.final_diff_score == 0.0, f'Non-zero diff with UTC timezone'
@@ -119,7 +123,7 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
             timezone='UTC',  # Must be UTC since ClickHouse stores UTC
         )
 
-        status, report, stats, details = checker.check_samples(
+        result = checker.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='record_date',
@@ -128,6 +132,10 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
             exclude_recent_hours=24,
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         assert status == CHECK_SUCCESS
         assert stats.final_diff_score == 0.0
@@ -187,13 +195,17 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_samples(
+        result = checker.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='record_date',
             date_range=('2024-01-01', '2024-01-03'),
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         assert status == CHECK_SUCCESS
 
@@ -250,13 +262,17 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
             target_engine=clickhouse_engine,
             timezone='UTC',  # Even UTC won't help mixing tz-aware with tz-naive
         )
-        status, report, stats, details = checker.check_samples(
+        result = checker.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='record_date',
             date_range=('2024-01-01', '2024-01-07'),  # Includes boundary
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
         assert status == CHECK_SUCCESS
 
@@ -275,13 +291,17 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
         )
 
         # Test filtering on the boundary date
-        status, report, stats, details = checker.check_samples(
+        result = checker.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='record_date',
             date_range=('2024-01-06', '2024-01-07'),  # Includes boundary
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         assert status == CHECK_SUCCESS
         # Should have the boundary record (id=6)
