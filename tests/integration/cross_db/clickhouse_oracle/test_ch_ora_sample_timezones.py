@@ -87,7 +87,7 @@ class TestClickHouseOracleMixedTimezoneOffsets:
             timezone='Europe/Paris',
         )
 
-        status, report, stats, details = checker.check_samples(
+        result = checker.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='record_date',
@@ -96,6 +96,10 @@ class TestClickHouseOracleMixedTimezoneOffsets:
             exclude_recent_hours=24,
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
         assert status == CHECK_SUCCESS
         assert stats.final_diff_score == 0.0
@@ -111,7 +115,7 @@ class TestClickHouseOracleMixedTimezoneOffsets:
             timezone='UTC',
         )
 
-        status, report, stats, details = checker.check_samples(
+        result = checker.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='record_date',
@@ -120,6 +124,10 @@ class TestClickHouseOracleMixedTimezoneOffsets:
             exclude_recent_hours=24,
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
         assert status == CHECK_SUCCESS
         assert stats.final_diff_score == 0.0
@@ -178,12 +186,16 @@ class TestClickHouseOracleMixedTimezoneOffsets:
             timezone='UTC',
         )
 
-        status, report, stats, details = checker.check_samples(
+        result = checker.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='record_date',
             date_range=('2024-01-01', '2024-01-03'),
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         assert status == CHECK_SUCCESS

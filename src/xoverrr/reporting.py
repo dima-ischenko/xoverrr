@@ -28,6 +28,9 @@ class CheckResult:
     
     This class combines status, statistics, details, and metadata
     into a single serializable object suitable for dashboards and APIs.
+
+    Check methods return this object so callers can read ``run_id`` and
+    other fields, for example ``result = checker.check_samples(...)``.
     """
     timestamp: str
     run_id: str
@@ -94,6 +97,7 @@ class CheckResult:
         
         result = {
             'timestamp': self.timestamp,
+            'run_id': self.run_id,
             'check_type': self.check_type,
             'status': self.status,
             'check_name': self.check_name,
@@ -128,7 +132,7 @@ class CheckResult:
         
         Args:
             indent: JSON indentation spaces
-            ensure_ascii: If False, allows non-ASCII characters
+            ensure_ascii: If False, allow non-ASCII characters
             
         Returns:
             JSON string representation
@@ -303,7 +307,6 @@ def generate_sample_report(
     lines.append(f'  Duplicated source key examples: {format_report_collection(details.dup_source_keys_examples)}')
     lines.append(f'  Duplicated target key examples: {format_report_collection(details.dup_target_keys_examples)}')
 
-    lines.append(f'  Evaluated columns: {format_report_collection(details.evaluated_columns)}')
     lines.append(f'  Skipped source columns: {format_report_collection(details.skipped_source_columns)}')
     lines.append(f'  Skipped target columns: {format_report_collection(details.skipped_target_columns)}')
 

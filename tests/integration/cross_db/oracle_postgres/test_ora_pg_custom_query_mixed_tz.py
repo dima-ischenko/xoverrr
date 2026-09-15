@@ -101,7 +101,7 @@ class TestPostgresOracleMixedTimezoneOffsets:
               AND record_date < date_trunc('day', cast(:end_date as date)) + interval '1 day'
         """
 
-        status, report, stats, details = checker.check_custom_queries(
+        result = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-08'},
             target_query=target_query,
@@ -109,6 +109,10 @@ class TestPostgresOracleMixedTimezoneOffsets:
             custom_primary_key=['id'],
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
 
         assert status == CHECK_SUCCESS

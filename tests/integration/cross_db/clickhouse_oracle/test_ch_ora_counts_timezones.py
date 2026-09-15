@@ -93,13 +93,17 @@ class TestClickHouseOracleMixedTimezoneOffsets:
                 timezone=timezone,
             )
 
-            status, report, stats, details = checker.check_counts(
+            result = checker.check_counts(
                 source_table=DataReference(table_name, 'test'),
                 target_table=DataReference(table_name, 'test'),
                 date_column='record_date',
                 date_range=('2024-01-01', '2024-01-08'),
                 tolerance_pct=0.0,
             )
+            status = result.status
+            report = result.report
+            stats = result.stats
+            details = result.details
 
             assert status == CHECK_SUCCESS, f'Failed with timezone {timezone}'
             assert stats.final_score == 100.0

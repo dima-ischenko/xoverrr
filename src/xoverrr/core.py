@@ -15,9 +15,8 @@ from .models import DataReference, DBMSType, ObjectType
 from .persistence import (
     CheckResultPersister,
     CheckRunTimings,
-    PersistResultOptions,
     build_run_id,
-    parse_persist_result_option,
+    normalize_persist_result,
 )
 from .utils import (CheckDetails, CheckStats,
                     build_check_stats, build_sniff_issue_stats,
@@ -28,6 +27,7 @@ from .utils import (CheckDetails, CheckStats,
                     prepare_dataframe, sniff_issue_row_count,
                     validate_dataframe_size)
 from .reporting import (
+    CheckResult,
     build_check_result,
     format_check_result,
     generate_count_report,
@@ -40,7 +40,7 @@ from .version import __version__
 
 class DataQualityChecker:
     """
-    Main checker class implementing data quality checks on and between databases.
+    Main checker for intra-source and cross-database data-quality checks.
     """
 
     def __init__(
@@ -50,6 +50,7 @@ class DataQualityChecker:
         default_exclude_recent_hours: Optional[int] = 24,
         timezone: str = ct.DEFAULT_TZ,
         results_engine: Optional[Engine] = None,
+        max_dataframe_size_gb: float = ct.DEFAULT_MAX_DATAFRAME_SIZE_GB,
     ):
         self.source_engine = source_engine
         self.target_engine = target_engine
@@ -60,6 +61,9 @@ class DataQualityChecker:
         self.default_exclude_recent_hours = default_exclude_recent_hours
         self.timezone = timezone
         self.results_engine = results_engine
+        self.max_dataframe_size_gb = self._normalize_max_dataframe_size_gb(
+            max_dataframe_size_gb
+        )
         self.result_persister = CheckResultPersister(
             results_engine=results_engine,
         )
@@ -82,6 +86,16 @@ class DataQualityChecker:
         app_logger.info(f'Source DB: {self._report_context["source_db_type"]}')
         target_db_label = self._report_context['target_db_type'] or 'not configured'
         app_logger.info(f'Target DB: {target_db_label}')
+        app_logger.info(
+            f'Max DataFrame size: {self.max_dataframe_size_gb} GB per query'
+        )
+
+    @staticmethod
+    def _normalize_max_dataframe_size_gb(max_dataframe_size_gb: float) -> float:
+        size_gb = float(max_dataframe_size_gb)
+        if size_gb <= 0:
+            raise ValueError('max_dataframe_size_gb must be greater than 0')
+        return size_gb
 
     def reset_stats(self):
         self._reset_stats()
@@ -100,7 +114,7 @@ class DataQualityChecker:
         }
 
     def _update_stats(self, status: str, source_table: DataReference):
-        """Update check statistics"""
+        """Update the checker run statistics."""
         self.check_stats[status] += 1
         self.check_stats['end_time'] = pd.Timestamp.now().strftime(
             ct.DATETIME_FORMAT
@@ -124,15 +138,22 @@ class DataQualityChecker:
         chunk_size_days: Optional[int] = None,
         tolerance_pct: float = 0.0,
         max_examples: Optional[int] = ct.DEFAULT_MAX_EXAMPLES,
-        persist_result: Union[bool, DataReference] = False,
+        persist_result: Optional[DataReference] = None,
         check_tags: Optional[Dict] = None,
         report_output_format: str = ct.REPORT_OUTPUT_FORMAT_TEXT,
-    ) -> Tuple[str, Optional[CheckStats], Optional[CheckDetails]]:
+    ) -> CheckResult:
+        """
+        Compare daily row counts between two tables or views.
+
+        Returns:
+            ``CheckResult`` including ``run_id``, ``status``, ``report``,
+            ``stats``, and ``details``.
+        """
 
         self._validate_inputs(source_table, target_table)
         self._require_target_engine()
         validate_report_output_format(report_output_format)
-        persist_options = parse_persist_result_option(persist_result)
+        persist_result = normalize_persist_result(persist_result)
         run_id, run_started_at = self._start_check_run(
             ct.CHECK_TYPE_COUNTS, check_name
         )
@@ -155,7 +176,7 @@ class DataQualityChecker:
                 run_started_at=run_started_at,
             )
 
-            report = self._finalize_check(
+            result = self._finalize_check(
                 status=status,
                 report=draft_report,
                 stats=stats,
@@ -165,16 +186,16 @@ class DataQualityChecker:
                 check_tags=check_tags,
                 source_table=source_table.full_name,
                 target_table=target_table.full_name,
-                persist_options=persist_options,
+                persist_result=persist_result,
                 report_output_format=report_output_format,
             )
-            self._update_stats(status, source_table)
-            return status, report, stats, details
+            self._update_stats(result.status, source_table)
+            return result
 
         except Exception as e:
             app_logger.exception(f'Counts check failed: {str(e)}')
             status = ct.CHECK_FAILED
-            report = self._finalize_check(
+            result = self._finalize_check(
                 status=status,
                 report=None,
                 stats=None,
@@ -184,11 +205,11 @@ class DataQualityChecker:
                 check_tags=check_tags,
                 source_table=source_table.full_name,
                 target_table=target_table.full_name,
-                persist_options=persist_options,
+                persist_result=persist_result,
                 report_output_format=report_output_format,
             )
-            self._update_stats(status, source_table)
-            return status, report, None, None
+            self._update_stats(result.status, source_table)
+            return result
 
     def check_samples(
         self,
@@ -205,33 +226,37 @@ class DataQualityChecker:
         tolerance_pct: float = 0.0,
         exclude_recent_hours: Optional[int] = None,
         max_examples: Optional[int] = ct.DEFAULT_MAX_EXAMPLES,
-        persist_result: Union[bool, DataReference] = False,
+        persist_result: Optional[DataReference] = None,
         check_tags: Optional[Dict] = None,
         report_output_format: str = ct.REPORT_OUTPUT_FORMAT_TEXT,
-    ) -> Tuple[str, str, Optional[CheckStats], Optional[CheckDetails]]:
+    ) -> CheckResult:
         """
-        Compare data from custom queries with specified key columns
+        Compare sample rows and column values between two tables or views.
 
         Parameters:
             source_table: `DataReference`
-                source table to check
+                Source table to check.
             target_table: `DataReference`
-                target table to check
+                Target table to check.
             custom_primary_key : `List[str]`
-                List of primary key columns for the check.
+                Primary-key columns for the check.
             exclude_columns : `Optional[List[str]] = None`
                 Columns to exclude from the check.
             include_columns : `Optional[List[str]] = None`
-                Columns to include in the check (default all cols)
+                Columns to include in the check (default: all columns).
             tolerance_pct : `float`
-                Tolerance pct for discrepancies (0–100).
+                Tolerance percentage for discrepancies (0–100).
             max_examples
-                Maximum number of discrepancy examples per column
+                Maximum number of discrepancy examples per column.
+
+        Returns:
+            ``CheckResult`` including ``run_id``, ``status``, ``report``,
+            ``stats``, and ``details``.
         """
         self._validate_inputs(source_table, target_table)
         self._require_target_engine()
         validate_report_output_format(report_output_format)
-        persist_options = parse_persist_result_option(persist_result)
+        persist_result = normalize_persist_result(persist_result)
         run_id, run_started_at = self._start_check_run(
             ct.CHECK_TYPE_SAMPLES, check_name
         )
@@ -268,7 +293,7 @@ class DataQualityChecker:
                 run_started_at=run_started_at,
             )
 
-            report = self._finalize_check(
+            result = self._finalize_check(
                 status=status,
                 report=draft_report,
                 stats=stats,
@@ -278,16 +303,16 @@ class DataQualityChecker:
                 check_tags=check_tags,
                 source_table=source_table.full_name,
                 target_table=target_table.full_name,
-                persist_options=persist_options,
+                persist_result=persist_result,
                 report_output_format=report_output_format,
             )
-            self._update_stats(status, source_table)
-            return status, report, stats, details
+            self._update_stats(result.status, source_table)
+            return result
 
         except Exception as e:
             app_logger.exception(f'Samples check failed: {str(e)}')
             status = ct.CHECK_FAILED
-            report = self._finalize_check(
+            result = self._finalize_check(
                 status=status,
                 report=None,
                 stats=None,
@@ -297,11 +322,11 @@ class DataQualityChecker:
                 check_tags=check_tags,
                 source_table=source_table.full_name,
                 target_table=target_table.full_name,
-                persist_options=persist_options,
+                persist_result=persist_result,
                 report_output_format=report_output_format,
             )
-            self._update_stats(status, source_table)
-            return status, report, None, None
+            self._update_stats(result.status, source_table)
+            return result
 
     def _start_check_run(
         self, check_type: str, check_name: Optional[str]
@@ -625,22 +650,26 @@ class DataQualityChecker:
         chunk_size_days: Optional[int] = None,
         tolerance_pct: float = 0.0,
         max_examples: Optional[int] = ct.DEFAULT_MAX_EXAMPLES,
-        persist_result: Union[bool, DataReference] = False,
+        persist_result: Optional[DataReference] = None,
         check_tags: Optional[Dict] = None,
         report_output_format: str = ct.REPORT_OUTPUT_FORMAT_TEXT,
-    ) -> Tuple[str, str, Optional[CheckStats], Optional[CheckDetails]]:
+    ) -> CheckResult:
         """
         Sniff out data issues with a source-only SQL check.
 
         Row-level and scalar pass/fail checks both use ``xsniff_passed``
         (``y`` = passed, ``n`` = failed).
+
+        Returns:
+            ``CheckResult`` including ``run_id``, ``status``, ``report``,
+            ``stats``, and ``details``.
         """
         source_engine = self.source_engine
         timezone = self.timezone
         source_params = source_params or {}
 
         validate_report_output_format(report_output_format)
-        persist_options = parse_persist_result_option(persist_result)
+        persist_result = normalize_persist_result(persist_result)
         run_id, run_started_at = self._start_check_run(
             ct.CHECK_TYPE_SNIFF_QUERY, check_name
         )
@@ -707,7 +736,7 @@ class DataQualityChecker:
                     source_db_type=self._report_context['source_db_type'],
                 )
 
-            report = self._finalize_check(
+            result = self._finalize_check(
                 status=status,
                 report=draft_report,
                 stats=stats,
@@ -719,16 +748,16 @@ class DataQualityChecker:
                 target_table=None,
                 source_query=source_query,
                 source_params=source_params,
-                persist_options=persist_options,
+                persist_result=persist_result,
                 report_output_format=report_output_format,
             )
-            self._update_stats(status, None)
-            return status, report, stats, details
+            self._update_stats(result.status, None)
+            return result
 
         except Exception:
             app_logger.exception('Sniff query failed')
             status = ct.CHECK_FAILED
-            report = self._finalize_check(
+            result = self._finalize_check(
                 status=status,
                 report=None,
                 stats=None,
@@ -740,11 +769,11 @@ class DataQualityChecker:
                 target_table=None,
                 source_query=source_query,
                 source_params=source_params,
-                persist_options=persist_options,
+                persist_result=persist_result,
                 report_output_format=report_output_format,
             )
-            self._update_stats(status, None)
-            return status, report, None, None
+            self._update_stats(result.status, None)
+            return result
 
     def check_custom_queries(
         self,
@@ -758,14 +787,18 @@ class DataQualityChecker:
         exclude_columns: Optional[List[str]] = None,
         tolerance_pct: float = 0.0,
         max_examples: Optional[int] = ct.DEFAULT_MAX_EXAMPLES,
-        persist_result: Union[bool, DataReference] = False,
+        persist_result: Optional[DataReference] = None,
         check_tags: Optional[Dict] = None,
         report_output_format: str = ct.REPORT_OUTPUT_FORMAT_TEXT,
-    ) -> Tuple[str, str, Optional[CheckStats], Optional[CheckDetails]]:
+    ) -> CheckResult:
         """
         Compare data from custom queries with specified key columns.
 
         For source-only issue checks, use :meth:`check_sniff_query`.
+
+        Returns:
+            ``CheckResult`` including ``run_id``, ``status``, ``report``,
+            ``stats``, and ``details``.
         """
         self._require_target_engine()
         source_engine = self.source_engine
@@ -779,7 +812,7 @@ class DataQualityChecker:
             raise ValueError('custom_primary_key is mandatory')
 
         validate_report_output_format(report_output_format)
-        persist_options = parse_persist_result_option(persist_result)
+        persist_result = normalize_persist_result(persist_result)
         run_id, run_started_at = self._start_check_run(
             ct.CHECK_TYPE_CUSTOM_QUERIES, check_name
         )
@@ -862,7 +895,7 @@ class DataQualityChecker:
                     **self._report_context,
                 )
 
-            report = self._finalize_check(
+            result = self._finalize_check(
                 status=status,
                 report=draft_report,
                 stats=stats,
@@ -876,16 +909,16 @@ class DataQualityChecker:
                 source_params=source_params,
                 target_query=target_query,
                 target_params=target_params,
-                persist_options=persist_options,
+                persist_result=persist_result,
                 report_output_format=report_output_format,
             )
-            self._update_stats(status, None)
-            return status, report, stats, details
+            self._update_stats(result.status, None)
+            return result
 
         except Exception:
             app_logger.exception('Custom queries check failed')
             status = ct.CHECK_FAILED
-            report = self._finalize_check(
+            result = self._finalize_check(
                 status=status,
                 report=None,
                 stats=None,
@@ -899,11 +932,11 @@ class DataQualityChecker:
                 source_params=source_params,
                 target_query=target_query,
                 target_params=target_params,
-                persist_options=persist_options,
+                persist_result=persist_result,
                 report_output_format=report_output_format,
             )
-            self._update_stats(status, None)
-            return status, report, None, None
+            self._update_stats(result.status, None)
+            return result
 
     def _finalize_check(
         self,
@@ -913,7 +946,7 @@ class DataQualityChecker:
         stats: Optional[CheckStats],
         details: Optional[CheckDetails],
         check_type: str,
-        persist_options: PersistResultOptions,
+        persist_result: Optional[DataReference] = None,
         report_output_format: str,
         check_name: Optional[str] = None,
         check_tags: Optional[Dict] = None,
@@ -923,7 +956,7 @@ class DataQualityChecker:
         source_params: Optional[Dict] = None,
         target_query: Optional[str] = None,
         target_params: Optional[Dict] = None,
-    ) -> Optional[str]:
+    ) -> CheckResult:
         if not getattr(self, '_active_run_id', None):
             raise RuntimeError('check run was not started; run_id is missing')
         self._run_timings.finish_run()
@@ -946,15 +979,17 @@ class DataQualityChecker:
             target_params=target_params,
             timings=self._run_timings,
         )
-        self.result_persister.persist(
-            result,
-            persist_result=persist_options.enabled,
-            persist_result_ref=persist_options.table_ref,
-        )
+        persist_ok = self.result_persister.persist(result, persist_result)
+        if not persist_ok:
+            status = ct.CHECK_FAILED
+            result.status = status
         app_logger.info(
             f'Check run finished: run_id={self._active_run_id} status={status}'
         )
-        return format_check_result(result, report_output_format)
+        # Persist already captured the original report; expose the formatted
+        # public report on the returned CheckResult.
+        result.report = format_check_result(result, report_output_format)
+        return result
 
     def _resolve_custom_query_chunks(
         self,
@@ -1359,7 +1394,7 @@ class DataQualityChecker:
     def _get_metadata_cols_for_custom_query(
         self, query, engine: Engine
     ) -> pd.DataFrame:
-        """Get metadata with proper source handling"""
+        """Return column metadata for a custom query."""
         adapter = self._get_adapter(DBMSType.from_engine(engine))
 
         columns_meta = adapter.get_metadata_for_custom_query(query, engine)
@@ -1372,7 +1407,7 @@ class DataQualityChecker:
     def _get_metadata_cols(
         self, data_ref: DataReference, engine: Engine
     ) -> pd.DataFrame:
-        """Get metadata with proper source handling"""
+        """Return column metadata for a table or view."""
         adapter = self._get_adapter(DBMSType.from_engine(engine))
 
         query, params = adapter.build_metadata_columns_query(data_ref)
@@ -1384,7 +1419,7 @@ class DataQualityChecker:
         return columns_meta
 
     def _get_metadata_pk(self, data_ref: DataReference, engine: Engine) -> pd.DataFrame:
-        """Get metadata with proper source handling"""
+        """Return primary-key metadata for a table or view."""
         adapter = self._get_adapter(DBMSType.from_engine(engine))
 
         query, params = adapter.build_primary_key_query(data_ref)
@@ -1411,7 +1446,7 @@ class DataQualityChecker:
         exclude_recent_hours: Optional[int],
         query_side: str,
     ) -> Tuple[pd.DataFrame, str, Dict]:
-        """Retrieve and prepare table data"""
+        """Fetch table data and apply type conversion."""
         db_type = DBMSType.from_engine(engine)
         adapter = self._get_adapter(db_type)
         app_logger.info(db_type)
@@ -1438,7 +1473,7 @@ class DataQualityChecker:
         return df, query, params
 
     def _get_adapter(self, db_type: DBMSType) -> BaseDatabaseAdapter:
-        """Get adapter for specific DBMS"""
+        """Return the adapter for the given DBMS."""
         try:
             return self.adapters[db_type]
         except KeyError:
@@ -1744,14 +1779,14 @@ class DataQualityChecker:
         timezone: str = None,
         query_side: Optional[str] = None,
     ) -> pd.DataFrame:
-        """Execute SQL query using appropriate adapter."""
+        """Execute an SQL query using the appropriate adapter."""
         if query_side:
             self._run_timings.mark_query_start(query_side)
         try:
             db_type = DBMSType.from_engine(engine)
             adapter = self._get_adapter(db_type)
             df = adapter._execute_query(query, engine, timezone)
-            validate_dataframe_size(df, ct.DEFAULT_MAX_SAMPLE_SIZE_GB)
+            validate_dataframe_size(df, self.max_dataframe_size_gb)
             return df
         finally:
             if query_side:
@@ -1760,7 +1795,7 @@ class DataQualityChecker:
     def _analyze_columns_meta(
         self, source_columns_meta: pd.DataFrame, target_columns_meta: pd.DataFrame
     ) -> tuple[pd.DataFrame, list, list]:
-        """Find common columns between source and target and return unique columns for each"""
+        """Find common columns and the columns unique to each side."""
 
         source_columns = source_columns_meta['column_name'].tolist()
         target_columns = target_columns_meta['column_name'].tolist()
@@ -1781,7 +1816,7 @@ class DataQualityChecker:
         return common_columns, source_unique, target_unique
 
     def _validate_inputs(self, source: DataReference, target: DataReference):
-        """Validate input parameters"""
+        """Validate that source and target are DataReference instances."""
         if not isinstance(source, DataReference):
             raise TypeError('source must be a DataReference')
         if not isinstance(target, DataReference):

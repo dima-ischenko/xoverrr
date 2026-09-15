@@ -67,7 +67,7 @@ def setup_sniff_data_with_issue(postgres_engine, table_helper):
 
 class TestPostgresSniffQuery:
     def test_row_level_pass(self, checker, setup_sniff_data):
-        status, _, stats, _ = checker.check_sniff_query(
+        result = checker.check_sniff_query(
             source_query=f"""
                 SELECT id, amount,
                     CASE WHEN amount < 0 THEN '{FLAG_VALUE_NO}' ELSE '{FLAG_VALUE_YES}' END
@@ -76,12 +76,14 @@ class TestPostgresSniffQuery:
             """,
             tolerance_pct=0.0,
         )
+        status = result.status
+        stats = result.stats
 
         assert status == CHECK_SUCCESS
         assert stats.final_score == 100.0
 
     def test_row_level_fail(self, checker, setup_sniff_data_with_issue):
-        status, _, stats, _ = checker.check_sniff_query(
+        result = checker.check_sniff_query(
             source_query=f"""
                 SELECT id, amount,
                     CASE WHEN amount < 0 THEN '{FLAG_VALUE_NO}' ELSE '{FLAG_VALUE_YES}' END
@@ -90,12 +92,14 @@ class TestPostgresSniffQuery:
             """,
             tolerance_pct=0.0,
         )
+        status = result.status
+        stats = result.stats
 
         assert status == CHECK_FAILED
         assert stats.final_score < 100.0
 
     def test_pass_fail_pass(self, checker, setup_sniff_data):
-        status, _, stats, _ = checker.check_sniff_query(
+        result = checker.check_sniff_query(
             source_query=f"""
                 SELECT CASE
                     WHEN SUM(CASE WHEN amount < 0 THEN 1 ELSE 0 END) > 0
@@ -104,12 +108,14 @@ class TestPostgresSniffQuery:
             """,
             tolerance_pct=0.0,
         )
+        status = result.status
+        stats = result.stats
 
         assert status == CHECK_SUCCESS
         assert stats.final_score == 100.0
 
     def test_pass_fail_fail(self, checker, setup_sniff_data_with_issue):
-        status, _, stats, _ = checker.check_sniff_query(
+        result = checker.check_sniff_query(
             source_query=f"""
                 SELECT CASE
                     WHEN SUM(CASE WHEN amount < 0 THEN 1 ELSE 0 END) > 0
@@ -118,12 +124,14 @@ class TestPostgresSniffQuery:
             """,
             tolerance_pct=0.0,
         )
+        status = result.status
+        stats = result.stats
 
         assert status == CHECK_FAILED
         assert stats.final_score == 0.0
 
     def test_issues_only_filter_pass(self, checker, setup_sniff_data):
-        status, _, stats, details = checker.check_sniff_query(
+        result = checker.check_sniff_query(
             source_query=f"""
                 SELECT id, amount, '{FLAG_VALUE_NO}' AS {XSNIFF_PASSED_COLUMN}
                 FROM {TABLE_NAME}
@@ -131,6 +139,9 @@ class TestPostgresSniffQuery:
             """,
             tolerance_pct=0.0,
         )
+        status = result.status
+        stats = result.stats
+        details = result.details
 
         assert status == CHECK_SUCCESS
         assert stats.total_source_rows == 0
@@ -138,7 +149,7 @@ class TestPostgresSniffQuery:
         assert details.issue_row_examples.empty
 
     def test_issues_only_filter_fail(self, checker, setup_sniff_data_with_issue):
-        status, _, stats, details = checker.check_sniff_query(
+        result = checker.check_sniff_query(
             source_query=f"""
                 SELECT id, amount, '{FLAG_VALUE_NO}' AS {XSNIFF_PASSED_COLUMN}
                 FROM {TABLE_NAME}
@@ -146,6 +157,9 @@ class TestPostgresSniffQuery:
             """,
             tolerance_pct=0.0,
         )
+        status = result.status
+        stats = result.stats
+        details = result.details
 
         assert status == CHECK_FAILED
         assert stats.total_source_rows == 1

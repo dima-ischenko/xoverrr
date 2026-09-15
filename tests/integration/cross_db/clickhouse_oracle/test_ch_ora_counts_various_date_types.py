@@ -108,13 +108,17 @@ class TestClickHouseOracleCountsWithVariousDateTypes:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_counts(
+        result = checker.check_counts(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_date',  # DATE type
             date_range=('2024-01-01', '2024-01-04'),
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         assert status == CHECK_SUCCESS
         assert stats.final_score == 100.0
@@ -130,13 +134,17 @@ class TestClickHouseOracleCountsWithVariousDateTypes:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_counts(
+        result = checker.check_counts(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_datetime',  # ClickHouse DateTime / Oracle TIMESTAMP
             date_range=('2024-01-01', '2024-01-04'),
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         assert status == CHECK_SUCCESS
         assert stats.final_score == 100.0
@@ -154,13 +162,17 @@ class TestClickHouseOracleCountsWithVariousDateTypes:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_counts(
+        result = checker.check_counts(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_datetime64',  # ClickHouse DateTime64 / Oracle TIMESTAMP
             date_range=('2024-01-01', '2024-01-04'),
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         assert status == CHECK_SUCCESS
         assert stats.final_score == 100.0
@@ -178,13 +190,17 @@ class TestClickHouseOracleCountsWithVariousDateTypes:
             timezone='Europe/Athens',  # Named timezone
         )
 
-        status, report, stats, details = checker.check_counts(
+        result = checker.check_counts(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_datetime',
             date_range=('2024-01-01', '2024-01-04'),
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         # Oracle thin client doesn't support named time zones, but should still work
         # with offset-based timezone conversion

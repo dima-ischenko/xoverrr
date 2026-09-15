@@ -1,41 +1,48 @@
 import json
 import dataclasses
+import time
 import uuid
-from dataclasses import dataclass
-from typing import Dict, Literal, Optional, Union
+from dataclasses import dataclass, field
+from typing import Dict, Literal, Optional
 
 import pandas as pd
 from sqlalchemy.engine import Engine
+from .adapters.base import PERSIST_INSERTED_AT_COLUMN
 from .adapters.clickhouse import ClickHouseAdapter
 from .adapters.oracle import OracleAdapter
 from .adapters.postgres import PostgresAdapter
-from .constants import DATETIME_FORMAT
+from .constants import DATETIME_FORMAT, STATS_REPORT_FLOAT_DECIMALS
 from .logger import app_logger
 from .models import DBMSType, DataReference
 from .reporting import CheckResult
-from .constants import STATS_REPORT_FLOAT_DECIMALS
 from .utils import CheckDetails, CheckStats
 
 PERSIST_PRIMARY_KEY = 'run_id'
 RUN_ID_LENGTH = 16
 QuerySide = Literal['source', 'target']
 
-TIMING_PERSIST_FIELDS = (
+RUN_TIME_PERSIST_FIELDS = (
     'run_started_at',
     'run_finished_at',
-    'source_query_started_at',
-    'source_query_finished_at',
-    'target_query_started_at',
-    'target_query_finished_at',
-    'dataset_check_started_at',
-    'dataset_check_finished_at',
 )
+DURATION_PERSIST_FIELDS = (
+    'source_query_duration_sec',
+    'target_query_duration_sec',
+    'dataset_check_duration_sec',
+)
+PERSIST_DURATION_DECIMALS = 2
 
 
 def _round_stats_float_for_persist(value) -> Optional[float]:
     if value is None:
         return None
     return round(float(value), STATS_REPORT_FLOAT_DECIMALS)
+
+
+def _round_duration_sec_for_persist(value) -> Optional[float]:
+    if value is None:
+        return None
+    return round(float(value), PERSIST_DURATION_DECIMALS)
 
 
 def validate_run_id(run_id: Optional[str]) -> str:
@@ -55,38 +62,42 @@ def build_run_id() -> str:
 
 @dataclass
 class CheckRunTimings:
-    """Wall-clock timestamps for a single check run (DATETIME_FORMAT strings)."""
+    """Run bounds plus accumulated step durations in seconds."""
 
     run_started_at: Optional[str] = None
     run_finished_at: Optional[str] = None
-    source_query_started_at: Optional[str] = None
-    source_query_finished_at: Optional[str] = None
-    target_query_started_at: Optional[str] = None
-    target_query_finished_at: Optional[str] = None
-    dataset_check_started_at: Optional[str] = None
-    dataset_check_finished_at: Optional[str] = None
+    source_query_duration_sec: Optional[float] = None
+    target_query_duration_sec: Optional[float] = None
+    dataset_check_duration_sec: Optional[float] = None
+    _active_started: Dict[str, float] = field(
+        default_factory=dict, repr=False, compare=False
+    )
 
     @staticmethod
     def now() -> str:
         return pd.Timestamp.now().strftime(DATETIME_FORMAT)
 
     def mark_query_start(self, side: QuerySide) -> None:
-        started_attr = f'{side}_query_started_at'
-        if getattr(self, started_attr) is None:
-            setattr(self, started_attr, self.now())
+        self._active_started[f'{side}_query'] = time.perf_counter()
 
     def mark_query_end(self, side: QuerySide) -> None:
-        setattr(self, f'{side}_query_finished_at', self.now())
+        self._add_elapsed(f'{side}_query', f'{side}_query_duration_sec')
 
     def mark_dataset_check_start(self) -> None:
-        if self.dataset_check_started_at is None:
-            self.dataset_check_started_at = self.now()
+        self._active_started['dataset_check'] = time.perf_counter()
 
     def mark_dataset_check_end(self) -> None:
-        self.dataset_check_finished_at = self.now()
+        self._add_elapsed('dataset_check', 'dataset_check_duration_sec')
 
     def finish_run(self) -> None:
         self.run_finished_at = self.now()
+
+    def _add_elapsed(self, timer_key: str, duration_attr: str) -> None:
+        started = self._active_started.pop(timer_key, None)
+        if started is None:
+            return
+        current = getattr(self, duration_attr) or 0.0
+        setattr(self, duration_attr, current + (time.perf_counter() - started))
 
 
 # Portable logical column types mapped to DB-specific DDL in adapter PERSIST_TYPE_MAP.
@@ -96,27 +107,13 @@ PERSIST_COL_NAME = 'name'
 PERSIST_COL_TABLE_REF = 'table_ref'
 PERSIST_COL_TZ_NAME = 'tz_name'
 PERSIST_COL_DATETIME = 'datetime'
+PERSIST_COL_DB_NOW = 'db_now'
 PERSIST_COL_TEXT = 'text'
 PERSIST_COL_INT = 'int'
 PERSIST_COL_FLOAT = 'float'
 
 # Persisted column name (avoids reserved TIMEZONE keyword in Oracle).
 PERSIST_TIMEZONE_COLUMN = 'check_timezone'
-
-BASE_PERSIST_COLUMN_TYPES = {
-    'run_id': PERSIST_COL_SHORT_STRING,
-    **{field: PERSIST_COL_DATETIME for field in TIMING_PERSIST_FIELDS},
-    'check_type': PERSIST_COL_STRING,
-    'status': PERSIST_COL_STRING,
-    'check_name': PERSIST_COL_NAME,
-    'check_tags_json': PERSIST_COL_TEXT,
-    'source_table': PERSIST_COL_TABLE_REF,
-    'target_table': PERSIST_COL_TABLE_REF,
-    PERSIST_TIMEZONE_COLUMN: PERSIST_COL_TZ_NAME,
-    'source_query': PERSIST_COL_TEXT,
-    'target_query': PERSIST_COL_TEXT,
-    'report': PERSIST_COL_TEXT,
-}
 
 
 def _stats_persist_fields(field_type: type) -> list[str]:
@@ -216,35 +213,22 @@ def _extract_base_persist_value(payload: Dict, column: str):
     return payload.get(column)
 
 
-@dataclass(frozen=True)
-class PersistResultOptions:
-    """Normalized ``persist_result`` argument from check methods."""
-
-    enabled: bool
-    table_ref: Optional[DataReference] = None
-
-
-def parse_persist_result_option(
-    persist_result: Union[bool, DataReference],
-) -> PersistResultOptions:
-    """Parse ``persist_result``: ``True``/``False`` or a custom ``DataReference`` table."""
+def normalize_persist_result(
+    persist_result: Optional[DataReference],
+) -> Optional[DataReference]:
+    """Accept a results table or ``None`` (do not persist)."""
+    if persist_result is None:
+        return None
     if isinstance(persist_result, DataReference):
-        return PersistResultOptions(enabled=True, table_ref=persist_result)
-    return PersistResultOptions(enabled=bool(persist_result))
+        return persist_result
+    raise TypeError('persist_result must be a DataReference or None')
 
 
 class CheckResultPersister:
-    """Persist check output to file and/or SQL table."""
+    """Persist check results to a SQL table."""
 
-    def __init__(
-        self,
-        results_engine: Optional[Engine] = None,
-        results_table: str = 'xoverrr_check_results',
-        results_schema: Optional[str] = None,
-    ):
+    def __init__(self, results_engine: Optional[Engine] = None):
         self.results_engine = results_engine
-        self.results_table = results_table
-        self.results_schema = results_schema
         self.adapters = {
             DBMSType.ORACLE: OracleAdapter(),
             DBMSType.POSTGRESQL: PostgresAdapter(),
@@ -254,84 +238,128 @@ class CheckResultPersister:
     def persist(
         self,
         result: CheckResult,
-        persist_result: bool = False,
-        persist_result_ref: Optional[DataReference] = None,
-    ) -> None:
-        should_persist_db = persist_result and self.results_engine is not None
-        if should_persist_db:
-            self._persist_to_db(result, persist_result_ref)
+        table_ref: Optional[DataReference] = None,
+    ) -> bool:
+        """Write ``result`` to ``table_ref``.
+
+        Returns False if a table was given and the write did not succeed.
+        """
+        table_ref = normalize_persist_result(table_ref)
+        if table_ref is None:
+            return True
+        if self.results_engine is None:
+            app_logger.warning(
+                'Unable to persist check result: results_engine is not configured'
+            )
+            return False
+        return self._persist_to_db(result, table_ref)
 
     def _persist_to_db(
-        self, result: CheckResult, persist_result_ref: Optional[DataReference]
-    ) -> None:
+        self, result: CheckResult, table_ref: DataReference
+    ) -> bool:
         try:
-            full_payload = result.to_dict()
-            record = self._build_db_record(result, full_payload)
-            table_ref = self._resolve_table_target(persist_result_ref)
-            adapter = self._get_adapter_for_engine(self.results_engine)
             column_types = self._build_column_types()
+            record = self._build_db_record(result, result.to_dict(), column_types)
+            record = _coerce_persist_record(
+                record, column_types, engine=self.results_engine
+            )
+            adapter = self._get_adapter_for_engine(self.results_engine)
             adapter.ensure_persistence_table(
                 self.results_engine,
                 table_ref,
                 column_types,
                 primary_key=PERSIST_PRIMARY_KEY,
             )
-            record = _coerce_persist_record(
-                record, column_types, engine=self.results_engine
+            adapter.insert_persistence_record(
+                self.results_engine, table_ref, record, column_types
             )
-            adapter.insert_persistence_record(self.results_engine, table_ref, record)
-            table_name = persist_result_ref.full_name if persist_result_ref else self.results_table
-            app_logger.info(f'Check result persisted to {table_name}')
+            app_logger.info(f'Check result persisted to {table_ref.full_name}')
+            return True
         except Exception as exc:
             app_logger.warning(
                 f'Unable to persist check result to storage engine: {exc}'
             )
+            return False
 
     def _build_db_record(
-        self, result: CheckResult, full_payload: Dict
+        self,
+        result: CheckResult,
+        full_payload: Dict,
+        column_types: Dict[str, str],
     ) -> Dict:
         stats = full_payload.get('stats') or {}
         details = _normalize_details_for_persist(full_payload.get('details'))
-
-        record = {
-            column: _extract_base_persist_value(full_payload, column)
-            for column in BASE_PERSIST_COLUMN_TYPES
-            if column not in ('run_id', *TIMING_PERSIST_FIELDS)
-        }
-        record['run_id'] = validate_run_id(result.run_id)
-        if result.timings:
-            for field in TIMING_PERSIST_FIELDS:
-                record[field] = getattr(result.timings, field)
-        elif result.timestamp:
-            record['run_started_at'] = result.timestamp
-
-        for key in STATS_INTEGER_FIELDS:
-            record[f'stats_{key}'] = stats.get(key)
-
-        for key in STATS_FLOAT_FIELDS:
-            record[f'stats_{key}'] = _round_stats_float_for_persist(stats.get(key))
-
-        for key in DETAILS_JSON_FIELDS:
-            record[f'details_{key}_json'] = _to_json_string(details.get(key))
-
+        record = {}
+        for column, col_type in column_types.items():
+            if col_type == PERSIST_COL_DB_NOW or column == PERSIST_INSERTED_AT_COLUMN:
+                continue
+            if column == 'run_id':
+                record[column] = validate_run_id(result.run_id)
+            elif column in RUN_TIME_PERSIST_FIELDS:
+                if result.timings:
+                    record[column] = getattr(result.timings, column)
+                elif column == 'run_started_at' and result.timestamp:
+                    record[column] = result.timestamp
+                else:
+                    record[column] = None
+            elif column in DURATION_PERSIST_FIELDS:
+                if result.timings:
+                    record[column] = _round_duration_sec_for_persist(
+                        getattr(result.timings, column)
+                    )
+                else:
+                    record[column] = None
+            elif column.startswith('stats_'):
+                key = column.removeprefix('stats_')
+                value = stats.get(key)
+                if col_type == PERSIST_COL_FLOAT:
+                    record[column] = _round_stats_float_for_persist(value)
+                else:
+                    record[column] = value
+            elif column.startswith('details_') and column.endswith('_json'):
+                key = column.removeprefix('details_').removesuffix('_json')
+                record[column] = _to_json_string(details.get(key))
+            else:
+                record[column] = _extract_base_persist_value(full_payload, column)
         return record
 
     def _build_column_types(self) -> Dict[str, str]:
-        column_types = dict(BASE_PERSIST_COLUMN_TYPES)
-        for field in STATS_INTEGER_FIELDS:
-            column_types[f'stats_{field}'] = PERSIST_COL_INT
-        for field in STATS_FLOAT_FIELDS:
-            column_types[f'stats_{field}'] = PERSIST_COL_FLOAT
-        for field in DETAILS_JSON_FIELDS:
-            column_types[f'details_{field}_json'] = PERSIST_COL_TEXT
-        return column_types
+        """Query-friendly column order: identity, score, run times, then durations."""
+        column_types: Dict[str, str] = {}
 
-    def _resolve_table_target(
-        self, persist_result_ref: Optional[DataReference]
-    ) -> DataReference:
-        if persist_result_ref:
-            return persist_result_ref
-        return DataReference(self.results_table, self.results_schema)
+        def add(name: str, col_type: str) -> None:
+            if name not in column_types:
+                column_types[name] = col_type
+
+        add('run_id', PERSIST_COL_SHORT_STRING)
+        add('check_name', PERSIST_COL_NAME)
+        add('status', PERSIST_COL_STRING)
+        add('stats_final_score', PERSIST_COL_FLOAT)
+        add('stats_final_diff_score', PERSIST_COL_FLOAT)
+        add('run_started_at', PERSIST_COL_DATETIME)
+        add('run_finished_at', PERSIST_COL_DATETIME)
+        add(PERSIST_INSERTED_AT_COLUMN, PERSIST_COL_DB_NOW)
+        for field_name in DURATION_PERSIST_FIELDS:
+            add(field_name, PERSIST_COL_FLOAT)
+        add('check_type', PERSIST_COL_STRING)
+        add('source_table', PERSIST_COL_TABLE_REF)
+        add('target_table', PERSIST_COL_TABLE_REF)
+        add('check_tags_json', PERSIST_COL_TEXT)
+        add(PERSIST_TIMEZONE_COLUMN, PERSIST_COL_TZ_NAME)
+
+        for field in STATS_INTEGER_FIELDS:
+            add(f'stats_{field}', PERSIST_COL_INT)
+        for field in STATS_FLOAT_FIELDS:
+            add(f'stats_{field}', PERSIST_COL_FLOAT)
+
+        add('source_query', PERSIST_COL_TEXT)
+        add('target_query', PERSIST_COL_TEXT)
+        add('report', PERSIST_COL_TEXT)
+
+        for field in DETAILS_JSON_FIELDS:
+            add(f'details_{field}_json', PERSIST_COL_TEXT)
+
+        return column_types
 
     def _get_adapter_for_engine(self, engine: Engine):
         if engine.dialect.name == 'sqlite':

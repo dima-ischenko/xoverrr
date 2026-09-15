@@ -12,6 +12,18 @@ from .base import BaseDatabaseAdapter, Engine
 
 
 class OracleAdapter(BaseDatabaseAdapter):
+    PERSIST_REPORT_COLUMN = 'report'  # CLOB
+    PERSIST_VARCHAR2_MAX_LENGTH = 4000
+    PERSIST_STRING_LOGICAL_TYPES = frozenset(
+        {
+            'short_string',
+            'string',
+            'name',
+            'table_ref',
+            'tz_name',
+            'text',
+        }
+    )
     PERSIST_TYPE_MAP = {
         'short_string': 'VARCHAR2(32)',
         'string': 'VARCHAR2(64)',
@@ -19,7 +31,8 @@ class OracleAdapter(BaseDatabaseAdapter):
         'table_ref': 'VARCHAR2(256)',
         'tz_name': 'VARCHAR2(128)',
         'datetime': 'TIMESTAMP',
-        'text': 'CLOB',
+        'db_now': 'TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL',
+        'text': 'VARCHAR2(4000)',
         'float': 'NUMBER',
         'int': 'NUMBER(19)',
     }
@@ -129,7 +142,7 @@ class OracleAdapter(BaseDatabaseAdapter):
                     pass
 
     def get_object_type(self, data_ref: DataReference, engine: Engine) -> ObjectType:
-        """Determine if object is table or view in Oracle"""
+        """Determine whether the object is a table or a view in Oracle."""
         query = """
             SELECT
                 CASE
@@ -305,7 +318,7 @@ class OracleAdapter(BaseDatabaseAdapter):
 
     def build_primary_key_query(self, data_ref: DataReference) -> pd.DataFrame:
 
-        # todo add suport of unique indexes when no pk?
+        # TODO: add support for unique indexes when there is no primary key.
         query = """
             SELECT lower(cols.column_name) as pk_column_name
             FROM all_constraints cons
@@ -427,7 +440,7 @@ class OracleAdapter(BaseDatabaseAdapter):
     def _build_exclusion_condition(
         self, update_column: str, exclude_recent_hours: int
     ) -> Tuple[str, Dict]:
-        """Oracle-specific implementation for recent data exclusion"""
+        """Oracle-specific predicate for recent-row exclusion."""
         if update_column and exclude_recent_hours:
             condition = (
                 f'case when {update_column} > (sysdate - :exclude_recent_hours/24) '
@@ -440,8 +453,10 @@ class OracleAdapter(BaseDatabaseAdapter):
 
     def _get_type_conversion_rules(self, timezone: str) -> Dict[str, Callable]:
         return {
-            # errors='coerce' is needed as workaround for >= 2262 year: Out of bounds nanosecond timestamp (3023-04-04 00:00:00)
-            #  todo need specify explicit dateformat (nls params) in sessions, for the correct string conversion to datetime
+            # errors='coerce' is needed as a workaround for years >= 2262
+            # (out-of-bounds nanosecond timestamp).
+            # TODO: set an explicit date format (NLS parameters) in the session
+            # so that string-to-datetime conversion is correct.
             r'date': lambda x: (
                 pd.to_datetime(x, errors='coerce')
                 .dt.strftime(DATETIME_FORMAT)
@@ -460,7 +475,7 @@ class OracleAdapter(BaseDatabaseAdapter):
             ),
             r'number|float|double': lambda x: (
                 x.astype(str).str.replace(r'\.0+$', '', regex=True).str.lower()
-            ),  # lower case for exponential form compare
+            ),  # Lowercase for exponential-form comparison.
         }
 
     def _identify_timestamp_tz_columns(
@@ -583,18 +598,65 @@ class OracleAdapter(BaseDatabaseAdapter):
     def _format_persist_column(
         self, name: str, col_type: str, primary_key: Optional[str]
     ) -> str:
-        sql_type = self.PERSIST_TYPE_MAP[col_type]
+        if name == self.PERSIST_REPORT_COLUMN:
+            sql_type = 'CLOB'
+        else:
+            sql_type = self.PERSIST_TYPE_MAP[col_type]
         if name == primary_key:
             return f'{name} {sql_type} PRIMARY KEY'
         return f'{name} {sql_type}'
 
+    def _truncate_varchar2_bind(self, value):
+        if not isinstance(value, str):
+            return value
+        encoded = value.encode('utf-8')
+        if len(encoded) <= self.PERSIST_VARCHAR2_MAX_LENGTH:
+            return value
+        return encoded[: self.PERSIST_VARCHAR2_MAX_LENGTH].decode(
+            'utf-8', errors='ignore'
+        )
+
+    def _prepare_persist_bind_record(
+        self, record: Dict, column_types: Dict[str, str]
+    ) -> Dict:
+        """Put CLOB ``report`` last and trim other strings to VARCHAR2(4000).
+
+        Oracle raises ORA-24816 if a >4000-byte VARCHAR2 bind follows a LOB.
+        """
+        report = self.PERSIST_REPORT_COLUMN
+        columns = [name for name in record if name != report]
+        if report in record:
+            columns.append(report)
+
+        prepared = {}
+        for column in columns:
+            value = record[column]
+            if (
+                column != report
+                and column_types.get(column) in self.PERSIST_STRING_LOGICAL_TYPES
+            ):
+                value = self._truncate_varchar2_bind(value)
+            prepared[column] = value
+        return prepared
+
+    def _build_persist_insert(
+        self,
+        table_ref: DataReference,
+        record: Dict,
+        column_types: Dict[str, str],
+    ) -> Tuple[str, Dict]:
+        bind_record = self._prepare_persist_bind_record(record, column_types)
+        return self.build_persistence_insert_sql(table_ref, bind_record), bind_record
+
     def insert_persistence_record(
-        self, engine: Engine, table_ref: DataReference, record: Dict
+        self,
+        engine: Engine,
+        table_ref: DataReference,
+        record: Dict,
+        column_types: Optional[Dict[str, str]] = None,
     ) -> None:
-        columns_sql = ', '.join(record.keys())
-        values_sql = ', '.join(f':{col}' for col in record.keys())
-        insert_sql = (
-            f'INSERT INTO {table_ref.full_name} ({columns_sql}) VALUES ({values_sql})'
+        insert_sql, bind_record = self._build_persist_insert(
+            table_ref, record, column_types or {}
         )
         with engine.begin() as conn:
-            conn.execute(text(insert_sql), record)
+            conn.execute(text(insert_sql), bind_record)

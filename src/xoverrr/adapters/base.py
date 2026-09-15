@@ -10,27 +10,30 @@ from ..constants import RESERVED_WORDS
 from ..logger import app_logger
 from ..models import DataReference, ObjectType
 
+# Persist-row clock column; filled by DEFAULT now()/SYSTIMESTAMP, omitted from INSERT.
+PERSIST_INSERTED_AT_COLUMN = 'inserted_at'
+
 
 class BaseDatabaseAdapter(ABC):
-    """Abstract base class with updated method signatures for parameterized queries"""
+    """Abstract base class for DBMS adapters with parameterised queries."""
 
     @abstractmethod
     def _execute_query(
         self, query: Union[str, Tuple[str, Dict]], engine: Engine, timezone: str
     ) -> pd.DataFrame:
-        """Execute query with DBMS-specific optimizations"""
+        """Execute a query with DBMS-specific optimisations."""
         pass
 
     @abstractmethod
     def get_object_type(self, data_ref: DataReference, engine: Engine) -> ObjectType:
-        """Determine database object type"""
+        """Determine the database object type."""
         pass
 
     @abstractmethod
     def get_metadata_for_custom_query(
         self, query: Union[str, Tuple[str, Dict]], engine: Engine
     ) -> pd.DataFrame:  # col_name, col_type, id
-        """Determine columns metadata based on arbitrary query"""
+        """Determine column metadata for an arbitrary query."""
         pass
 
     @abstractmethod
@@ -50,7 +53,7 @@ class BaseDatabaseAdapter(ABC):
         columns_meta: Optional[pd.DataFrame],
         timezone: Optional[str],
     ) -> Tuple[str, Dict]:
-        """Returns tuple of (query, params) with recent data exclusion"""
+        """Return a (query, params) tuple with optional recent-row exclusion."""
         result = self.build_count_query(
             data_ref, date_column, start_date, end_date, columns_meta, timezone
         )
@@ -66,7 +69,7 @@ class BaseDatabaseAdapter(ABC):
         columns_meta: Optional[pd.DataFrame],
         timezone: Optional[str],
     ) -> Tuple[str, Dict]:
-        """Returns tuple of (query, params) with recent data exclusion"""
+        """Return a (query, params) tuple with optional recent-row exclusion."""
         pass
 
     def build_data_query_common(
@@ -81,7 +84,7 @@ class BaseDatabaseAdapter(ABC):
         columns_meta: pd.DataFrame = None,
         timezone: str = None,
     ) -> Tuple[str, Dict]:
-        """Build data query for the DBMS with recent data exclusion"""
+        """Build a data query for the DBMS, with optional recent-row exclusion."""
         # Handle reserved words
         cols_select = [
             f'"{col}"' if col.lower() in RESERVED_WORDS else col
@@ -119,22 +122,22 @@ class BaseDatabaseAdapter(ABC):
     def _build_exclusion_condition(
         self, update_column: str, exclude_recent_hours: int
     ) -> Tuple[str, Dict]:
-        """DBMS-specific implementation for recent data exclusion"""
+        """Build the DBMS-specific predicate for recent-row exclusion."""
         pass
 
     def convert_types(
         self, df: pd.DataFrame, metadata: pd.DataFrame, timezone: str
     ) -> pd.DataFrame:
-        """Convert DBMS-specific types to standardized formats"""
-        # there is need to specify timezone for covnersion as
-        #   pandas implicitly converts to UTC tz aware cols
-        #   and there is general way for different version of pandas to disable this
+        """Convert DBMS-specific types to standardised formats."""
+        # A timezone is required for conversion: pandas implicitly converts
+        # time-zone-aware columns to UTC, and there is no portable way to
+        # disable this across pandas versions.
         type_rules = self._get_type_conversion_rules(timezone)
         return self._apply_type_conversion(df, metadata, type_rules)
 
     @abstractmethod
     def _get_type_conversion_rules(self, timezone: str) -> Dict[str, Callable]:
-        """Get type conversion rules for specific DBMS"""
+        """Return type-conversion rules for a specific DBMS."""
         pass
 
     @abstractmethod
@@ -145,12 +148,26 @@ class BaseDatabaseAdapter(ABC):
         column_types: Dict[str, str],
         primary_key: Optional[str] = None,
     ) -> None:
-        """Create persistence table using explicit DDL if needed."""
+        """Create the persistence table if it is missing."""
         pass
+
+    def build_persistence_insert_sql(
+        self, table_ref: DataReference, record: Dict
+    ) -> str:
+        columns = [name for name in record if name != PERSIST_INSERTED_AT_COLUMN]
+        columns_sql = ', '.join(columns)
+        values_sql = ', '.join(f':{col}' for col in columns)
+        return (
+            f'INSERT INTO {table_ref.full_name} ({columns_sql}) VALUES ({values_sql})'
+        )
 
     @abstractmethod
     def insert_persistence_record(
-        self, engine: Engine, table_ref: DataReference, record: Dict
+        self,
+        engine: Engine,
+        table_ref: DataReference,
+        record: Dict,
+        column_types: Optional[Dict[str, str]] = None,
     ) -> None:
         """Insert one persistence record using explicit SQL."""
         pass
@@ -158,7 +175,7 @@ class BaseDatabaseAdapter(ABC):
     def _apply_type_conversion(
         self, df: pd.DataFrame, metadata: pd.DataFrame, type_rules: Dict[str, Callable]
     ) -> pd.DataFrame:
-        """Apply type conversion rules to DataFrame"""
+        """Apply type-conversion rules to a DataFrame."""
         if df.empty:
             return df
 
@@ -166,7 +183,7 @@ class BaseDatabaseAdapter(ABC):
         app_logger.debug(f'df.dtypes: {df.dtypes}')
         app_logger.debug(f'db col metadata: {metadata}')
 
-        # apply conversion based on db col meta only
+        # Apply conversion from database column metadata only.
         for _, col_info in metadata.iterrows():
             col_name = col_info['column_name']
             if col_name not in df.columns:

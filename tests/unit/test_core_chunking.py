@@ -1,5 +1,6 @@
 import pytest
 
+from xoverrr.constants import DEFAULT_MAX_DATAFRAME_SIZE_GB
 from xoverrr.core import DataQualityChecker
 
 

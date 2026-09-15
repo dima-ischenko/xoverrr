@@ -69,14 +69,16 @@ class TestPostgresYearlyChunking:
         )
         table_ref = DataReference('test_pg_chunking_yearly', 'test')
 
-        status_counts_full, _, stats_counts_full, _ = checker.check_counts(
+        result = checker.check_counts(
             source_table=table_ref,
             target_table=table_ref,
             date_column='created_at',
             date_range=('2024-01-01', '2024-12-31'),
             tolerance_pct=0.0,
         )
-        status_counts_chunked, _, stats_counts_chunked, _ = checker.check_counts(
+        status_counts_full = result.status
+        stats_counts_full = result.stats
+        result = checker.check_counts(
             source_table=table_ref,
             target_table=table_ref,
             date_column='created_at',
@@ -84,8 +86,10 @@ class TestPostgresYearlyChunking:
             chunk_size_days=30,
             tolerance_pct=0.0,
         )
+        status_counts_chunked = result.status
+        stats_counts_chunked = result.stats
 
-        status_sample_full, _, stats_sample_full, _ = checker.check_samples(
+        result = checker.check_samples(
             source_table=table_ref,
             target_table=table_ref,
             date_column='created_at',
@@ -93,7 +97,9 @@ class TestPostgresYearlyChunking:
             date_range=('2024-01-01', '2024-12-31'),
             tolerance_pct=0.0,
         )
-        status_sample_chunked, _, stats_sample_chunked, _ = checker.check_samples(
+        status_sample_full = result.status
+        stats_sample_full = result.stats
+        result = checker.check_samples(
             source_table=table_ref,
             target_table=table_ref,
             date_column='created_at',
@@ -102,6 +108,8 @@ class TestPostgresYearlyChunking:
             chunk_size_days=30,
             tolerance_pct=0.0,
         )
+        status_sample_chunked = result.status
+        stats_sample_chunked = result.stats
 
         assert status_counts_full == CHECK_SUCCESS
         assert status_counts_chunked == CHECK_SUCCESS
@@ -124,8 +132,7 @@ class TestPostgresYearlyChunking:
         source_ref = DataReference('test_pg_chunking_yearly', 'test')
         target_ref = DataReference('test_pg_chunking_yearly_target', 'test')
 
-        status_sample_full, _, stats_sample_full, details_sample_full = (
-            checker.check_samples(
+        result = checker.check_samples(
                 source_table=source_ref,
                 target_table=target_ref,
                 date_column='created_at',
@@ -133,9 +140,10 @@ class TestPostgresYearlyChunking:
                 date_range=('2024-01-01', '2024-12-31'),
                 tolerance_pct=0.0,
             )
-        )
-        status_sample_chunked, _, stats_sample_chunked, details_sample_chunked = (
-            checker.check_samples(
+        status_sample_full = result.status
+        stats_sample_full = result.stats
+        details_sample_full = result.details
+        result = checker.check_samples(
                 source_table=source_ref,
                 target_table=target_ref,
                 date_column='created_at',
@@ -144,7 +152,9 @@ class TestPostgresYearlyChunking:
                 chunk_size_days=30,
                 tolerance_pct=0.0,
             )
-        )
+        status_sample_chunked = result.status
+        stats_sample_chunked = result.stats
+        details_sample_chunked = result.details
 
         assert status_sample_full == CHECK_FAILED
         assert status_sample_chunked == CHECK_FAILED

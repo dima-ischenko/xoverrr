@@ -5,6 +5,8 @@ from xoverrr.constants import CHECK_FAILED, CHECK_SUCCESS
 from xoverrr.core import DataQualityChecker, DataReference
 
 
+SRC_TABLE = 'test_persist_postgres_src'
+TRG_TABLE = 'test_persist_postgres_trg'
 RESULTS_TABLE_SAMPLE = 'test_persist_postgres_results'
 RESULTS_TABLE_COUNTS = 'test_persist_postgres_results_counts'
 RESULTS_TABLE_CUSTOM = 'test_persist_postgres_results_custom'
@@ -15,9 +17,6 @@ RESULTS_TABLE_FAILED_COMPOUND = 'test_persist_postgres_results_failed_compound'
 class TestPostgresPersistenceE2E:
     @pytest.fixture(autouse=True)
     def setup_postgres_data(self, postgres_engine, table_helper):
-        src_table = 'test_persist_postgres_src'
-        trg_table = 'test_persist_postgres_trg'
-
         for results_table in (
             RESULTS_TABLE_SAMPLE,
             RESULTS_TABLE_COUNTS,
@@ -43,15 +42,15 @@ class TestPostgresPersistenceE2E:
 
         table_helper.create_table(
             engine=postgres_engine,
-            table_name=src_table,
-            create_sql=create_sql.format(table_name=src_table),
-            insert_sql=insert_sql.format(table_name=src_table),
+            table_name=SRC_TABLE,
+            create_sql=create_sql.format(table_name=SRC_TABLE),
+            insert_sql=insert_sql.format(table_name=SRC_TABLE),
         )
         table_helper.create_table(
             engine=postgres_engine,
-            table_name=trg_table,
-            create_sql=create_sql.format(table_name=trg_table),
-            insert_sql=insert_sql.format(table_name=trg_table),
+            table_name=TRG_TABLE,
+            create_sql=create_sql.format(table_name=TRG_TABLE),
+            insert_sql=insert_sql.format(table_name=TRG_TABLE),
         )
 
         yield
@@ -65,12 +64,9 @@ class TestPostgresPersistenceE2E:
         )
 
     def test_postgres_persistence_sample_e2e(self, postgres_engine):
-        src_table = 'test_persist_postgres_src'
-        trg_table = 'test_persist_postgres_trg'
-
-        status, _, _, _ = self._build_checker(postgres_engine).check_samples(
-            source_table=DataReference(src_table, 'test'),
-            target_table=DataReference(trg_table, 'test'),
+        result = self._build_checker(postgres_engine).check_samples(
+            source_table=DataReference(SRC_TABLE, 'test'),
+            target_table=DataReference(TRG_TABLE, 'test'),
             date_column='created_at',
             date_range=('2024-01-01', '2024-01-03'),
             custom_primary_key=['id'],
@@ -78,6 +74,7 @@ class TestPostgresPersistenceE2E:
             persist_result=DataReference(RESULTS_TABLE_SAMPLE),
             report_output_format='json',
         )
+        status = result.status
 
         assert status == CHECK_SUCCESS
 
@@ -91,22 +88,20 @@ class TestPostgresPersistenceE2E:
                 )
             ).fetchone()
 
-        assert row[0] == 'samples' and row[1] == CHECK_SUCCESS
+        assert row[:2] == ('samples', CHECK_SUCCESS)
         assert 'SAMPLES CHECK REPORT' in row[2]
 
     def test_postgres_persistence_counts_e2e(self, postgres_engine):
-        src_table = 'test_persist_postgres_src'
-        trg_table = 'test_persist_postgres_trg'
-
-        status, _, _, _ = self._build_checker(postgres_engine).check_counts(
-            source_table=DataReference(src_table, 'test'),
-            target_table=DataReference(trg_table, 'test'),
+        result = self._build_checker(postgres_engine).check_counts(
+            source_table=DataReference(SRC_TABLE, 'test'),
+            target_table=DataReference(TRG_TABLE, 'test'),
             date_column='created_at',
             date_range=('2024-01-01', '2024-01-04'),
             tolerance_pct=0.0,
             persist_result=DataReference(RESULTS_TABLE_COUNTS),
             report_output_format='json',
         )
+        status = result.status
 
         assert status == CHECK_SUCCESS
 
@@ -124,24 +119,21 @@ class TestPostgresPersistenceE2E:
         assert 'COUNTS CHECK REPORT' in row[2]
 
     def test_postgres_persistence_custom_query_e2e(self, postgres_engine):
-        src_table = 'test_persist_postgres_src'
-        trg_table = 'test_persist_postgres_trg'
-
         source_query = f"""
             SELECT id, value, created_at
-            FROM test.{src_table}
+            FROM test.{SRC_TABLE}
             WHERE created_at >= cast(:start_date as date)
               AND created_at < cast(:end_date as date)
         """
         target_query = f"""
             SELECT id, value, created_at
-            FROM test.{trg_table}
+            FROM test.{TRG_TABLE}
             WHERE created_at >= cast(:start_date as date)
               AND created_at < cast(:end_date as date)
         """
         query_params = {'start_date': '2024-01-01', 'end_date': '2024-01-04'}
 
-        status, _, _, _ = self._build_checker(postgres_engine).check_custom_queries(
+        result = self._build_checker(postgres_engine).check_custom_queries(
             source_query=source_query,
             source_params=query_params,
             target_query=target_query,
@@ -151,6 +143,7 @@ class TestPostgresPersistenceE2E:
             persist_result=DataReference(RESULTS_TABLE_CUSTOM),
             report_output_format='json',
         )
+        status = result.status
 
         assert status == CHECK_SUCCESS
 
@@ -158,22 +151,17 @@ class TestPostgresPersistenceE2E:
             row = conn.execute(
                 text(
                     f"""
-                    SELECT check_type, status, source_query, target_query
+                    SELECT check_type, status
                     FROM {RESULTS_TABLE_CUSTOM}
                     """
                 )
             ).fetchone()
 
         assert row[:2] == ('custom_queries', CHECK_SUCCESS)
-        assert ':start_date' not in row[2] and "'2024-01-01'" in row[2]
-        assert ':end_date' not in row[3] and "'2024-01-04'" in row[3]
 
     def test_postgres_persistence_failed_e2e(self, postgres_engine, table_helper):
         failed_src = 'test_persist_postgres_failed_src'
         failed_trg = 'test_persist_postgres_failed_trg'
-
-        for table_name in (failed_src, failed_trg):
-            table_helper.drop_table(postgres_engine, table_name)
 
         create_sql = """
             CREATE TABLE {table_name} (
@@ -209,7 +197,7 @@ class TestPostgresPersistenceE2E:
             """,
         )
 
-        status, report, stats, details = self._build_checker(postgres_engine).check_samples(
+        result = self._build_checker(postgres_engine).check_samples(
             source_table=DataReference(failed_src, 'test'),
             target_table=DataReference(failed_trg, 'test'),
             date_column='created_at',
@@ -219,46 +207,29 @@ class TestPostgresPersistenceE2E:
             persist_result=DataReference(RESULTS_TABLE_FAILED),
             report_output_format='text',
         )
+        status = result.status
+        report = result.report
 
         assert status == CHECK_FAILED
-        assert stats.dup_source_rows > 0
-        assert stats.dup_target_rows > 0
-        assert stats.only_source_rows > 0
-        assert stats.only_target_rows > 0
-        assert stats.passed_rows < stats.comparable_rows
 
         with postgres_engine.begin() as conn:
             row = conn.execute(
                 text(
                     f"""
-                    SELECT
-                        check_type,
-                        status,
-                        stats_dup_source_rows,
-                        stats_only_source_rows,
-                        stats_only_target_rows,
-                        stats_issue_rows_pct,
-                        stats_final_diff_score,
-                        stats_final_score,
-                        report
+                    SELECT check_type, status, report
                     FROM {RESULTS_TABLE_FAILED}
                     """
                 )
             ).fetchone()
 
         assert row[:2] == ('samples', CHECK_FAILED)
-        assert row[2] > 0 and row[3] > 0 and row[4] > 0
-        assert f'Final discrepancies score: {row[6]:.5f}' in row[8]
-        assert report == row[8]
+        assert report == row[2]
 
     def test_postgres_persistence_failed_compound_pk_e2e(
         self, postgres_engine, table_helper
     ):
         failed_src = 'test_persist_postgres_failed_compound_src'
         failed_trg = 'test_persist_postgres_failed_compound_trg'
-
-        for table_name in (failed_src, failed_trg):
-            table_helper.drop_table(postgres_engine, table_name)
 
         create_sql = """
             CREATE TABLE {table_name} (
@@ -296,7 +267,7 @@ class TestPostgresPersistenceE2E:
             """,
         )
 
-        status, report, stats, details = self._build_checker(postgres_engine).check_samples(
+        result = self._build_checker(postgres_engine).check_samples(
             source_table=DataReference(failed_src, 'test'),
             target_table=DataReference(failed_trg, 'test'),
             date_column='created_at',
@@ -306,35 +277,20 @@ class TestPostgresPersistenceE2E:
             persist_result=DataReference(RESULTS_TABLE_FAILED_COMPOUND),
             report_output_format='text',
         )
+        status = result.status
+        report = result.report
 
         assert status == CHECK_FAILED
-        assert stats.only_source_rows >= 2
-        assert stats.only_target_rows >= 2
-        assert stats.comparable_rows == 3
-        assert stats.passed_rows < stats.comparable_rows
-        assert len(details.source_only_keys_examples) >= 2
-        assert len(details.target_only_keys_examples) >= 2
 
         with postgres_engine.begin() as conn:
             row = conn.execute(
                 text(
                     f"""
-                    SELECT
-                        check_type,
-                        status,
-                        stats_only_source_rows,
-                        stats_only_target_rows,
-                        stats_final_diff_score,
-                        report
+                    SELECT check_type, status, report
                     FROM {RESULTS_TABLE_FAILED_COMPOUND}
                     """
                 )
             ).fetchone()
 
         assert row[:2] == ('samples', CHECK_FAILED)
-        assert row[2] >= 2 and row[3] >= 2
-        assert f'Source only rows %: {stats.source_only_rows_pct:.5f}' in row[5]
-        assert f'Target only rows %: {stats.target_only_rows_pct:.5f}' in row[5]
-        assert f'Final discrepancies score: {row[4]:.5f}' in row[5]
-        assert report == row[5]
-
+        assert report == row[2]

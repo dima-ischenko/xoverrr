@@ -20,6 +20,7 @@ class PostgresAdapter(BaseDatabaseAdapter):
         'table_ref': 'VARCHAR(256)',
         'tz_name': 'VARCHAR(128)',
         'datetime': 'TIMESTAMP',
+        'db_now': 'TIMESTAMP DEFAULT now() NOT NULL',
         'text': 'TEXT',
         'float': 'DOUBLE PRECISION',
         'int': 'BIGINT',
@@ -63,7 +64,7 @@ class PostgresAdapter(BaseDatabaseAdapter):
             raise QueryExecutionError(f'Query failed: {str(e)}')
 
     def get_object_type(self, data_ref: DataReference, engine: Engine) -> ObjectType:
-        """Determine if object is table, view, or materialized view"""
+        """Determine whether the object is a table, view, or materialised view."""
         query = """
             SELECT
                 CASE
@@ -215,7 +216,7 @@ class PostgresAdapter(BaseDatabaseAdapter):
         return query, params
 
     def build_primary_key_query(self, data_ref: DataReference) -> pd.DataFrame:
-        """Build primary key query with GreenPlum compatibility"""
+        """Build a primary-key query compatible with Greenplum."""
         query = """
             select
                 lower(pg_attribute.attname) as pk_column_name
@@ -302,7 +303,7 @@ class PostgresAdapter(BaseDatabaseAdapter):
     def _build_exclusion_condition(
         self, update_column: str, exclude_recent_hours: int
     ) -> Tuple[str, Dict]:
-        """PostgreSQL-specific implementation for recent data exclusion"""
+        """PostgreSQL-specific predicate for recent-row exclusion."""
         if update_column and exclude_recent_hours:
             exclude_recent_hours = exclude_recent_hours
 
@@ -335,7 +336,7 @@ class PostgresAdapter(BaseDatabaseAdapter):
                 .dt.strftime(DATETIME_FORMAT)
                 .str.replace(r'\s00:00:00$', '', regex=True)
             ),
-            # lower in numerics for scientific notations
+            # Lowercase numerics so that scientific notation compares consistently.
             r'numeric|decimal|bigint|int8|double precision|real': lambda x: (
                 x.astype(str)
                 .str.lower()
@@ -357,11 +358,6 @@ class PostgresAdapter(BaseDatabaseAdapter):
         column_types: Dict[str, str],
         primary_key: Optional[str] = None,
     ) -> None:
-        if table_ref.schema:
-            create_schema_sql = f'CREATE SCHEMA IF NOT EXISTS {table_ref.schema}'
-        else:
-            create_schema_sql = None
-
         columns_sql = ',\n                    '.join(
             self._format_persist_column(name, col_type, primary_key)
             for name, col_type in column_types.items()
@@ -371,9 +367,11 @@ class PostgresAdapter(BaseDatabaseAdapter):
                     {columns_sql}
             )
         """
+        if engine.dialect.name == 'sqlite':
+            create_table_sql = create_table_sql.replace(
+                'DEFAULT now()', 'DEFAULT CURRENT_TIMESTAMP'
+            )
         with engine.begin() as conn:
-            if create_schema_sql:
-                conn.execute(text(create_schema_sql))
             conn.execute(text(create_table_sql))
 
     def _format_persist_column(
@@ -385,12 +383,12 @@ class PostgresAdapter(BaseDatabaseAdapter):
         return f'{name} {sql_type}'
 
     def insert_persistence_record(
-        self, engine: Engine, table_ref: DataReference, record: Dict
+        self,
+        engine: Engine,
+        table_ref: DataReference,
+        record: Dict,
+        column_types: Optional[Dict[str, str]] = None,
     ) -> None:
-        columns_sql = ', '.join(record.keys())
-        values_sql = ', '.join(f':{col}' for col in record.keys())
-        insert_sql = (
-            f'INSERT INTO {table_ref.full_name} ({columns_sql}) VALUES ({values_sql})'
-        )
+        insert_sql = self.build_persistence_insert_sql(table_ref, record)
         with engine.begin() as conn:
             conn.execute(text(insert_sql), record)

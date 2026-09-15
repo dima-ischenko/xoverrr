@@ -12,7 +12,7 @@ from .base import BaseDatabaseAdapter, Engine
 
 
 class ClickHouseAdapter(BaseDatabaseAdapter):
-    """ClickHouse adapter with parameterized queries"""
+    """ClickHouse adapter with parameterised queries."""
     PERSIST_TYPE_MAP = {
         'short_string': 'Nullable(String)',
         'string': 'Nullable(String)',
@@ -20,6 +20,7 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
         'table_ref': 'Nullable(String)',
         'tz_name': 'Nullable(String)',
         'datetime': 'Nullable(DateTime)',
+        'db_now': 'DateTime DEFAULT now()',
         'text': 'Nullable(String)',
         'float': 'Nullable(Float64)',
         'int': 'Nullable(Int64)',
@@ -31,6 +32,7 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
         'table_ref': 'String',
         'tz_name': 'String',
         'datetime': 'DateTime',
+        'db_now': 'DateTime DEFAULT now()',
         'text': 'String',
         'float': 'Float64',
         'int': 'Int64',
@@ -73,7 +75,7 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
             raise QueryExecutionError(f'Query failed: {str(e)}')
 
     def get_object_type(self, data_ref: DataReference, engine: Engine) -> ObjectType:
-        """Determine if object is table or view in ClickHouse"""
+        """Determine whether the object is a table or a view in ClickHouse."""
         query = """
             SELECT
                 engine as table_engine,
@@ -90,7 +92,7 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
                 type_str = result.iloc[0]['object_type']
                 engine_str = result.iloc[0]['table_engine']
 
-                # ClickHouse имеет разные типы таблиц
+                # ClickHouse has several table engines.
                 if engine_str == 'View':
                     return ObjectType.VIEW
                 elif engine_str in ['MaterializedView', 'MaterializeView']:
@@ -251,7 +253,7 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
     def _build_exclusion_condition(
         self, update_column: str, exclude_recent_hours: int
     ) -> Tuple[str, Dict]:
-        """ClickHouse-specific implementation for recent data exclusion"""
+        """ClickHouse-specific predicate for recent-row exclusion."""
         if update_column and exclude_recent_hours:
             exclude_recent_hours = exclude_recent_hours
 
@@ -277,7 +279,7 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
                 .dt.strftime(DATE_FORMAT)
                 .str.replace(r'\s00:00:00$', '', regex=True)
             ),
-            # lower for scientific notation
+            # Lowercase for scientific-notation comparison.
             r'uint64|uint8|float|decimal|int32': lambda x: (
                 x.astype(str).str.lower().replace(r'\.0+$', '', regex=True)
             ),
@@ -315,12 +317,12 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
         return f'{name} {sql_type}'
 
     def insert_persistence_record(
-        self, engine: Engine, table_ref: DataReference, record: Dict
+        self,
+        engine: Engine,
+        table_ref: DataReference,
+        record: Dict,
+        column_types: Optional[Dict[str, str]] = None,
     ) -> None:
-        columns_sql = ', '.join(record.keys())
-        values_sql = ', '.join(f':{col}' for col in record.keys())
-        insert_sql = (
-            f'INSERT INTO {table_ref.full_name} ({columns_sql}) VALUES ({values_sql})'
-        )
+        insert_sql = self.build_persistence_insert_sql(table_ref, record)
         with engine.begin() as conn:
             conn.execute(text(insert_sql), record)

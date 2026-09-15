@@ -66,7 +66,7 @@ class TestOracleCustomQueryYearlyChunking:
         """
         params = {'start_date': '2024-01-01', 'end_date': '2024-12-31'}
 
-        status_full, _, stats_full, _ = checker.check_custom_queries(
+        result = checker.check_custom_queries(
             source_query=query,
             source_params=params,
             target_query=query,
@@ -74,7 +74,9 @@ class TestOracleCustomQueryYearlyChunking:
             custom_primary_key=['id'],
             tolerance_pct=0.0,
         )
-        status_chunked, _, stats_chunked, _ = checker.check_custom_queries(
+        status_full = result.status
+        stats_full = result.stats
+        result = checker.check_custom_queries(
             source_query=query,
             source_params=params,
             target_query=query,
@@ -83,6 +85,8 @@ class TestOracleCustomQueryYearlyChunking:
             chunk_size_days=30,
             tolerance_pct=0.0,
         )
+        status_chunked = result.status
+        stats_chunked = result.stats
         assert status_full == CHECK_SUCCESS
         assert status_chunked == CHECK_SUCCESS
         assert stats_chunked.final_diff_score == stats_full.final_diff_score
@@ -103,7 +107,7 @@ class TestOracleCustomQueryYearlyChunking:
         """
         params = {'start_date': '2024-01-01', 'end_date': '2024-12-31'}
 
-        status_full, _, stats_full, details_full = checker.check_custom_queries(
+        result = checker.check_custom_queries(
             source_query=source_query,
             source_params=params,
             target_query=target_query,
@@ -111,8 +115,10 @@ class TestOracleCustomQueryYearlyChunking:
             custom_primary_key=['id'],
             tolerance_pct=0.0,
         )
-        status_chunked, _, stats_chunked, details_chunked = (
-            checker.check_custom_queries(
+        status_full = result.status
+        stats_full = result.stats
+        details_full = result.details
+        result = checker.check_custom_queries(
                 source_query=source_query,
                 source_params=params,
                 target_query=target_query,
@@ -121,7 +127,9 @@ class TestOracleCustomQueryYearlyChunking:
                 chunk_size_days=30,
                 tolerance_pct=0.0,
             )
-        )
+        status_chunked = result.status
+        stats_chunked = result.stats
+        details_chunked = result.details
         assert status_full == CHECK_FAILED
         assert status_chunked == CHECK_FAILED
         assert stats_chunked.final_diff_score == stats_full.final_diff_score

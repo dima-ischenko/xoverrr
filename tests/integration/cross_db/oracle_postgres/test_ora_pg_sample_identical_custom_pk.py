@@ -72,7 +72,7 @@ class TestOraclePostgresCustomPrimaryKey:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_samples(
+        result = checker.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='created_date',
@@ -80,6 +80,10 @@ class TestOraclePostgresCustomPrimaryKey:
             custom_primary_key=['email'],  # Custom PK by email
             tolerance_pct=5.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         # Should detect duplicates
         assert stats.dup_source_rows > 0

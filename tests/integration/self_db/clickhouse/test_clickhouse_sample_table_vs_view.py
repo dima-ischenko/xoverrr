@@ -71,7 +71,7 @@ class TestClickHouseTableVsView:
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = checker.check_samples(
+        result = checker.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(view_name, 'test'),
             date_column='created_at',
@@ -79,6 +79,10 @@ class TestClickHouseTableVsView:
             include_columns=['id', 'name', 'price', 'created_at'],
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         assert status == CHECK_SUCCESS
         print(f'ClickHouse table vs view check passed: {stats.final_score:.2f}%')

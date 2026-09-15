@@ -87,7 +87,7 @@ class TestCustomQueryCheck:
               AND created_at < date_trunc('day', cast(:end_date as date)) + interval '1 days'
         """
 
-        status, report, stats, details = checker.check_custom_queries(
+        result = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-05'},
             target_query=target_query,
@@ -95,6 +95,10 @@ class TestCustomQueryCheck:
             custom_primary_key=['id'],
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
         assert status == CHECK_SUCCESS
         print(f'Custom query check passed: {stats.final_score:.2f}%')
@@ -123,7 +127,7 @@ class TestCustomQueryCheck:
               AND created_at < date_trunc('day', cast(:end_date as date)) + interval '1 days'
         """
 
-        status, report, stats, details = checker.check_custom_queries(
+        result = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-05'},
             target_query=target_query,
@@ -131,6 +135,10 @@ class TestCustomQueryCheck:
             custom_primary_key=['ID'],
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
         assert status == CHECK_SUCCESS
         print(f'Custom query check passed: {stats.final_score:.2f}%')
@@ -158,7 +166,7 @@ class TestCustomQueryCheck:
               AND created_at < date_trunc('day', cast(:end_date as date)) + interval '1 days'
         """
 
-        status, report, stats, details = checker.check_custom_queries(
+        result = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-05'},
             target_query=target_query,
@@ -166,6 +174,10 @@ class TestCustomQueryCheck:
             custom_primary_key=['id'],
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
         assert status == CHECK_SUCCESS
         print(f'Custom query check passed: {stats.final_score:.2f}%')
@@ -192,7 +204,7 @@ class TestCustomQueryCheck:
               AND created_at < date_trunc('day', cast(:end_date as date)) + interval '1 days'
         """
 
-        status, report, stats, details = checker.check_custom_queries(
+        result = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-04'},
             target_query=target_query,
@@ -200,6 +212,10 @@ class TestCustomQueryCheck:
             custom_primary_key=['id'],
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
         assert status == CHECK_SUCCESS
         print(f'Custom query check passed: {stats.final_score:.2f}%')
@@ -226,7 +242,7 @@ class TestCustomQueryCheck:
               AND created_at < date_trunc('day', cast(:end_date as date)) + interval '1 days'
         """
 
-        status, report, stats, details = checker.check_custom_queries(
+        result = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-04'},
             target_query=target_query,
@@ -234,6 +250,10 @@ class TestCustomQueryCheck:
             custom_primary_key=['id'],
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
         assert status == CHECK_SUCCESS
         print(f'Custom query check passed: {stats.final_score:.2f}%')
@@ -262,7 +282,7 @@ class TestCustomQueryCheck:
               and name like '%lice%'
         """
 
-        status, report, stats, details = checker.check_custom_queries(
+        result = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-04'},
             target_query=target_query,
@@ -270,6 +290,10 @@ class TestCustomQueryCheck:
             custom_primary_key=['id'],
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
         assert status == CHECK_SUCCESS
         print(f'Custom query check passed: {stats.final_score:.2f}%')
@@ -302,7 +326,7 @@ class TestCustomQueryCheck:
             group by id
         """
 
-        status, report, stats, details = checker.check_custom_queries(
+        result = checker.check_custom_queries(
             source_query=source_query,
             source_params={
                 'start_date': '2024-01-01',
@@ -318,6 +342,10 @@ class TestCustomQueryCheck:
             custom_primary_key=['id'],
             tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
         assert status == CHECK_SUCCESS
         print(f'Custom query check passed: {stats.final_score:.2f}%')
