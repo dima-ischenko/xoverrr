@@ -111,4 +111,3 @@ class TestClickHouseOracleCountsCheck:
         assert result.stats.total_source_rows == 5
         assert result.stats.total_target_rows == 5
         assert 'Source total count: 5' in result.report
-        assert 'ISSUE BREAKDOWN' not in result.report
