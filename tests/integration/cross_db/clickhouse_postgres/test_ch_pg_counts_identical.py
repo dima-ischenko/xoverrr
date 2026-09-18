@@ -90,9 +90,7 @@ class TestClickHousePostgresCountsCheck:
         print(report)
         assert status == CHECK_SUCCESS
         assert stats.final_score == 100.0
-        print(
-            f'ClickHouse   PostgreSQL count check passed: {stats.final_score:.2f}%'
-        )
+        print(f'ClickHouse   PostgreSQL count check passed: {stats.final_score:.2f}%')
 
     def test_total_counts(self, clickhouse_engine, postgres_engine):
         table_name = 'test_ch_pg_counts'

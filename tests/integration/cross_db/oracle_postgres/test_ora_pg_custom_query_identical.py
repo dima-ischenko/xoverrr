@@ -103,9 +103,7 @@ class TestCustomQueryCheck:
         assert status == CHECK_SUCCESS
         print(f'Custom query check passed: {stats.final_score:.2f}%')
 
-    def test_custom_query_check_char_uppercase_pk(
-        self, oracle_engine, postgres_engine
-    ):
+    def test_custom_query_check_char_uppercase_pk(self, oracle_engine, postgres_engine):
         pytest.skip('issue #37')
         checker = DataQualityChecker(
             source_engine=oracle_engine,

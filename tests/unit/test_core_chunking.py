@@ -186,7 +186,9 @@ def test_validate_date_window_args_accepts_complete_range():
 def test_validate_date_window_args_rejects_incomplete_tuple():
     checker = _comparator_without_init()
 
-    with pytest.raises(ValueError, match='date_range must be \\(start_date, end_date\\)'):
+    with pytest.raises(
+        ValueError, match='date_range must be \\(start_date, end_date\\)'
+    ):
         checker._validate_date_window_args(
             date_column='created_at',
             date_range=('2024-01-01',),

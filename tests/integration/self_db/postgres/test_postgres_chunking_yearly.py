@@ -4,12 +4,10 @@ Year-range chunking integration tests for PostgreSQL.
 
 import pytest
 
+from tests.integration.open_ended_date_range import \
+    assert_open_ended_date_range_without_chunking
 from xoverrr.constants import CHECK_FAILED, CHECK_SUCCESS
 from xoverrr.core import DataQualityChecker, DataReference
-
-from tests.integration.open_ended_date_range import (
-    assert_open_ended_date_range_without_chunking,
-)
 
 
 class TestPostgresYearlyChunking:
@@ -137,25 +135,25 @@ class TestPostgresYearlyChunking:
         target_ref = DataReference('test_pg_chunking_yearly_target', 'test')
 
         result = checker.check_samples(
-                source_table=source_ref,
-                target_table=target_ref,
-                date_column='created_at',
-                update_column='updated_at',
-                date_range=('2024-01-01', '2024-12-31'),
-                tolerance_pct=0.0,
-            )
+            source_table=source_ref,
+            target_table=target_ref,
+            date_column='created_at',
+            update_column='updated_at',
+            date_range=('2024-01-01', '2024-12-31'),
+            tolerance_pct=0.0,
+        )
         status_sample_full = result.status
         stats_sample_full = result.stats
         details_sample_full = result.details
         result = checker.check_samples(
-                source_table=source_ref,
-                target_table=target_ref,
-                date_column='created_at',
-                update_column='updated_at',
-                date_range=('2024-01-01', '2024-12-31'),
-                chunk_size_days=30,
-                tolerance_pct=0.0,
-            )
+            source_table=source_ref,
+            target_table=target_ref,
+            date_column='created_at',
+            update_column='updated_at',
+            date_range=('2024-01-01', '2024-12-31'),
+            chunk_size_days=30,
+            tolerance_pct=0.0,
+        )
         status_sample_chunked = result.status
         stats_sample_chunked = result.stats
         details_sample_chunked = result.details
@@ -165,9 +163,7 @@ class TestPostgresYearlyChunking:
         assert (
             stats_sample_chunked.final_diff_score == stats_sample_full.final_diff_score
         )
-        mismatch_full = details_sample_full.issue_breakdown.set_index(
-            'column_name'
-        )
+        mismatch_full = details_sample_full.issue_breakdown.set_index('column_name')
         mismatch_chunked = details_sample_chunked.issue_breakdown.set_index(
             'column_name'
         )

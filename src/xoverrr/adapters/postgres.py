@@ -5,7 +5,8 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 import pandas as pd
 from sqlalchemy import text
 
-from ..constants import DATETIME_FORMAT, FLAG_VALUE_YES, XRECENTLY_CHANGED_COLUMN
+from ..constants import (DATETIME_FORMAT, FLAG_VALUE_YES,
+                         XRECENTLY_CHANGED_COLUMN)
 from ..exceptions import MetadataError, QueryExecutionError
 from ..logger import app_logger
 from ..models import DataReference, ObjectType

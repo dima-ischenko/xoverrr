@@ -91,9 +91,7 @@ class TestPostgresOracleMixedTimezoneOffsets:
 
         print(report)
 
-        assert status == CHECK_SUCCESS, (
-            'Cross-db tz-aware check failed with UTC'
-        )
+        assert status == CHECK_SUCCESS, 'Cross-db tz-aware check failed with UTC'
         assert stats.final_diff_score == 0.0, f'Non-zero diff with UTC timezone'
         print(f'cross-db check with UTC passed: {stats.final_score:.2f}%')
 

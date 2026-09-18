@@ -5,14 +5,9 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-from .constants import (
-    DEFAULT_MAX_EXAMPLES,
-    FLAG_VALUE_YES,
-    NULL_REPLACEMENT,
-    XSNIFF_PASSED_COLUMN,
-    XSNIFF_PASSED_VALUE_NO,
-    XRECENTLY_CHANGED_COLUMN,
-)
+from .constants import (DEFAULT_MAX_EXAMPLES, FLAG_VALUE_YES, NULL_REPLACEMENT,
+                        XRECENTLY_CHANGED_COLUMN, XSNIFF_PASSED_COLUMN,
+                        XSNIFF_PASSED_VALUE_NO)
 from .logger import app_logger
 
 
@@ -91,12 +86,8 @@ def build_check_stats(
     issue_rows_pct = (1 - passed_rows / comparable_rows) * 100
 
     issue_pcts = [(cnt / comparable_rows) * 100 for cnt in issue_counts]
-    max_issue_pct = (
-        float(np.max(issue_pcts)) if issue_pcts else 0.0
-    )
-    median_issue_pct = (
-        float(np.median(issue_pcts)) if issue_pcts else 0.0
-    )
+    max_issue_pct = float(np.max(issue_pcts)) if issue_pcts else 0.0
+    median_issue_pct = float(np.median(issue_pcts)) if issue_pcts else 0.0
 
     final_diff_score = (
         dup_source_rows_pct * 0.1
@@ -205,6 +196,7 @@ def build_total_count_stats(source_count: int, target_count: int) -> CheckStats:
 @dataclass
 class CheckDetails:
     """Examples and per-column details for a single check."""
+
     issue_breakdown: pd.DataFrame
     issue_examples: pd.DataFrame
 
@@ -285,7 +277,7 @@ def resolve_check_sniff_query_passed_column(columns: List[str]) -> str:
     if XSNIFF_PASSED_COLUMN not in normalized_columns:
         raise ValueError(
             f"Sniff query requires '{XSNIFF_PASSED_COLUMN}' column; "
-            f"got columns: {', '.join(normalized_columns)}"
+            f'got columns: {", ".join(normalized_columns)}'
         )
     return XSNIFF_PASSED_COLUMN
 
@@ -300,7 +292,9 @@ def evaluate_check_sniff_query_data(
     ``y`` means passed, ``n`` means failed.
     """
     prepared_df = prepare_dataframe(df)
-    passed_column = resolve_check_sniff_query_passed_column(prepared_df.columns.tolist())
+    passed_column = resolve_check_sniff_query_passed_column(
+        prepared_df.columns.tolist()
+    )
 
     is_failed = prepared_df[passed_column] == XSNIFF_PASSED_VALUE_NO
     issue_rows = int(is_failed.sum())
@@ -667,14 +661,11 @@ def clean_recently_changed_data(
     Returns:
         tuple: (df1_processed, df2_processed)
     """
-    app_logger.info(
-        f'Before exclusion: source={len(df1)}, target={len(df2)}'
-    )
+    app_logger.info(f'Before exclusion: source={len(df1)}, target={len(df2)}')
 
     if df1.empty and df2.empty:
         app_logger.info('Both dataframes are empty, skipping exclusion')
         return df1, df2
-
 
     has_flag_df1 = XRECENTLY_CHANGED_COLUMN in df1.columns
     has_flag_df2 = XRECENTLY_CHANGED_COLUMN in df2.columns

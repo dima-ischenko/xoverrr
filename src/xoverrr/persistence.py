@@ -1,5 +1,5 @@
-import json
 import dataclasses
+import json
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -7,13 +7,14 @@ from typing import Dict, Literal, Optional
 
 import pandas as pd
 from sqlalchemy.engine import Engine
+
 from .adapters.base import PERSIST_INSERTED_AT_COLUMN
 from .adapters.clickhouse import ClickHouseAdapter
 from .adapters.oracle import OracleAdapter
 from .adapters.postgres import PostgresAdapter
 from .constants import DATETIME_FORMAT, STATS_REPORT_FLOAT_DECIMALS
 from .logger import app_logger
-from .models import DBMSType, DataReference
+from .models import DataReference, DBMSType
 from .reporting import CheckResult
 from .utils import CheckDetails, CheckStats
 
@@ -178,9 +179,7 @@ def _coerce_persist_record(
 ) -> Dict:
     """Convert logical persist values to DB-driver-friendly Python types."""
     coerced = dict(record)
-    keep_datetime_as_string = (
-        engine is not None and engine.dialect.name == 'sqlite'
-    )
+    keep_datetime_as_string = engine is not None and engine.dialect.name == 'sqlite'
     for column, col_type in column_types.items():
         if col_type != PERSIST_COL_DATETIME:
             continue
@@ -254,9 +253,7 @@ class CheckResultPersister:
             return False
         return self._persist_to_db(result, table_ref)
 
-    def _persist_to_db(
-        self, result: CheckResult, table_ref: DataReference
-    ) -> bool:
+    def _persist_to_db(self, result: CheckResult, table_ref: DataReference) -> bool:
         try:
             column_types = self._build_column_types()
             record = self._build_db_record(result, result.to_dict(), column_types)

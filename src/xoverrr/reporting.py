@@ -14,8 +14,10 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 
-from .constants import DATETIME_FORMAT, REPORT_OUTPUT_FORMAT_JSON, REPORT_OUTPUT_FORMATS, REPORT_OUTPUT_FORMAT_TEXT
-from .utils import CheckDetails, CheckStats, append_report_run_header, format_report_collection, sniff_issue_row_count
+from .constants import (DATETIME_FORMAT, REPORT_OUTPUT_FORMAT_JSON,
+                        REPORT_OUTPUT_FORMAT_TEXT, REPORT_OUTPUT_FORMATS)
+from .utils import (CheckDetails, CheckStats, append_report_run_header,
+                    format_report_collection, sniff_issue_row_count)
 
 if TYPE_CHECKING:
     from .persistence import CheckRunTimings
@@ -25,13 +27,14 @@ if TYPE_CHECKING:
 class CheckResult:
     """
     Unified container for all check output data.
-    
+
     This class combines status, statistics, details, and metadata
     into a single serializable object suitable for dashboards and APIs.
 
     Check methods return this object so callers can read ``run_id`` and
     other fields, for example ``result = checker.check_samples(...)``.
     """
+
     timestamp: str
     run_id: str
     check_type: str  # CHECK_TYPE_SAMPLES, CHECK_TYPE_COUNTS_GROUP_BY_DATE, ...
@@ -54,14 +57,15 @@ class CheckResult:
         from .persistence import validate_run_id
 
         object.__setattr__(self, 'run_id', validate_run_id(self.run_id))
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """
         Convert the entire result to a JSON-serializable dictionary.
-        
+
         Returns:
             Dictionary representation suitable for json.dumps()
         """
+
         def _convert_value(value: Any) -> Any:
             """Recursively convert values to JSON-serializable types"""
             if value is None:
@@ -76,8 +80,8 @@ class CheckResult:
                 return value.to_dict()
             elif hasattr(value, '__dict__'):
                 return {
-                    k: _convert_value(v) 
-                    for k, v in value.__dict__.items() 
+                    k: _convert_value(v)
+                    for k, v in value.__dict__.items()
                     if not k.startswith('_')
                 }
             elif isinstance(value, (datetime, pd.Timestamp)):
@@ -94,7 +98,7 @@ class CheckResult:
                 except (AttributeError, ValueError):
                     pass
                 return value
-        
+
         result = {
             'timestamp': self.timestamp,
             'run_id': self.run_id,
@@ -107,13 +111,13 @@ class CheckResult:
             'target_table': self.target_table,
             'timezone': self.timezone,
         }
-        
+
         if self.stats:
             result['stats'] = _convert_value(self.stats)
-        
+
         if self.details:
             result['details'] = _convert_value(self.details)
-        
+
         # Query info (optional)
         if self.source_query:
             result['source_query'] = self.source_query
@@ -123,37 +127,32 @@ class CheckResult:
             result['target_query'] = self.target_query
         if self.target_params:
             result['target_params'] = self.target_params
-            
+
         return result
-    
+
     def to_json(self, indent: int = 2, ensure_ascii: bool = False) -> str:
         """
         Convert to JSON string.
-        
+
         Args:
             indent: JSON indentation spaces
             ensure_ascii: If False, allow non-ASCII characters
-            
+
         Returns:
             JSON string representation
         """
         import json
-        
+
         return json.dumps(
-            self.to_dict(),
-            indent=indent,
-            ensure_ascii=ensure_ascii,
-            default=str
+            self.to_dict(), indent=indent, ensure_ascii=ensure_ascii, default=str
         )
 
 
 def validate_report_output_format(report_output_format: str) -> None:
-    normalized_format = (
-        report_output_format or REPORT_OUTPUT_FORMAT_JSON
-    ).lower()
+    normalized_format = (report_output_format or REPORT_OUTPUT_FORMAT_JSON).lower()
     if normalized_format not in REPORT_OUTPUT_FORMATS:
         raise ValueError(
-            "report_output_format must be either "
+            'report_output_format must be either '
             f"'{REPORT_OUTPUT_FORMAT_JSON}' or "
             f"'{REPORT_OUTPUT_FORMAT_TEXT}'"
         )
@@ -228,7 +227,7 @@ def generate_sample_report(
 ) -> str:
     """
     Generate a human-readable text report for a sample check.
-    
+
     Args:
         source_table: Source table name (None for custom queries)
         target_table: Target table name (None for custom queries)
@@ -240,7 +239,7 @@ def generate_sample_report(
         target_query: Target SQL query
         target_params: Target query parameters
         date_chunks: Optional chunk intervals used for the check
-        
+
     Returns:
         Formatted text report
     """
@@ -260,7 +259,7 @@ def generate_sample_report(
         lines.append(f'{target_table}')
     else:
         lines.append('SAMPLES CHECK REPORT:')
-    
+
     lines.append('=' * 80)
 
     if date_chunks and len(date_chunks) > 1:
@@ -291,7 +290,7 @@ def generate_sample_report(
     lines.append(f'  Comparable rows: {stats.comparable_rows}')
     lines.append(f'  Passed rows: {stats.passed_rows}')
     lines.append('-' * 40)
-    
+
     # Percentages
     lines.append(f'  Source only rows %: {stats.source_only_rows_pct:.5f}')
     lines.append(f'  Target only rows %: {stats.target_only_rows_pct:.5f}')
@@ -302,13 +301,25 @@ def generate_sample_report(
     lines.append(f'  Final data quality score: {stats.final_score:.5f}')
 
     # Key examples
-    lines.append(f'  Source-only key examples: {format_report_collection(details.source_only_keys_examples)}')
-    lines.append(f'  Target-only key examples: {format_report_collection(details.target_only_keys_examples)}')
-    lines.append(f'  Duplicated source key examples: {format_report_collection(details.dup_source_keys_examples)}')
-    lines.append(f'  Duplicated target key examples: {format_report_collection(details.dup_target_keys_examples)}')
+    lines.append(
+        f'  Source-only key examples: {format_report_collection(details.source_only_keys_examples)}'
+    )
+    lines.append(
+        f'  Target-only key examples: {format_report_collection(details.target_only_keys_examples)}'
+    )
+    lines.append(
+        f'  Duplicated source key examples: {format_report_collection(details.dup_source_keys_examples)}'
+    )
+    lines.append(
+        f'  Duplicated target key examples: {format_report_collection(details.dup_target_keys_examples)}'
+    )
 
-    lines.append(f'  Skipped source columns: {format_report_collection(details.skipped_source_columns)}')
-    lines.append(f'  Skipped target columns: {format_report_collection(details.skipped_target_columns)}')
+    lines.append(
+        f'  Skipped source columns: {format_report_collection(details.skipped_source_columns)}'
+    )
+    lines.append(
+        f'  Skipped target columns: {format_report_collection(details.skipped_target_columns)}'
+    )
 
     # Column differences
     if stats.max_issue_pct > 0 and not details.issue_breakdown.empty:
@@ -326,8 +337,7 @@ def generate_sample_report(
     # Horizontal wide row dumps are hard to use in text reports.
     # Keep the code for a future optional report parameter (e.g. include_issue_row_examples).
     if False and (
-        details.issue_row_examples is not None
-        and not details.issue_row_examples.empty
+        details.issue_row_examples is not None and not details.issue_row_examples.empty
     ):
         lines.append('\nISSUE ROW EXAMPLES:')
         lines.append('Sorted by primary key and dataset:\n')
@@ -392,10 +402,7 @@ def generate_check_sniff_query_report(
         lines.append('\nISSUE BREAKDOWN:')
         lines.append(details.issue_breakdown.to_string(index=False))
 
-    if (
-        details.issue_row_examples is not None
-        and not details.issue_row_examples.empty
-    ):
+    if details.issue_row_examples is not None and not details.issue_row_examples.empty:
         lines.append('\nISSUE ROW EXAMPLES:')
         lines.append(
             details.issue_row_examples.to_string(
@@ -430,7 +437,7 @@ def generate_count_report(
 ) -> str:
     """
     Generate a human-readable text report for a count-based check.
-    
+
     Args:
         source_table: Source table name
         target_table: Target table name
@@ -445,7 +452,7 @@ def generate_count_report(
         source_params: Source query parameters
         target_query: Target SQL query
         target_params: Target query parameters
-        
+
     Returns:
         Formatted text report
     """
@@ -473,7 +480,7 @@ def generate_count_report(
         lines.append(f'    {target_query}')
         if target_params:
             lines.append(f'    params: {target_params}')
-    
+
     lines.append('-' * 40)
 
     lines.append('\nSUMMARY:')
@@ -492,8 +499,7 @@ def generate_count_report(
     # Horizontal wide row dumps are hard to use in text reports.
     # Keep the code for a future optional report parameter (e.g. include_issue_row_examples).
     if False and (
-        details.issue_row_examples is not None
-        and not details.issue_row_examples.empty
+        details.issue_row_examples is not None and not details.issue_row_examples.empty
     ):
         lines.append('\nISSUE ROW EXAMPLES:')
         lines.append('Sorted by primary key and dataset:\n')

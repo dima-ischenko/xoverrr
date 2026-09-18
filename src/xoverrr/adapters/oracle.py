@@ -4,7 +4,8 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 import pandas as pd
 from sqlalchemy import text
 
-from ..constants import DATETIME_FORMAT, FLAG_VALUE_YES, XRECENTLY_CHANGED_COLUMN
+from ..constants import (DATETIME_FORMAT, FLAG_VALUE_YES,
+                         XRECENTLY_CHANGED_COLUMN)
 from ..exceptions import QueryExecutionError
 from ..logger import app_logger
 from ..models import DataReference, ObjectType
@@ -404,9 +405,7 @@ class OracleAdapter(BaseDatabaseAdapter):
             )
             params['start_date'] = start_date
         if end_date:
-            extra_sql += (
-                f" AND {date_expr} < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1\n"
-            )
+            extra_sql += f" AND {date_expr} < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1\n"
             params['end_date'] = end_date
         return extra_sql, params
 

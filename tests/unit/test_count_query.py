@@ -11,9 +11,7 @@ from xoverrr.models import DataReference
 )
 def test_total_count_query(adapter_cls):
     adapter = adapter_cls()
-    query, params = adapter.build_total_count_query(
-        DataReference('users', 'public')
-    )
+    query, params = adapter.build_total_count_query(DataReference('users', 'public'))
 
     normalized = ' '.join(query.lower().split())
     assert 'count(*) as cnt' in normalized
@@ -64,7 +62,7 @@ def test_count_query_with_date_column_groups_by_day(adapter_cls):
 
 
 def test_count_volume_scores():
-    from xoverrr.utils import count_volume_scores, build_total_count_stats
+    from xoverrr.utils import build_total_count_stats, count_volume_scores
 
     assert count_volume_scores(0, 4) == (0.0, 100.0)
     diff, score = count_volume_scores(1, 3)

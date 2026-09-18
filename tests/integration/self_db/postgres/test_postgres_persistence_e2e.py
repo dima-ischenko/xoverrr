@@ -1,9 +1,9 @@
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import CHECK_FAILED, CHECK_SUCCESS, CHECK_TYPE_COUNTS_GROUP_BY_DATE
+from xoverrr.constants import (CHECK_FAILED, CHECK_SUCCESS,
+                               CHECK_TYPE_COUNTS_GROUP_BY_DATE)
 from xoverrr.core import DataQualityChecker, DataReference
-
 
 SRC_TABLE = 'test_persist_postgres_src'
 TRG_TABLE = 'test_persist_postgres_trg'

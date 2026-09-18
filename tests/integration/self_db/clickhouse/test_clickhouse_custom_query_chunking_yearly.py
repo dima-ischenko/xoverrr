@@ -129,14 +129,14 @@ class TestClickHouseCustomQueryYearlyChunking:
         stats_full = result.stats
         details_full = result.details
         result = checker.check_custom_queries(
-                source_query=source_query,
-                source_params=params,
-                target_query=target_query,
-                target_params=params,
-                custom_primary_key=['id'],
-                chunk_size_days=30,
-                tolerance_pct=0.0,
-            )
+            source_query=source_query,
+            source_params=params,
+            target_query=target_query,
+            target_params=params,
+            custom_primary_key=['id'],
+            chunk_size_days=30,
+            tolerance_pct=0.0,
+        )
         status_chunked = result.status
         stats_chunked = result.stats
         details_chunked = result.details

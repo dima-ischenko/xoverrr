@@ -40,10 +40,12 @@ XSNIFF_PASSED_VALUE_NO = FLAG_VALUE_NO
 # Report output formats
 REPORT_OUTPUT_FORMAT_JSON = 'json'
 REPORT_OUTPUT_FORMAT_TEXT = 'text'
-REPORT_OUTPUT_FORMATS = frozenset({
-    REPORT_OUTPUT_FORMAT_JSON,
-    REPORT_OUTPUT_FORMAT_TEXT,
-})
+REPORT_OUTPUT_FORMATS = frozenset(
+    {
+        REPORT_OUTPUT_FORMAT_JSON,
+        REPORT_OUTPUT_FORMAT_TEXT,
+    }
+)
 
 # Float precision used in text reports and persisted stats columns.
 STATS_REPORT_FLOAT_DECIMALS = 5

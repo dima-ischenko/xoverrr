@@ -66,9 +66,7 @@ class TestClickHouseNullValues:
 
         yield
 
-    def test_clickhouse_null_values_check(
-        self, clickhouse_engine, postgres_engine
-    ):
+    def test_clickhouse_null_values_check(self, clickhouse_engine, postgres_engine):
         """
         Compare tables with NULL values between ClickHouse and PostgreSQL.
         """

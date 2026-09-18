@@ -4,7 +4,6 @@ from sqlalchemy import text
 from xoverrr.constants import CHECK_SUCCESS, CHECK_TYPE_COUNTS_GROUP_BY_DATE
 from xoverrr.core import DataQualityChecker, DataReference
 
-
 SRC_TABLE = 'test_persist_clickhouse_src'
 TRG_TABLE = 'test_persist_clickhouse_trg'
 RESULTS_TABLE_SAMPLE = 'test_persist_clickhouse_results'

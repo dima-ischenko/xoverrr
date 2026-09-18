@@ -12,32 +12,20 @@ from .adapters.postgres import PostgresAdapter
 from .exceptions import MetadataError
 from .logger import app_logger
 from .models import DataReference, DBMSType, ObjectType
-from .persistence import (
-    CheckResultPersister,
-    CheckRunTimings,
-    build_run_id,
-    normalize_persist_result,
-)
-from .utils import (CheckDetails, CheckStats,
-                    build_check_stats, build_sniff_issue_stats,
-                    build_total_count_stats,
-                    clean_recently_changed_data,
-                    compare_dataframes, count_volume_scores,
-                    cross_fill_missing_dates,
-                    evaluate_check_sniff_query_data,
-                    normalize_column_names,
+from .persistence import (CheckResultPersister, CheckRunTimings, build_run_id,
+                          normalize_persist_result)
+from .reporting import (CheckResult, build_check_result, format_check_result,
+                        generate_check_sniff_query_report,
+                        generate_count_report, generate_sample_report,
+                        generate_total_count_report,
+                        validate_report_output_format)
+from .utils import (CheckDetails, CheckStats, build_check_stats,
+                    build_sniff_issue_stats, build_total_count_stats,
+                    clean_recently_changed_data, compare_dataframes,
+                    count_volume_scores, cross_fill_missing_dates,
+                    evaluate_check_sniff_query_data, normalize_column_names,
                     prepare_dataframe, sniff_issue_row_count,
                     validate_dataframe_size)
-from .reporting import (
-    CheckResult,
-    build_check_result,
-    format_check_result,
-    generate_count_report,
-    generate_sample_report,
-    generate_check_sniff_query_report,
-    generate_total_count_report,
-    validate_report_output_format,
-)
 from .version import __version__
 
 
@@ -144,9 +132,7 @@ class DataQualityChecker:
     def _update_stats(self, status: str, source_table: DataReference):
         """Update the checker run statistics."""
         self.check_stats[status] += 1
-        self.check_stats['end_time'] = pd.Timestamp.now().strftime(
-            ct.DATETIME_FORMAT
-        )
+        self.check_stats['end_time'] = pd.Timestamp.now().strftime(ct.DATETIME_FORMAT)
         if source_table:
             match status:
                 case ct.CHECK_SUCCESS:
@@ -487,7 +473,7 @@ class DataQualityChecker:
             target_chunks = []
             source_query, source_params = None, None
             target_query, target_params = None, None
-            
+
             date_chunks = self._iter_date_chunks(
                 date_column, start_date, end_date, chunk_size_days
             )
@@ -1245,9 +1231,7 @@ class DataQualityChecker:
         source_end = source_params.get('end_date')
 
         if not (
-            chunk_size_days
-            and source_start is not None
-            and source_end is not None
+            chunk_size_days and source_start is not None and source_end is not None
         ):
             return [source_params]
 
@@ -1539,9 +1523,7 @@ class DataQualityChecker:
                 chunk_details.issue_examples is not None
                 and not chunk_details.issue_examples.empty
             ):
-                for row in chunk_details.issue_examples.to_dict(
-                    'records'
-                ):
+                for row in chunk_details.issue_examples.to_dict('records'):
                     col = row['column_name']
                     if discrepancy_examples_by_col[col] < examples_limit:
                         discrepancy_examples_rows.append(row)
@@ -1563,9 +1545,7 @@ class DataQualityChecker:
         )
         issue_breakdown = (
             pd.DataFrame(
-                sorted(
-                    issue_counter.items(), key=lambda item: item[1], reverse=True
-                ),
+                sorted(issue_counter.items(), key=lambda item: item[1], reverse=True),
                 columns=['column_name', 'issue_count'],
             )
             if issue_counter
@@ -1691,14 +1671,10 @@ class DataQualityChecker:
                 raise ValueError('date_range must be (start_date, end_date)')
             start_date, end_date = _unpack_date_range(date_range)
             if start_date is None and end_date is None:
-                raise ValueError(
-                    'date_range requires start_date and/or end_date'
-                )
+                raise ValueError('date_range requires start_date and/or end_date')
         if chunk_size_days is not None:
             if date_range is None:
-                raise ValueError(
-                    'date_range is required when chunk_size_days is set'
-                )
+                raise ValueError('date_range is required when chunk_size_days is set')
             if start_date is None or end_date is None:
                 raise ValueError(
                     'date_range requires both start_date and end_date'
@@ -1897,9 +1873,7 @@ class DataQualityChecker:
                 chunk_details.issue_examples is not None
                 and not chunk_details.issue_examples.empty
             ):
-                for row in chunk_details.issue_examples.to_dict(
-                    'records'
-                ):
+                for row in chunk_details.issue_examples.to_dict('records'):
                     col = row['column_name']
                     if discrepancy_examples_by_col[col] < examples_limit:
                         discrepancy_examples_rows.append(row)
@@ -1998,9 +1972,7 @@ class DataQualityChecker:
     ):
         self._run_timings.mark_dataset_check_start()
         try:
-            return compare_dataframes(
-                source_df, target_df, key_columns, max_examples
-            )
+            return compare_dataframes(source_df, target_df, key_columns, max_examples)
         finally:
             self._run_timings.mark_dataset_check_end()
 

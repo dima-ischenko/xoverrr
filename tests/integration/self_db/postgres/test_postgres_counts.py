@@ -3,7 +3,8 @@
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import CHECK_FAILED, CHECK_SUCCESS, CHECK_TYPE_TOTAL_COUNTS
+from xoverrr.constants import (CHECK_FAILED, CHECK_SUCCESS,
+                               CHECK_TYPE_TOTAL_COUNTS)
 from xoverrr.core import DataQualityChecker, DataReference
 
 RESULTS_TABLE = 'test_total_counts_results'
