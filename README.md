@@ -1,4 +1,4 @@
-# xoverrr (pronounced “crossover”)
+# xoverrr (pronounced "crossover")
 
 A tool for cross-database and intra-source data quality checks with detailed discrepancy analysis and reporting.
 
@@ -8,23 +8,23 @@ Supported databases: **Oracle**, **PostgreSQL** (+ Greenplum), **ClickHouse**.
 
 ## Features
 
-- **Five check strategies** — row samples, daily counts, whole-table counts, custom SQL, and source-only sniff checks
-- **Multi-DBMS** — tables and views, extensible via adapters
-- **SQLAlchemy engines** — pass any supported source, target, or results connection
-- **Recent-row exclusion** — optionally skip rows that may still be delayed (batch load, replication, or calculation)
-- **Auto metadata** — primary keys and column types from DBMS catalogues (or supply your own primary key)
-- **Type conversion** — application-side normalisation across databases
-- **Column filters** — include / exclude lists; mismatched column names are skipped automatically
-- **Chunked date ranges** — process long periods in N-day windows
-- **Reports** — text or JSON, with example mismatched rows
-- **Optional persistence** — write run results to a third engine for dashboards and audit
-- **Tests** — unit coverage plus Docker-backed integration tests
+- **Five check strategies** - row samples, counts grouped by day, whole-table counts, custom SQL, and source-only sniff checks
+- **Multi-DBMS** - tables and views, extensible via adapters
+- **SQLAlchemy engines** - pass any supported source, target, or results connection
+- **Recent-row exclusion** - optionally skip rows that may still be delayed (batch load, replication, or calculation)
+- **Auto metadata** - primary keys and column types from DBMS catalogues (or supply your own primary key)
+- **Type conversion** - application-side normalisation across databases
+- **Column filters** - include / exclude lists; mismatched column names are skipped automatically
+- **Chunked date ranges** - process long periods in N-day windows
+- **Reports** - text or JSON, with example mismatched rows
+- **Optional persistence** - write run results to a third engine for dashboards and audit
+- **Tests** - unit coverage plus Docker-backed integration tests
 
 ---
 
 ## Quick start
 
-**Sample check** (Greenplum/PostgreSQL → Oracle):
+**Sample check** (Greenplum/PostgreSQL -> Oracle):
 
 ```python
 from xoverrr import DataQualityChecker, DataReference, CheckResult, CHECK_SUCCESS
@@ -94,8 +94,8 @@ result.details
 |-------|---------|
 | `result.status` | `CHECK_SUCCESS` / `CHECK_FAILED` / `CHECK_SKIPPED` |
 | `result.report` | Text report or JSON string (`report_output_format`) |
-| `result.stats` | `CheckStats` — scores and row counts |
-| `result.details` | `CheckDetails` — examples and per-column diffs |
+| `result.stats` | `CheckStats` - scores and row counts |
+| `result.details` | `CheckDetails` - examples and per-column diffs |
 | `result.run_id` | Unique id of this run (also in JSON and persistence) |
 
 ---
@@ -105,10 +105,12 @@ result.details
 | Method | When to use | Requires a target database? |
 |--------|-------------|------------------|
 | `check_samples` | Compare row values between two tables/views | Yes |
-| `check_counts` | Daily volume check (missing / extra rows) | Yes |
-| `check_total_counts` | Whole-table `COUNT(*)` | Yes |
+| `check_counts_group_by_day` | Volume grouped by day (missing / extra rows) | Yes |
+| `check_total_counts` | Whole-table `COUNT(*)`, optional date-window chunks | Yes |
 | `check_custom_queries` | Complex joins, renamed columns, custom SQL | Yes |
-| `check_sniff_query` | Source-only rule: “does this data look wrong?” | No |
+| `check_sniff_query` | Source-only rule: "does this data look wrong?" | No |
+
+A target engine is required for the first four methods, but it may be the same as `source_engine` (two tables or schemas in one database). Pass a second engine only when the sides live in different databases.
 
 ---
 
@@ -142,11 +144,11 @@ result = checker.check_samples(
 | `source_table`, `target_table` | Tables or views to compare |
 | `date_column` | Column for date-range filtering |
 | `update_column` | Timestamp used to detect recently changed rows (excluded on both sides) |
-| `date_range` | `(start_date, end_date)` as `YYYY-MM-DD` |
-| `chunk_size_days` | Optional N-day windows over the range |
+| `date_range` | `(start_date, end_date)` as `YYYY-MM-DD`; both bounds are required if set |
+| `chunk_size_days` | Optional N-day windows over a complete `date_range` |
 | `exclude_columns` / `include_columns` | A blacklist or whitelist of columns |
 | `custom_primary_key` | Primary-key columns; detected automatically if omitted |
-| `tolerance_pct` | The check fails if `final_diff_score` exceeds this (0–100) |
+| `tolerance_pct` | The check fails if `final_diff_score` exceeds this (0-100) |
 | `exclude_recent_hours` | Exclude rows changed in the last N hours (batch load, replication, or calculation delay) |
 | `max_examples` | Maximum number of discrepancy examples in the report |
 | `persist_result` | `DataReference` of the results table; omit this option to skip persistence |
@@ -157,12 +159,12 @@ If `custom_primary_key` is omitted, the primary key is inferred from metadata (i
 
 ---
 
-### 2. Counts (`check_counts`)
+### 2. Counts grouped by day (`check_counts_group_by_day`)
 
-Daily aggregates — suitable for large volumes and for spotting missing or extra rows.
+Per-day aggregates (`GROUP BY` the date column) - suitable for large volumes and for spotting missing or extra rows.
 
 ```python
-result = checker.check_counts(
+result = checker.check_counts_group_by_day(
     source_table=DataReference("users", "schema1"),
     target_table=DataReference("users", "schema2"),
     date_column="created_at",
@@ -173,13 +175,13 @@ result = checker.check_counts(
 )
 ```
 
-**Main parameters:** `source_table`, `target_table`, `date_column`, `date_range`, `chunk_size_days`, `tolerance_pct`, `max_examples`, plus the shared `persist_result` / `check_name` / `check_tags` / `report_output_format` options described above.
+**Main parameters:** `source_table`, `target_table`, `date_column`, `date_range`, `chunk_size_days`, `tolerance_pct`, `max_examples`, plus the shared `persist_result` / `check_name` / `check_tags` / `report_output_format` options described above. If `date_range` is set, both start and end dates are required; `chunk_size_days` requires a complete `date_range`.
 
 ---
 
 ### 3. Total counts (`check_total_counts`)
 
-Whole-table `COUNT(*)` on each side. No date column, no metadata lookup, no per-day breakdown, no `chunk_size_days`. For volume over a date range, use `check_counts`.
+Whole-table `COUNT(*)` on each side. No metadata lookup unless `date_column` is set. Optional `date_range` / `chunk_size_days` split the scan into date windows and sum the counts (no group-by-day breakdown).
 
 ```python
 result = checker.check_total_counts(
@@ -187,9 +189,18 @@ result = checker.check_total_counts(
     target_table=DataReference("users", "schema2"),
     tolerance_pct=2.0,
 )
+
+result = checker.check_total_counts(
+    source_table=DataReference("users", "schema1"),
+    target_table=DataReference("users", "schema2"),
+    date_column="created_at",
+    date_range=("2024-01-01", "2024-12-31"),
+    chunk_size_days=30,
+    tolerance_pct=2.0,
+)
 ```
 
-**Main parameters:** `source_table`, `target_table`, `tolerance_pct`, plus the shared `persist_result` / `check_name` / `check_tags` / `report_output_format` options.
+**Main parameters:** `source_table`, `target_table`, `date_column`, `date_range`, `chunk_size_days`, `tolerance_pct`, plus the shared `persist_result` / `check_name` / `check_tags` / `report_output_format` options. `date_range` and `chunk_size_days` require `date_column`. If `date_range` is set, both start and end dates are required; `chunk_size_days` also requires a complete `date_range`.
 
 ---
 
@@ -262,8 +273,8 @@ checker = DataQualityChecker(
 )
 ```
 
-**Row-level** — one flag per row. Use this when you need an issue *rate* over the full scope;
-`tolerance_pct` then means “allow up to N% of rows with `xsniff_passed = n`”:
+**Row-level** - one flag per row. Use this when you need an issue *rate* over the full scope;
+`tolerance_pct` then means "allow up to N% of rows with `xsniff_passed = n`":
 
 ```python
 result = checker.check_sniff_query(
@@ -283,7 +294,7 @@ result = checker.check_sniff_query(
 )
 ```
 
-**Scalar pass/fail** — a single `xsniff_passed` value. The outcome is typically binary
+**Scalar pass/fail** - a single `xsniff_passed` value. The outcome is typically binary
 (`final_diff_score` 0 or 100), so leave `tolerance_pct` at the default `0.0`
 (fail on any issue):
 
@@ -298,7 +309,7 @@ result = checker.check_sniff_query(
 )
 ```
 
-**Issues-only filter** — `WHERE` keeps only the failing rows and marks every returned row with a literal `'n'`.  
+**Issues-only filter** - `WHERE` keeps only the failing rows and marks every returned row with a literal `'n'`.  
 An empty result means a pass (`final_score = 100`). Any returned row means a fail (`issue_rows_pct = 100` for that result set). As with the scalar pattern, keep the default `tolerance_pct=0.0` so that the check fails if any issue is found:
 
 ```python
@@ -338,46 +349,46 @@ All methods expose `result.stats.final_diff_score` and `result.stats.final_score
 **Quality score (every method):**
 
 ```
-final_score = 100 − final_diff_score
+final_score = 100 - final_diff_score
 ```
 
 Scores range from 0 to 100%. A higher `final_score` indicates better quality.  
 Pass or fail is determined by the tolerance:
 
-- `final_diff_score > tolerance_pct` → `CHECK_FAILED`
-- otherwise → `CHECK_SUCCESS`
+- `final_diff_score > tolerance_pct` -> `CHECK_FAILED`
+- otherwise -> `CHECK_SUCCESS`
 
 ### `check_samples` / `check_custom_queries`
 
 ```
 final_diff_score =
-    (dup_source_rows_pct × 0.1)
-  + (dup_target_rows_pct × 0.1)
-  + (source_only_rows_pct × 0.15)
-  + (target_only_rows_pct × 0.15)
-  + (issue_rows_pct × 0.5)
+    (dup_source_rows_pct * 0.1)
+  + (dup_target_rows_pct * 0.1)
+  + (source_only_rows_pct * 0.15)
+  + (target_only_rows_pct * 0.15)
+  + (issue_rows_pct * 0.5)
 ```
 
-### `check_counts` / `check_total_counts`
+### `check_counts_group_by_day` / `check_total_counts`
 
 ```
-sum_of_absolute_differences = abs(source_count − target_count)  per day (or one total)
+sum_of_absolute_differences = abs(source_count - target_count)  per day (or one total)
 sum_of_common_counts        = min(source_count, target_count)   per day (or one total)
 
-final_diff_score = 100 × sum_of_absolute_differences
+final_diff_score = 100 * sum_of_absolute_differences
                        / (sum_of_absolute_differences + sum_of_common_counts)
 ```
 
 ### `check_sniff_query`
 
 ```
-issue_rows_pct = (rows with xsniff_passed = 'n') / (checked rows) × 100
+issue_rows_pct = (rows with xsniff_passed = 'n') / (checked rows) * 100
 final_diff_score = issue_rows_pct
 ```
 
 An empty result yields `final_diff_score = 0` (and a score of 100).
 
-With the issues-only filter pattern (`WHERE …` plus a literal `'n' AS xsniff_passed`), *checked rows* are only the filtered issue rows, so any non-empty result yields `issue_rows_pct = 100`.
+With the issues-only filter pattern (`WHERE ...` plus a literal `'n' AS xsniff_passed`), *checked rows* are only the filtered issue rows, so any non-empty result yields `issue_rows_pct = 100`.
 
 ---
 
@@ -385,10 +396,11 @@ With the issues-only filter pattern (`WHERE …` plus a literal `'n' AS xsniff_p
 
 ### Chunked processing (`chunk_size_days`)
 
-Available on `check_samples`, `check_counts`, `check_custom_queries`, and `check_sniff_query`. It splits a date range into N-day windows, runs each chunk, then aggregates the metrics and examples. This is useful for long ranges or large tables. `check_total_counts` has no date window, so it is not chunked.
+Available on `check_samples`, `check_counts_group_by_day`, `check_total_counts`, `check_custom_queries`, and `check_sniff_query`. It splits a date range into N-day windows, runs each chunk, then aggregates the metrics and examples. This is useful for long ranges or large tables. Open-ended ranges (`None` on either side) are rejected: both bounds must be set.
 
 - `check_custom_queries`: both sides must supply `start_date` and `end_date` in their parameters
 - `check_sniff_query`: chunking uses `start_date` / `end_date` in `source_params`
+- `check_total_counts`: `date_column` plus a complete `date_range`; chunk `COUNT(*)` values are summed
 
 ### Status values
 
@@ -416,8 +428,8 @@ Each run has a `run_id` on the returned `CheckResult` (also stored when persiste
 
 ### Performance notes
 
-- DataFrame size limit: `max_dataframe_size_gb` on the checker (default 3 GB per query / chunk from one DB)
-- Rough benchmark: two samples of about 1 million rows × 10 columns (about 330 MB each) compared in about 3 s (Intel Core i5 / 16 GB RAM)
+- DataFrame size limit: `max_dataframe_size_gb` on the checker (default 3 GB per query / chunk from one DB)
+- Rough benchmark: two samples of about 1 million rows * 10 columns (about 330 MB each) compared in about 3 s (Intel Core i5 / 16 GB RAM)
 
 ---
 
@@ -507,7 +519,7 @@ ISSUE BREAKDOWN:
 
 With the Oracle thin client and `check_custom_queries`, `TIMESTAMP WITH TIME ZONE` columns lose their time-zone context in the result set.
 
-**Workaround** — cast to `TIMESTAMP` in SQL:
+**Workaround** - cast to `TIMESTAMP` in SQL:
 
 ```python
 source_query = """

@@ -156,7 +156,7 @@ def test_persist_writes_to_results_engine():
         report='COUNT REPORT',
         stats=_build_stats(),
         details=_build_details(),
-        check_type=ct.CHECK_TYPE_COUNTS,
+        check_type=ct.CHECK_TYPE_COUNTS_GROUP_BY_DAY,
         source_table='public.a',
         target_table='public.b',
     )
@@ -167,7 +167,7 @@ def test_persist_writes_to_results_engine():
     row = stored.iloc[0]
     assert len(stored) == 1
     assert row['run_id'] == RUN_ID
-    assert row['check_type'] == ct.CHECK_TYPE_COUNTS
+    assert row['check_type'] == ct.CHECK_TYPE_COUNTS_GROUP_BY_DAY
     assert row['status'] == 'failed'
     assert row['report'] == 'COUNT REPORT'
     assert row['stats_final_score'] == 100.0
@@ -377,7 +377,7 @@ def test_persist_returns_false_on_storage_error():
         report='COUNT REPORT',
         stats=_build_stats(),
         details=_build_details(),
-        check_type=ct.CHECK_TYPE_COUNTS,
+        check_type=ct.CHECK_TYPE_COUNTS_GROUP_BY_DAY,
         source_table='public.a',
         target_table='public.b',
     )
@@ -395,7 +395,7 @@ def test_persist_returns_false_when_engine_is_missing():
         report='COUNT REPORT',
         stats=_build_stats(),
         details=_build_details(),
-        check_type=ct.CHECK_TYPE_COUNTS,
+        check_type=ct.CHECK_TYPE_COUNTS_GROUP_BY_DAY,
         source_table='public.a',
         target_table='public.b',
     )

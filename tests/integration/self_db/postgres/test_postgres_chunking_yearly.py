@@ -69,7 +69,7 @@ class TestPostgresYearlyChunking:
         )
         table_ref = DataReference('test_pg_chunking_yearly', 'test')
 
-        result = checker.check_counts(
+        result = checker.check_counts_group_by_day(
             source_table=table_ref,
             target_table=table_ref,
             date_column='created_at',
@@ -78,7 +78,7 @@ class TestPostgresYearlyChunking:
         )
         status_counts_full = result.status
         stats_counts_full = result.stats
-        result = checker.check_counts(
+        result = checker.check_counts_group_by_day(
             source_table=table_ref,
             target_table=table_ref,
             date_column='created_at',
@@ -169,3 +169,36 @@ class TestPostgresYearlyChunking:
         )
         assert int(mismatch_full.loc['name', 'issue_count']) == 3
         assert int(mismatch_chunked.loc['name', 'issue_count']) == 3
+
+    def test_postgres_total_counts_chunking_matches_non_chunked(self, postgres_engine):
+        checker = DataQualityChecker(
+            source_engine=postgres_engine,
+            target_engine=postgres_engine,
+            timezone='UTC',
+        )
+        source_ref = DataReference('test_pg_chunking_yearly', 'test')
+        target_ref = DataReference('test_pg_chunking_yearly_target', 'test')
+
+        result_full = checker.check_total_counts(
+            source_table=source_ref,
+            target_table=target_ref,
+            date_column='created_at',
+            date_range=('2024-01-01', '2024-12-31'),
+            tolerance_pct=0.0,
+        )
+        result_chunked = checker.check_total_counts(
+            source_table=source_ref,
+            target_table=target_ref,
+            date_column='created_at',
+            date_range=('2024-01-01', '2024-12-31'),
+            chunk_size_days=30,
+            tolerance_pct=0.0,
+        )
+
+        assert result_full.status == CHECK_SUCCESS
+        assert result_chunked.status == CHECK_SUCCESS
+        assert result_full.stats.total_source_rows == 365
+        assert result_chunked.stats.total_source_rows == 365
+        assert result_chunked.stats.total_target_rows == 365
+        assert result_chunked.stats.final_diff_score == 0.0
+        assert 'chunks processed' in result_chunked.report

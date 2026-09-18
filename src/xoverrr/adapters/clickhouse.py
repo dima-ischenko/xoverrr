@@ -212,6 +212,28 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
         query += ' GROUP BY dt ORDER BY dt DESC'
         return query, params
 
+    def _total_count_date_filters(
+        self,
+        date_column: Optional[str],
+        start_date: Optional[str],
+        end_date: Optional[str],
+        columns_meta: Optional[pd.DataFrame],
+        timezone: Optional[str],
+    ) -> Tuple[str, Dict]:
+        if not date_column:
+            return '', {}
+        extra_sql = ''
+        params = {}
+        if start_date:
+            extra_sql += f' AND {date_column} >= toDate(:start_date)\n'
+            params['start_date'] = start_date
+        if end_date:
+            extra_sql += (
+                f' AND {date_column} < toDate(:end_date) + INTERVAL 1 day\n'
+            )
+            params['end_date'] = end_date
+        return extra_sql, params
+
     def build_data_query(
         self,
         data_ref: DataReference,

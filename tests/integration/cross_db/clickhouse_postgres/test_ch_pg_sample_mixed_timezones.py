@@ -1,6 +1,6 @@
 """
 Test for bug fix: Mixed timezone offsets in timestamptz columns should be handled correctly.
-ClickHouse ↔ PostgreSQL checks must handle timezone conversions properly.
+ClickHouse / PostgreSQL checks must handle timezone conversions properly.
 ClickHouse doesn't store timezone info natively, so we store UTC times.
 """
 
@@ -12,7 +12,7 @@ from xoverrr.core import DataQualityChecker, DataReference
 
 
 class TestPostgresClickHouseMixedTimezoneOffsets:
-    """Test for mixed timezone offsets in timestamptz columns bug fix - PostgreSQL ↔ ClickHouse"""
+    """Test for mixed timezone offsets in timestamptz columns bug fix - PostgreSQL / ClickHouse"""
 
     @pytest.fixture(autouse=True)
     def setup_mixed_timezone_data(
@@ -78,7 +78,7 @@ class TestPostgresClickHouseMixedTimezoneOffsets:
 
     def test_cross_db_check_must_use_utc(self, postgres_engine, clickhouse_engine):
         """
-        Test PostgreSQL ↔ ClickHouse check MUST use UTC.
+        Test PostgreSQL / ClickHouse check MUST use UTC.
         ClickHouse stores UTC, PostgreSQL has tz-aware columns.
         """
         table_name = 'test_mixed_timezones_ch_pg'

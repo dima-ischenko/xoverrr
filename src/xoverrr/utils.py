@@ -661,7 +661,7 @@ def _legacy_generate_sample_report(
     if date_chunks and len(date_chunks) > 1:
         rl.append(f'\nchunks processed ({len(date_chunks)} intervals):')
         for start, end in date_chunks:
-            rl.append(f'  {start} → {end}')
+            rl.append(f'  {start} -> {end}')
 
     if source_query and target_query:
         rl.append(f'timezone: {timezone}')
@@ -773,7 +773,7 @@ def _legacy_generate_count_report(
         source_db_type=source_db_type,
         target_db_type=target_db_type,
     )
-    rl.append(f'COUNTS CHECK REPORT:')
+    rl.append(f'COUNTS GROUP BY DAY CHECK REPORT:')
     rl.append(f'{source_table}')
     rl.append(f'VS')
     rl.append(f'{target_table}')
@@ -782,7 +782,7 @@ def _legacy_generate_count_report(
     if date_chunks and len(date_chunks) > 1:
         rl.append(f'\nchunks processed ({len(date_chunks)} intervals):')
         for start, end in date_chunks:
-            rl.append(f'  {start} → {end}') 
+            rl.append(f'  {start} -> {end}') 
 
     if source_query and target_query:
         rl.append(f'timezone: {timezone}')
@@ -935,7 +935,7 @@ def clean_recently_changed_data(
 def find_count_discrepancies(
     source_counts: pd.DataFrame, target_counts: pd.DataFrame
 ) -> pd.DataFrame:
-    """Find discrepancies in daily row counts between source and target."""
+    """Find discrepancies in row counts grouped by day between source and target."""
     source_counts['flg'] = 'source'
     target_counts['flg'] = 'target'
 
@@ -946,26 +946,6 @@ def find_count_discrepancies(
     ).sort_values(by=['dt', 'flg'], ascending=[False, True])
 
     return discrepancies
-
-
-def create_result_message(
-    source_total: int,
-    target_total: int,
-    discrepancies: pd.DataFrame,
-    check_type: str,
-) -> str:
-    """Create a standardised result message."""
-    if discrepancies.empty:
-        return f'{check_type} match: Source={source_total}, Target={target_total}'
-
-    issue_count = len(discrepancies)
-    diff = source_total - target_total
-    diff_msg = f' (Δ={diff})' if diff != 0 else ''
-
-    return (
-        f'{check_type} mismatch: Source={source_total}, Target={target_total}{diff_msg}, '
-        f'{issue_count} discrepancies found'
-    )
 
 
 def filter_columns(

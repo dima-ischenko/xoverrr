@@ -10,7 +10,7 @@ from xoverrr.core import DataQualityChecker, DataReference
 
 
 class TestOraclePostgresCountsCheck:
-    """Cross-database count-based check tests Oracle ↔ PostgreSQL"""
+    """Cross-database count-based check tests Oracle / PostgreSQL"""
 
     @pytest.fixture(autouse=True)
     def setup_count_data(self, oracle_engine, postgres_engine, table_helper):
@@ -74,7 +74,7 @@ class TestOraclePostgresCountsCheck:
             timezone='Europe/Athens',
         )
 
-        result = checker.check_counts(
+        result = checker.check_counts_group_by_day(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_date',

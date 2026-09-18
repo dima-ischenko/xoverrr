@@ -118,7 +118,7 @@ class TestOraclePostgresCountsWithVariousDateTypes:
             timezone='Europe/Athens',
         )
 
-        result = checker.check_counts(
+        result = checker.check_counts_group_by_day(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_date',  # DATE type
@@ -144,7 +144,7 @@ class TestOraclePostgresCountsWithVariousDateTypes:
             timezone='Europe/Athens',
         )
 
-        result = checker.check_counts(
+        result = checker.check_counts_group_by_day(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_timestamp',  # TIMESTAMP type
@@ -170,7 +170,7 @@ class TestOraclePostgresCountsWithVariousDateTypes:
             timezone='Europe/Athens',
         )
 
-        result = checker.check_counts(
+        result = checker.check_counts_group_by_day(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_datetime',  # DATETIME/TIMESTAMP type
@@ -199,7 +199,7 @@ class TestOraclePostgresCountsWithVariousDateTypes:
             timezone='Europe/Athens',
         )
 
-        result = checker.check_counts(
+        result = checker.check_counts_group_by_day(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_timestamp_tz',  # TIMESTAMP WITH TIME ZONE type

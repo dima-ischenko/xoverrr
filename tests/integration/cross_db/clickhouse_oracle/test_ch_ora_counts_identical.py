@@ -76,7 +76,7 @@ class TestClickHouseOracleCountsCheck:
             timezone='Europe/Athens',
         )
 
-        result = checker.check_counts(
+        result = checker.check_counts_group_by_day(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_date',

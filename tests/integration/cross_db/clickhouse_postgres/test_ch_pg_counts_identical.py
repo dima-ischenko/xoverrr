@@ -10,7 +10,7 @@ from xoverrr.core import DataQualityChecker, DataReference
 
 
 class TestClickHousePostgresCountsCheck:
-    """Cross-database count-based check tests ClickHouse ↔ PostgreSQL"""
+    """Cross-database count-based check tests ClickHouse / PostgreSQL"""
 
     @pytest.fixture(autouse=True)
     def setup_count_data(self, clickhouse_engine, postgres_engine, table_helper):
@@ -76,7 +76,7 @@ class TestClickHousePostgresCountsCheck:
             timezone='Europe/Athens',
         )
 
-        result = checker.check_counts(
+        result = checker.check_counts_group_by_day(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_date',

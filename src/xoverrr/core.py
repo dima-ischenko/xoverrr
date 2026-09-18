@@ -47,6 +47,10 @@ def _first_count_value(df: Optional[pd.DataFrame]) -> int:
     return int(df.iloc[0, 0])
 
 
+def _has_date_bound(value) -> bool:
+    return value is not None and str(value).strip() != ''
+
+
 class DataQualityChecker:
     """
     Main checker for intra-source and cross-database data-quality checks.
@@ -137,7 +141,7 @@ class DataQualityChecker:
                 case ct.CHECK_SKIPPED:
                     self.check_stats['tables_skipped'].add(source_table.full_name)
 
-    def check_counts(
+    def check_counts_group_by_day(
         self,
         source_table: DataReference,
         target_table: DataReference,
@@ -152,7 +156,7 @@ class DataQualityChecker:
         report_output_format: str = ct.REPORT_OUTPUT_FORMAT_TEXT,
     ) -> CheckResult:
         """
-        Compare daily row counts between two tables or views.
+        Compare row counts grouped by day between two tables or views.
 
         Returns:
             ``CheckResult`` including ``run_id``, ``status``, ``report``,
@@ -161,10 +165,11 @@ class DataQualityChecker:
 
         self._validate_inputs(source_table, target_table)
         self._require_target_engine()
+        self._validate_date_window_args(date_column, date_range, chunk_size_days)
         validate_report_output_format(report_output_format)
         persist_result = normalize_persist_result(persist_result)
         run_id, run_started_at = self._start_check_run(
-            ct.CHECK_TYPE_COUNTS, check_name
+            ct.CHECK_TYPE_COUNTS_GROUP_BY_DAY, check_name
         )
 
         start_date, end_date = date_range or (None, None)
@@ -172,7 +177,7 @@ class DataQualityChecker:
         try:
             self.check_stats['checked'] += 1
 
-            status, draft_report, stats, details = self._check_counts(
+            status, draft_report, stats, details = self._check_counts_group_by_day(
                 source_table,
                 target_table,
                 date_column,
@@ -190,7 +195,7 @@ class DataQualityChecker:
                 report=draft_report,
                 stats=stats,
                 details=details,
-                check_type=ct.CHECK_TYPE_COUNTS,
+                check_type=ct.CHECK_TYPE_COUNTS_GROUP_BY_DAY,
                 check_name=check_name,
                 check_tags=check_tags,
                 source_table=source_table.full_name,
@@ -209,7 +214,7 @@ class DataQualityChecker:
                 report=None,
                 stats=None,
                 details=None,
-                check_type=ct.CHECK_TYPE_COUNTS,
+                check_type=ct.CHECK_TYPE_COUNTS_GROUP_BY_DAY,
                 check_name=check_name,
                 check_tags=check_tags,
                 source_table=source_table.full_name,
@@ -225,16 +230,21 @@ class DataQualityChecker:
         source_table: DataReference,
         target_table: DataReference,
         check_name: Optional[str] = None,
+        date_column: Optional[str] = None,
+        date_range: Optional[Tuple[str, str]] = None,
+        chunk_size_days: Optional[int] = None,
         tolerance_pct: float = 0.0,
         persist_result: Optional[DataReference] = None,
         check_tags: Optional[Dict] = None,
         report_output_format: str = ct.REPORT_OUTPUT_FORMAT_TEXT,
     ) -> CheckResult:
         """
-        Compare whole-table ``COUNT(*)`` between two tables or views.
+        Compare ``COUNT(*)`` between two tables or views.
 
-        Date-interval chunking is not supported. For volume by day or over
-        a date range, use ``check_counts``.
+        Omit ``date_column`` for a whole-table count. Pass ``date_column``
+        with a complete ``date_range`` (both start and end) and optional
+        ``chunk_size_days`` to scan in date windows and sum the chunk
+        counts (avoids one heavy query).
 
         Returns:
             ``CheckResult`` including ``run_id``, ``status``, ``report``,
@@ -242,11 +252,14 @@ class DataQualityChecker:
         """
         self._validate_inputs(source_table, target_table)
         self._require_target_engine()
+        self._validate_date_window_args(date_column, date_range, chunk_size_days)
         validate_report_output_format(report_output_format)
         persist_result = normalize_persist_result(persist_result)
         run_id, run_started_at = self._start_check_run(
             ct.CHECK_TYPE_TOTAL_COUNTS, check_name
         )
+
+        start_date, end_date = date_range or (None, None)
 
         try:
             self.check_stats['checked'] += 1
@@ -254,6 +267,10 @@ class DataQualityChecker:
             status, draft_report, stats = self._check_total_counts(
                 source_table,
                 target_table,
+                date_column,
+                start_date,
+                end_date,
+                chunk_size_days,
                 tolerance_pct,
                 run_id=run_id,
                 run_started_at=run_started_at,
@@ -328,7 +345,7 @@ class DataQualityChecker:
             include_columns : `Optional[List[str]] = None`
                 Columns to include in the check (default: all columns).
             tolerance_pct : `float`
-                Tolerance percentage for discrepancies (0–100).
+                Tolerance percentage for discrepancies (0-100).
             max_examples
                 Maximum number of discrepancy examples per column.
 
@@ -338,6 +355,7 @@ class DataQualityChecker:
         """
         self._validate_inputs(source_table, target_table)
         self._require_target_engine()
+        self._validate_date_window_args(date_column, date_range, chunk_size_days)
         validate_report_output_format(report_output_format)
         persist_result = normalize_persist_result(persist_result)
         run_id, run_started_at = self._start_check_run(
@@ -426,7 +444,7 @@ class DataQualityChecker:
         self._run_timings = CheckRunTimings(run_started_at=run_started_at)
         return run_id, run_started_at
 
-    def _check_counts(
+    def _check_counts_group_by_day(
         self,
         source_table: DataReference,
         target_table: DataReference,
@@ -565,6 +583,10 @@ class DataQualityChecker:
         self,
         source_table: DataReference,
         target_table: DataReference,
+        date_column: Optional[str],
+        start_date: Optional[str],
+        end_date: Optional[str],
+        chunk_size_days: Optional[int],
         tolerance_pct: float,
         run_id: str,
         run_started_at: str,
@@ -573,28 +595,57 @@ class DataQualityChecker:
             source_adapter = self._get_adapter(self.source_db_type)
             target_adapter = self._get_adapter(self.target_db_type)
 
-            source_query, source_params = source_adapter.build_total_count_query(
-                source_table
-            )
-            target_query, target_params = target_adapter.build_total_count_query(
-                target_table
+            source_columns_meta = None
+            target_columns_meta = None
+            if date_column:
+                source_columns_meta = self._get_metadata_cols(
+                    source_table, self.source_engine
+                )
+                target_columns_meta = self._get_metadata_cols(
+                    target_table, self.target_engine
+                )
+
+            date_chunks = self._iter_date_chunks(
+                date_column, start_date, end_date, chunk_size_days
             )
 
-            source_df = self._execute_query(
-                (source_query, source_params),
-                self.source_engine,
-                self.timezone,
-                query_side='source',
-            )
-            target_df = self._execute_query(
-                (target_query, target_params),
-                self.target_engine,
-                self.timezone,
-                query_side='target',
-            )
+            source_count = 0
+            target_count = 0
+            source_query, source_params = None, None
+            target_query, target_params = None, None
 
-            source_count = _first_count_value(source_df)
-            target_count = _first_count_value(target_df)
+            for chunk_start, chunk_end in date_chunks:
+                source_query, source_params = source_adapter.build_total_count_query(
+                    source_table,
+                    date_column,
+                    chunk_start,
+                    chunk_end,
+                    source_columns_meta,
+                    self.timezone,
+                )
+                source_df = self._execute_query(
+                    (source_query, source_params),
+                    self.source_engine,
+                    self.timezone,
+                    query_side='source',
+                )
+                source_count += _first_count_value(source_df)
+
+                target_query, target_params = target_adapter.build_total_count_query(
+                    target_table,
+                    date_column,
+                    chunk_start,
+                    chunk_end,
+                    target_columns_meta,
+                    self.timezone,
+                )
+                target_df = self._execute_query(
+                    (target_query, target_params),
+                    self.target_engine,
+                    self.timezone,
+                    query_side='target',
+                )
+                target_count += _first_count_value(target_df)
 
             if (source_count, target_count) == (0, 0):
                 app_logger.warning('nothing to compare to you')
@@ -617,6 +668,7 @@ class DataQualityChecker:
                 source_params,
                 target_query,
                 target_params,
+                date_chunks=date_chunks,
                 **self._report_context,
             )
             return status, report, stats
@@ -1623,6 +1675,31 @@ class DataQualityChecker:
         except KeyError:
             raise ValueError(f'No adapter available for {db_type}')
 
+    def _validate_date_window_args(
+        self,
+        date_column: Optional[str],
+        date_range: Optional[Tuple[str, str]],
+        chunk_size_days: Optional[int],
+    ) -> None:
+        if date_range is not None:
+            if not isinstance(date_range, (tuple, list)) or len(date_range) != 2:
+                raise ValueError('date_range must be (start_date, end_date)')
+            start_date, end_date = date_range
+            if not _has_date_bound(start_date) or not _has_date_bound(end_date):
+                raise ValueError(
+                    'date_range requires both start_date and end_date'
+                )
+        if chunk_size_days is not None and date_range is None:
+            raise ValueError(
+                'date_range is required when chunk_size_days is set'
+            )
+        if date_column:
+            return
+        if date_range is not None or chunk_size_days is not None:
+            raise ValueError(
+                'date_column is required when date_range or chunk_size_days is set'
+            )
+
     def _iter_date_chunks(
         self,
         date_column: Optional[str],
@@ -1636,8 +1713,8 @@ class DataQualityChecker:
         if not (
             chunk_size_days
             and date_column
-            and start_date is not None
-            and end_date is not None
+            and _has_date_bound(start_date)
+            and _has_date_bound(end_date)
         ):
             return [(start_date, end_date)]
 
@@ -1969,7 +2046,7 @@ class DataQualityChecker:
     def _require_target_engine(self) -> Engine:
         if self.target_engine is None:
             raise ValueError(
-                'target_engine is required for check_samples, check_counts, '
+                'target_engine is required for check_samples, check_counts_group_by_day, '
                 'check_total_counts, and check_custom_queries'
             )
         return self.target_engine

@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import CHECK_FAILED, CHECK_SUCCESS
+from xoverrr.constants import CHECK_FAILED, CHECK_SUCCESS, CHECK_TYPE_COUNTS_GROUP_BY_DAY
 from xoverrr.core import DataQualityChecker, DataReference
 
 
@@ -92,7 +92,7 @@ class TestPostgresPersistenceE2E:
         assert 'SAMPLES CHECK REPORT' in row[2]
 
     def test_postgres_persistence_counts_e2e(self, postgres_engine):
-        result = self._build_checker(postgres_engine).check_counts(
+        result = self._build_checker(postgres_engine).check_counts_group_by_day(
             source_table=DataReference(SRC_TABLE, 'test'),
             target_table=DataReference(TRG_TABLE, 'test'),
             date_column='created_at',
@@ -116,8 +116,8 @@ class TestPostgresPersistenceE2E:
                 )
             ).fetchone()
 
-        assert row[:2] == ('counts', CHECK_SUCCESS)
-        assert 'COUNTS CHECK REPORT' in row[2]
+        assert row[:2] == (CHECK_TYPE_COUNTS_GROUP_BY_DAY, CHECK_SUCCESS)
+        assert 'COUNTS GROUP BY DAY CHECK REPORT' in row[2]
         assert row[3] == 100.0
         assert row[4] == 0.0
 

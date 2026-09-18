@@ -246,7 +246,6 @@ class TestOraclePostgresNumericEdge:
         result = checker.check_samples(
             source_table=DataReference(numeric_large_data, 'test'),
             target_table=DataReference(numeric_large_data, 'test'),
-            date_range=('2024-01-01', '2024-01-05'),
             tolerance_pct=0.0,
         )
         status = result.status

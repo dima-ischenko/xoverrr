@@ -34,7 +34,7 @@ class CheckResult:
     """
     timestamp: str
     run_id: str
-    check_type: str  # CHECK_TYPE_SAMPLES, CHECK_TYPE_COUNTS, ...
+    check_type: str  # CHECK_TYPE_SAMPLES, CHECK_TYPE_COUNTS_GROUP_BY_DAY, ...
     status: str
     check_name: Optional[str] = None
     check_tags: Optional[Dict[str, Any]] = None
@@ -266,7 +266,7 @@ def generate_sample_report(
     if date_chunks and len(date_chunks) > 1:
         lines.append(f'\nchunks processed ({len(date_chunks)} intervals):')
         for start, end in date_chunks:
-            lines.append(f'  {start} → {end}')
+            lines.append(f'  {start} -> {end}')
 
     if source_query and target_query:
         lines.append(f'timezone: {timezone}')
@@ -370,7 +370,7 @@ def generate_check_sniff_query_report(
     if date_chunks and len(date_chunks) > 1:
         lines.append(f'\nchunks processed ({len(date_chunks)} intervals):')
         for start, end in date_chunks:
-            lines.append(f'  {start} → {end}')
+            lines.append(f'  {start} -> {end}')
 
     if source_query:
         lines.append(f'timezone: {timezone}')
@@ -458,7 +458,7 @@ def generate_count_report(
         source_db_type=source_db_type,
         target_db_type=target_db_type,
     )
-    lines.append('COUNTS CHECK REPORT:')
+    lines.append('COUNTS GROUP BY DAY CHECK REPORT:')
     lines.append(f'{source_table}')
     lines.append('VS')
     lines.append(f'{target_table}')
@@ -516,6 +516,7 @@ def generate_total_count_report(
     source_params: Optional[Dict] = None,
     target_query: Optional[str] = None,
     target_params: Optional[Dict] = None,
+    date_chunks: Optional[List[Tuple[Optional[str], Optional[str]]]] = None,
     library_version: Optional[str] = None,
     source_db_type: Optional[str] = None,
     target_db_type: Optional[str] = None,
@@ -540,6 +541,11 @@ def generate_total_count_report(
     lines.append('VS')
     lines.append(f'{target_table}')
     lines.append('=' * 80)
+
+    if date_chunks and len(date_chunks) > 1:
+        lines.append(f'\nchunks processed ({len(date_chunks)} intervals):')
+        for start, end in date_chunks:
+            lines.append(f'  {start} -> {end}')
 
     if source_query and target_query:
         lines.append(f'timezone: {timezone}')
