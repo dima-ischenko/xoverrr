@@ -7,6 +7,10 @@ import pytest
 from xoverrr.constants import CHECK_FAILED, CHECK_SUCCESS
 from xoverrr.core import DataQualityChecker, DataReference
 
+from tests.integration.open_ended_date_range import (
+    assert_open_ended_date_range_without_chunking,
+)
+
 
 class TestClickHouseYearlyChunking:
     @pytest.fixture(autouse=True)
@@ -209,3 +213,10 @@ class TestClickHouseYearlyChunking:
         assert result_chunked.stats.total_target_rows == 365
         assert result_chunked.stats.final_diff_score == 0.0
         assert 'chunks processed' in result_chunked.report
+
+    def test_open_ended_date_range_without_chunking(self, clickhouse_engine):
+        assert_open_ended_date_range_without_chunking(
+            clickhouse_engine,
+            'test_ch_chunking_yearly',
+            'test_ch_chunking_yearly_target',
+        )

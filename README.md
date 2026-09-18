@@ -144,8 +144,8 @@ result = checker.check_samples(
 | `source_table`, `target_table` | Tables or views to compare |
 | `date_column` | Column for date-range filtering |
 | `update_column` | Timestamp used to detect recently changed rows (excluded on both sides) |
-| `date_range` | `(start_date, end_date)` as `YYYY-MM-DD`; both bounds are required if set |
-| `chunk_size_days` | Optional N-day windows over a complete `date_range` |
+| `date_range` | `(start_date, end_date)` as `YYYY-MM-DD`; either bound may be omitted unless chunking |
+| `chunk_size_days` | Optional N-day windows; requires both `date_range` bounds |
 | `exclude_columns` / `include_columns` | A blacklist or whitelist of columns |
 | `custom_primary_key` | Primary-key columns; detected automatically if omitted |
 | `tolerance_pct` | The check fails if `final_diff_score` exceeds this (0-100) |
@@ -175,7 +175,7 @@ result = checker.check_counts_group_by_date(
 )
 ```
 
-**Main parameters:** `source_table`, `target_table`, `date_column`, `date_range`, `chunk_size_days`, `tolerance_pct`, `max_examples`, plus the shared `persist_result` / `check_name` / `check_tags` / `report_output_format` options described above. If `date_range` is set, both start and end dates are required; `chunk_size_days` requires a complete `date_range`.
+**Main parameters:** `source_table`, `target_table`, `date_column`, `date_range`, `chunk_size_days`, `tolerance_pct`, `max_examples`, plus the shared `persist_result` / `check_name` / `check_tags` / `report_output_format` options described above. One-sided `date_range` is allowed without chunking; `chunk_size_days` requires both start and end dates.
 
 ---
 
@@ -200,7 +200,7 @@ result = checker.check_total_counts(
 )
 ```
 
-**Main parameters:** `source_table`, `target_table`, `date_column`, `date_range`, `chunk_size_days`, `tolerance_pct`, plus the shared `persist_result` / `check_name` / `check_tags` / `report_output_format` options. `date_range` and `chunk_size_days` require `date_column`. If `date_range` is set, both start and end dates are required; `chunk_size_days` also requires a complete `date_range`.
+**Main parameters:** `source_table`, `target_table`, `date_column`, `date_range`, `chunk_size_days`, `tolerance_pct`, plus the shared `persist_result` / `check_name` / `check_tags` / `report_output_format` options. `date_range` and `chunk_size_days` require `date_column`. One-sided `date_range` is allowed without chunking; `chunk_size_days` requires both start and end dates.
 
 ---
 
@@ -396,11 +396,11 @@ With the issues-only filter pattern (`WHERE ...` plus a literal `'n' AS xsniff_p
 
 ### Chunked processing (`chunk_size_days`)
 
-Available on `check_samples`, `check_counts_group_by_date`, `check_total_counts`, `check_custom_queries`, and `check_sniff_query`. It splits a date range into N-day windows, runs each chunk, then aggregates the metrics and examples. This is useful for long ranges or large tables. Open-ended ranges (`None` on either side) are rejected: both bounds must be set.
+Available on `check_samples`, `check_counts_group_by_date`, `check_total_counts`, `check_custom_queries`, and `check_sniff_query`. It splits a date range into N-day windows, runs each chunk, then aggregates the metrics and examples. This is useful for long ranges or large tables. Chunking needs both start and end dates; without `chunk_size_days`, either bound may be omitted.
 
 - `check_custom_queries`: both sides must supply `start_date` and `end_date` in their parameters
 - `check_sniff_query`: chunking uses `start_date` / `end_date` in `source_params`
-- `check_total_counts`: `date_column` plus a complete `date_range`; chunk `COUNT(*)` values are summed
+- `check_total_counts`: `date_column` plus `date_range`; chunk `COUNT(*)` values are summed
 
 ### Status values
 

@@ -91,6 +91,19 @@ def test_validate_date_window_args_requires_date_column_for_filters(
         )
 
 
+def test_iter_date_chunks_open_ended_range_is_single_chunk():
+    checker = _comparator_without_init()
+
+    chunks = checker._iter_date_chunks(
+        date_column='created_at',
+        start_date='2024-01-01',
+        end_date=None,
+        chunk_size_days=None,
+    )
+
+    assert chunks == [('2024-01-01', None)]
+
+
 @pytest.mark.parametrize(
     'date_range',
     [
@@ -102,15 +115,48 @@ def test_validate_date_window_args_requires_date_column_for_filters(
         ('   ', '2024-12-31'),
     ],
 )
-def test_validate_date_window_args_requires_both_bounds(date_range):
+def test_validate_date_window_args_allows_one_sided_range_without_chunking(
+    date_range,
+):
+    checker = _comparator_without_init()
+    checker._validate_date_window_args(
+        date_column='created_at',
+        date_range=date_range,
+        chunk_size_days=None,
+    )
+
+
+@pytest.mark.parametrize(
+    'date_range',
+    [
+        ('2024-01-01', None),
+        (None, '2024-12-31'),
+        ('2024-01-01', ''),
+    ],
+)
+def test_validate_date_window_args_requires_both_bounds_for_chunking(date_range):
     checker = _comparator_without_init()
 
     with pytest.raises(
-        ValueError, match='date_range requires both start_date and end_date'
+        ValueError,
+        match='date_range requires both start_date and end_date when chunk_size_days is set',
     ):
         checker._validate_date_window_args(
             date_column='created_at',
             date_range=date_range,
+            chunk_size_days=7,
+        )
+
+
+def test_validate_date_window_args_rejects_empty_range():
+    checker = _comparator_without_init()
+
+    with pytest.raises(
+        ValueError, match='date_range requires start_date and/or end_date'
+    ):
+        checker._validate_date_window_args(
+            date_column='created_at',
+            date_range=(None, None),
             chunk_size_days=None,
         )
 

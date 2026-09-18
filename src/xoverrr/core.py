@@ -51,6 +51,21 @@ def _has_date_bound(value) -> bool:
     return value is not None and str(value).strip() != ''
 
 
+def _normalize_date_bound(value) -> Optional[str]:
+    if not _has_date_bound(value):
+        return None
+    return str(value).strip()
+
+
+def _unpack_date_range(
+    date_range: Optional[Tuple[Optional[str], Optional[str]]],
+) -> Tuple[Optional[str], Optional[str]]:
+    if date_range is None:
+        return None, None
+    start_date, end_date = date_range
+    return _normalize_date_bound(start_date), _normalize_date_bound(end_date)
+
+
 class DataQualityChecker:
     """
     Main checker for intra-source and cross-database data-quality checks.
@@ -147,7 +162,7 @@ class DataQualityChecker:
         target_table: DataReference,
         date_column: str,
         check_name: Optional[str] = None,
-        date_range: Optional[Tuple[str, str]] = None,
+        date_range: Optional[Tuple[Optional[str], Optional[str]]] = None,
         chunk_size_days: Optional[int] = None,
         tolerance_pct: float = 0.0,
         max_examples: Optional[int] = ct.DEFAULT_MAX_EXAMPLES,
@@ -172,7 +187,7 @@ class DataQualityChecker:
             ct.CHECK_TYPE_COUNTS_GROUP_BY_DATE, check_name
         )
 
-        start_date, end_date = date_range or (None, None)
+        start_date, end_date = _unpack_date_range(date_range)
 
         try:
             self.check_stats['checked'] += 1
@@ -229,7 +244,7 @@ class DataQualityChecker:
         target_table: DataReference,
         check_name: Optional[str] = None,
         date_column: Optional[str] = None,
-        date_range: Optional[Tuple[str, str]] = None,
+        date_range: Optional[Tuple[Optional[str], Optional[str]]] = None,
         chunk_size_days: Optional[int] = None,
         tolerance_pct: float = 0.0,
         persist_result: Optional[DataReference] = None,
@@ -240,9 +255,9 @@ class DataQualityChecker:
         Compare ``COUNT(*)`` between two tables or views.
 
         Omit ``date_column`` for a whole-table count. Pass ``date_column``
-        with a complete ``date_range`` (both start and end) and optional
+        with ``date_range`` (one or both bounds) and optional
         ``chunk_size_days`` to scan in date windows and sum the chunk
-        counts (avoids one heavy query).
+        counts (avoids one heavy query). Chunking requires both bounds.
 
         Returns:
             ``CheckResult`` including ``run_id``, ``status``, ``report``,
@@ -257,7 +272,7 @@ class DataQualityChecker:
             ct.CHECK_TYPE_TOTAL_COUNTS, check_name
         )
 
-        start_date, end_date = date_range or (None, None)
+        start_date, end_date = _unpack_date_range(date_range)
 
         try:
             self.check_stats['checked'] += 1
@@ -314,7 +329,7 @@ class DataQualityChecker:
         check_name: Optional[str] = None,
         date_column: Optional[str] = None,
         update_column: Optional[str] = None,
-        date_range: Optional[Tuple[str, str]] = None,
+        date_range: Optional[Tuple[Optional[str], Optional[str]]] = None,
         chunk_size_days: Optional[int] = None,
         exclude_columns: Optional[List[str]] = None,
         include_columns: Optional[List[str]] = None,
@@ -360,7 +375,7 @@ class DataQualityChecker:
 
         exclude_hours = exclude_recent_hours or self.default_exclude_recent_hours
 
-        start_date, end_date = date_range or (None, None)
+        start_date, end_date = _unpack_date_range(date_range)
         exclude_cols = normalize_column_names(exclude_columns or [])
         custom_keys = (
             normalize_column_names(custom_primary_key or [])
@@ -1667,21 +1682,28 @@ class DataQualityChecker:
     def _validate_date_window_args(
         self,
         date_column: Optional[str],
-        date_range: Optional[Tuple[str, str]],
+        date_range: Optional[Tuple[Optional[str], Optional[str]]],
         chunk_size_days: Optional[int],
     ) -> None:
+        start_date = end_date = None
         if date_range is not None:
             if not isinstance(date_range, (tuple, list)) or len(date_range) != 2:
                 raise ValueError('date_range must be (start_date, end_date)')
-            start_date, end_date = date_range
-            if not _has_date_bound(start_date) or not _has_date_bound(end_date):
+            start_date, end_date = _unpack_date_range(date_range)
+            if start_date is None and end_date is None:
+                raise ValueError(
+                    'date_range requires start_date and/or end_date'
+                )
+        if chunk_size_days is not None:
+            if date_range is None:
+                raise ValueError(
+                    'date_range is required when chunk_size_days is set'
+                )
+            if start_date is None or end_date is None:
                 raise ValueError(
                     'date_range requires both start_date and end_date'
+                    ' when chunk_size_days is set'
                 )
-        if chunk_size_days is not None and date_range is None:
-            raise ValueError(
-                'date_range is required when chunk_size_days is set'
-            )
         if date_column:
             return
         if date_range is not None or chunk_size_days is not None:
