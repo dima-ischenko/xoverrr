@@ -6,7 +6,7 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 import pandas as pd
 from sqlalchemy.engine import Engine
 
-from ..constants import RESERVED_WORDS
+from ..constants import COUNTS_TOTAL_DT, RESERVED_WORDS
 from ..logger import app_logger
 from ..models import DataReference, ObjectType
 
@@ -47,17 +47,25 @@ class BaseDatabaseAdapter(ABC):
     def build_count_query_common(
         self,
         data_ref: DataReference,
-        date_column: str,
+        date_column: Optional[str],
         start_date: Optional[str],
         end_date: Optional[str],
         columns_meta: Optional[pd.DataFrame],
         timezone: Optional[str],
     ) -> Tuple[str, Dict]:
-        """Return a (query, params) tuple with optional recent-row exclusion."""
-        result = self.build_count_query(
+        """Return a (query, params) tuple for daily or whole-table counts."""
+        if not date_column:
+            query = f"""
+            SELECT
+                '{COUNTS_TOTAL_DT}' as dt,
+                count(*) as cnt
+            FROM {data_ref.full_name}
+            WHERE 1=1
+            """
+            return query, {}
+        return self.build_count_query(
             data_ref, date_column, start_date, end_date, columns_meta, timezone
         )
-        return result
 
     @abstractmethod
     def build_count_query(

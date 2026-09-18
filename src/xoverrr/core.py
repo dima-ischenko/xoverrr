@@ -143,7 +143,11 @@ class DataQualityChecker:
         report_output_format: str = ct.REPORT_OUTPUT_FORMAT_TEXT,
     ) -> CheckResult:
         """
-        Compare daily row counts between two tables or views.
+        Compare row counts between two tables or views.
+
+        With ``date_column``, counts are aggregated by day. Without it, each
+        side is a single whole-table ``COUNT(*)``. ``date_range`` and
+        ``chunk_size_days`` require ``date_column``.
 
         Returns:
             ``CheckResult`` including ``run_id``, ``status``, ``report``,
@@ -152,6 +156,7 @@ class DataQualityChecker:
 
         self._validate_inputs(source_table, target_table)
         self._require_target_engine()
+        self._validate_count_date_args(date_column, date_range, chunk_size_days)
         validate_report_output_format(report_output_format)
         persist_result = normalize_persist_result(persist_result)
         run_id, run_started_at = self._start_check_run(
@@ -347,7 +352,7 @@ class DataQualityChecker:
         self,
         source_table: DataReference,
         target_table: DataReference,
-        date_column: str,
+        date_column: Optional[str],
         start_date: Optional[str],
         end_date: Optional[str],
         chunk_size_days: Optional[int],
@@ -1478,6 +1483,19 @@ class DataQualityChecker:
             return self.adapters[db_type]
         except KeyError:
             raise ValueError(f'No adapter available for {db_type}')
+
+    def _validate_count_date_args(
+        self,
+        date_column: Optional[str],
+        date_range: Optional[Tuple[str, str]],
+        chunk_size_days: Optional[int],
+    ) -> None:
+        if date_column:
+            return
+        if date_range is not None or chunk_size_days is not None:
+            raise ValueError(
+                'date_column is required when date_range or chunk_size_days is set'
+            )
 
     def _iter_date_chunks(
         self,

@@ -93,3 +93,23 @@ class TestClickHousePostgresCountsCheck:
         print(
             f'ClickHouse   PostgreSQL count check passed: {stats.final_score:.2f}%'
         )
+
+    def test_counts_without_date_column(self, clickhouse_engine, postgres_engine):
+        table_name = 'test_ch_pg_counts'
+
+        checker = DataQualityChecker(
+            source_engine=clickhouse_engine,
+            target_engine=postgres_engine,
+            timezone='Europe/Athens',
+        )
+
+        result = checker.check_counts(
+            source_table=DataReference(table_name, 'test'),
+            target_table=DataReference(table_name, 'test'),
+            tolerance_pct=0.0,
+        )
+
+        assert result.status == CHECK_SUCCESS
+        assert result.stats.final_score == 100.0
+        assert 'Source total count: 5' in result.report
+        assert 'Target total count: 5' in result.report

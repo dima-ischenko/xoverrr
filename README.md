@@ -8,7 +8,7 @@ Supported databases: **Oracle**, **PostgreSQL** (+ Greenplum), **ClickHouse**.
 
 ## Features
 
-- **Four check strategies** — row samples, daily counts, custom SQL, and source-only sniff checks
+- **Four check strategies** — row samples, row counts: total, daily counts, custom SQL, and source-only sniff checks
 - **Multi-DBMS** — tables and views, extensible via adapters
 - **SQLAlchemy engines** — pass any supported source, target, or results connection
 - **Recent-row exclusion** — optionally skip rows that may still be delayed (batch load, replication, or calculation)
@@ -105,7 +105,7 @@ result.details
 | Method | When to use | Requires a target database? |
 |--------|-------------|------------------|
 | `check_samples` | Compare row values between two tables/views | Yes |
-| `check_counts` | Fast volume check by day (missing / extra rows) | Yes |
+| `check_counts` | Fast volume check: whole table, or by day | Yes |
 | `check_custom_queries` | Complex joins, renamed columns, custom SQL | Yes |
 | `check_sniff_query` | Source-only rule: “does this data look wrong?” | No |
 
@@ -158,9 +158,17 @@ If `custom_primary_key` is omitted, the primary key is inferred from metadata (i
 
 ### 2. Counts (`check_counts`)
 
-Daily aggregates — suitable for large volumes and for spotting missing or extra rows.
+Row-volume check. Omit `date_column` for a whole-table `COUNT(*)`. Pass `date_column` to compare daily aggregates (large volumes, missing or extra rows). `date_range` and `chunk_size_days` require `date_column`.
 
 ```python
+# Whole-table counts
+result = checker.check_counts(
+    source_table=DataReference("users", "schema1"),
+    target_table=DataReference("users", "schema2"),
+    tolerance_pct=2.0,
+)
+
+# Daily counts
 result = checker.check_counts(
     source_table=DataReference("users", "schema1"),
     target_table=DataReference("users", "schema2"),

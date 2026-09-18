@@ -30,6 +30,9 @@ FLAG_VALUE_NO = 'n'
 # Recently changed exclusion column (check_samples / check_custom_queries).
 XRECENTLY_CHANGED_COLUMN = 'xrecently_changed'
 
+# Sentinel `dt` value when check_counts runs without date_column (whole-table COUNT(*)).
+COUNTS_TOTAL_DT = 'total'
+
 # Pass/fail flag column for check_sniff_query (row-level or scalar).
 # ``y`` = passed, ``n`` = failed.
 XSNIFF_PASSED_COLUMN = 'xsniff_passed'
