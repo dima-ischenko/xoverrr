@@ -62,31 +62,3 @@ def test_iter_date_chunks_without_date_column_returns_single_chunk():
     )
 
     assert chunks == [(None, None)]
-
-
-def test_validate_count_date_args_allows_missing_date_column():
-    checker = _comparator_without_init()
-    checker._validate_count_date_args(
-        date_column=None, date_range=None, chunk_size_days=None
-    )
-
-
-@pytest.mark.parametrize(
-    'date_range, chunk_size_days',
-    [
-        (('2024-01-01', '2024-01-31'), None),
-        (None, 7),
-        (('2024-01-01', '2024-01-31'), 7),
-    ],
-)
-def test_validate_count_date_args_requires_date_column_for_filters(
-    date_range, chunk_size_days
-):
-    checker = _comparator_without_init()
-
-    with pytest.raises(ValueError, match='date_column is required'):
-        checker._validate_count_date_args(
-            date_column=None,
-            date_range=date_range,
-            chunk_size_days=chunk_size_days,
-        )

@@ -503,3 +503,62 @@ def generate_count_report(
     lines.append('=' * 80)
 
     return '\n'.join(lines)
+
+
+def generate_total_count_report(
+    source_table: str,
+    target_table: str,
+    stats: CheckStats,
+    timezone: str,
+    run_id: str,
+    run_started_at: str,
+    source_query: Optional[str] = None,
+    source_params: Optional[Dict] = None,
+    target_query: Optional[str] = None,
+    target_params: Optional[Dict] = None,
+    library_version: Optional[str] = None,
+    source_db_type: Optional[str] = None,
+    target_db_type: Optional[str] = None,
+) -> str:
+    """Generate a text report for a whole-table COUNT(*) check."""
+    source_count = stats.total_source_rows
+    target_count = stats.total_target_rows
+    diff_count = abs(source_count - target_count)
+    equal_count = min(source_count, target_count)
+
+    lines = []
+    append_report_run_header(
+        lines,
+        run_id,
+        run_started_at,
+        library_version=library_version,
+        source_db_type=source_db_type,
+        target_db_type=target_db_type,
+    )
+    lines.append('TOTAL COUNTS CHECK REPORT:')
+    lines.append(f'{source_table}')
+    lines.append('VS')
+    lines.append(f'{target_table}')
+    lines.append('=' * 80)
+
+    if source_query and target_query:
+        lines.append(f'timezone: {timezone}')
+        lines.append(f'    {source_query}')
+        if source_params:
+            lines.append(f'    params: {source_params}')
+        lines.append('-' * 40)
+        lines.append(f'    {target_query}')
+        if target_params:
+            lines.append(f'    params: {target_params}')
+
+    lines.append('-' * 40)
+    lines.append('\nSUMMARY:')
+    lines.append(f'  Source total count: {source_count}')
+    lines.append(f'  Target total count: {target_count}')
+    lines.append(f'  Common total count: {equal_count}')
+    lines.append(f'  Diff total count: {diff_count}')
+    lines.append(f'  Discrepancies %: {stats.final_diff_score:.5f}%')
+    lines.append(f'  Final discrepancies score: {stats.final_diff_score:.5f}')
+    lines.append(f'  Final data quality score: {stats.final_score:.5f}')
+    lines.append('=' * 80)
+    return '\n'.join(lines)

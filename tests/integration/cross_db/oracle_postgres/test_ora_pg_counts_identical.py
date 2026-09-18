@@ -90,7 +90,7 @@ class TestOraclePostgresCountsCheck:
         assert stats.final_score == 100.0
         print(f'Oracle   PostgreSQL count check passed: {stats.final_score:.2f}%')
 
-    def test_counts_without_date_column(self, oracle_engine, postgres_engine):
+    def test_total_counts(self, oracle_engine, postgres_engine):
         table_name = 'test_ora_pg_counts'
 
         checker = DataQualityChecker(
@@ -99,7 +99,7 @@ class TestOraclePostgresCountsCheck:
             timezone='Europe/Athens',
         )
 
-        result = checker.check_counts(
+        result = checker.check_total_counts(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             tolerance_pct=0.0,
@@ -107,5 +107,7 @@ class TestOraclePostgresCountsCheck:
 
         assert result.status == CHECK_SUCCESS
         assert result.stats.final_score == 100.0
+        assert result.stats.total_source_rows == 5
+        assert result.stats.total_target_rows == 5
         assert 'Source total count: 5' in result.report
-        assert 'Target total count: 5' in result.report
+        assert 'ISSUE BREAKDOWN' not in result.report

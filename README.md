@@ -8,7 +8,7 @@ Supported databases: **Oracle**, **PostgreSQL** (+ Greenplum), **ClickHouse**.
 
 ## Features
 
-- **Four check strategies** — row samples, row counts: total, daily counts, custom SQL, and source-only sniff checks
+- **Five check strategies** — row samples, daily counts, whole-table counts, custom SQL, and source-only sniff checks
 - **Multi-DBMS** — tables and views, extensible via adapters
 - **SQLAlchemy engines** — pass any supported source, target, or results connection
 - **Recent-row exclusion** — optionally skip rows that may still be delayed (batch load, replication, or calculation)
@@ -105,7 +105,8 @@ result.details
 | Method | When to use | Requires a target database? |
 |--------|-------------|------------------|
 | `check_samples` | Compare row values between two tables/views | Yes |
-| `check_counts` | Fast volume check: whole table, or by day | Yes |
+| `check_counts` | Daily volume check (missing / extra rows) | Yes |
+| `check_total_counts` | Whole-table `COUNT(*)` | Yes |
 | `check_custom_queries` | Complex joins, renamed columns, custom SQL | Yes |
 | `check_sniff_query` | Source-only rule: “does this data look wrong?” | No |
 
@@ -158,17 +159,9 @@ If `custom_primary_key` is omitted, the primary key is inferred from metadata (i
 
 ### 2. Counts (`check_counts`)
 
-Row-volume check. Omit `date_column` for a whole-table `COUNT(*)`. Pass `date_column` to compare daily aggregates (large volumes, missing or extra rows). `date_range` and `chunk_size_days` require `date_column`.
+Daily aggregates — suitable for large volumes and for spotting missing or extra rows.
 
 ```python
-# Whole-table counts
-result = checker.check_counts(
-    source_table=DataReference("users", "schema1"),
-    target_table=DataReference("users", "schema2"),
-    tolerance_pct=2.0,
-)
-
-# Daily counts
 result = checker.check_counts(
     source_table=DataReference("users", "schema1"),
     target_table=DataReference("users", "schema2"),
@@ -184,7 +177,23 @@ result = checker.check_counts(
 
 ---
 
-### 3. Custom query (`check_custom_queries`)
+### 3. Total counts (`check_total_counts`)
+
+Whole-table `COUNT(*)` on each side. No date column, no metadata lookup, no per-day breakdown.
+
+```python
+result = checker.check_total_counts(
+    source_table=DataReference("users", "schema1"),
+    target_table=DataReference("users", "schema2"),
+    tolerance_pct=2.0,
+)
+```
+
+**Main parameters:** `source_table`, `target_table`, `tolerance_pct`, plus the shared `persist_result` / `check_name` / `check_tags` / `report_output_format` options.
+
+---
+
+### 4. Custom query (`check_custom_queries`)
 
 Compare the results of arbitrary SQL on both sides. A primary key is **required**.
 
@@ -241,7 +250,7 @@ CASE WHEN updated_at > (sysdate - 3/24) THEN 'y' END AS xrecently_changed
 
 ---
 
-### 4. Sniff query (`check_sniff_query`)
+### 5. Sniff query (`check_sniff_query`)
 
 A source-only check. Mark each row with `xsniff_passed` (`y` = passed, `n` = failed).  
 No target engine or primary key is required:
@@ -349,11 +358,11 @@ final_diff_score =
   + (issue_rows_pct × 0.5)
 ```
 
-### `check_counts`
+### `check_counts` / `check_total_counts`
 
 ```
-sum_of_absolute_differences = abs(source_count − target_count)  per day
-sum_of_common_counts        = min(source_count, target_count)   per day
+sum_of_absolute_differences = abs(source_count − target_count)  per day (or one total)
+sum_of_common_counts        = min(source_count, target_count)   per day (or one total)
 
 final_diff_score = 100 × sum_of_absolute_differences
                        / (sum_of_absolute_differences + sum_of_common_counts)
@@ -376,7 +385,7 @@ With the issues-only filter pattern (`WHERE …` plus a literal `'n' AS xsniff_p
 
 ### Chunked processing (`chunk_size_days`)
 
-Available on all methods. It splits a date range into N-day windows, runs each chunk, then aggregates the metrics and examples. This is useful for long ranges or large tables.
+Available on `check_samples`, `check_counts`, `check_custom_queries`, and `check_sniff_query`. It splits a date range into N-day windows, runs each chunk, then aggregates the metrics and examples. This is useful for long ranges or large tables.
 
 - `check_custom_queries`: both sides must supply `start_date` and `end_date` in their parameters
 - `check_sniff_query`: chunking uses `start_date` / `end_date` in `source_params`

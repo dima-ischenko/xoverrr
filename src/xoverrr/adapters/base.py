@@ -6,7 +6,7 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 import pandas as pd
 from sqlalchemy.engine import Engine
 
-from ..constants import COUNTS_TOTAL_DT, RESERVED_WORDS
+from ..constants import RESERVED_WORDS
 from ..logger import app_logger
 from ..models import DataReference, ObjectType
 
@@ -47,25 +47,24 @@ class BaseDatabaseAdapter(ABC):
     def build_count_query_common(
         self,
         data_ref: DataReference,
-        date_column: Optional[str],
+        date_column: str,
         start_date: Optional[str],
         end_date: Optional[str],
         columns_meta: Optional[pd.DataFrame],
         timezone: Optional[str],
     ) -> Tuple[str, Dict]:
-        """Return a (query, params) tuple for daily or whole-table counts."""
-        if not date_column:
-            query = f"""
-            SELECT
-                '{COUNTS_TOTAL_DT}' as dt,
-                count(*) as cnt
-            FROM {data_ref.full_name}
-            WHERE 1=1
-            """
-            return query, {}
+        """Return a (query, params) tuple for daily counts."""
         return self.build_count_query(
             data_ref, date_column, start_date, end_date, columns_meta, timezone
         )
+
+    def build_total_count_query(self, data_ref: DataReference) -> Tuple[str, Dict]:
+        """Return a whole-table ``COUNT(*)`` query. ANSI SQL, shared by all adapters."""
+        query = f"""
+            SELECT count(*) as cnt
+            FROM {data_ref.full_name}
+        """
+        return query, {}
 
     @abstractmethod
     def build_count_query(

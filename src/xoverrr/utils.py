@@ -170,6 +170,41 @@ class CheckStats:
     final_score: float
 
 
+def count_volume_scores(diff_count, equal_count) -> Tuple[float, float]:
+    """Return ``(final_diff_score, final_score)`` from count totals."""
+    total = float(diff_count) + float(equal_count)
+    if not total:
+        return 0.0, 100.0
+    final_diff_score = 100.0 * float(diff_count) / total
+    return final_diff_score, 100.0 - final_diff_score
+
+
+def build_total_count_stats(source_count: int, target_count: int) -> CheckStats:
+    """Build CheckStats for a whole-table COUNT(*) comparison."""
+    diff_count = abs(source_count - target_count)
+    equal_count = min(source_count, target_count)
+    final_diff_score, final_score = count_volume_scores(diff_count, equal_count)
+    return CheckStats(
+        total_source_rows=source_count,
+        total_target_rows=target_count,
+        dup_source_rows=0,
+        dup_target_rows=0,
+        only_source_rows=0,
+        only_target_rows=0,
+        comparable_rows=0,
+        passed_rows=0,
+        dup_source_rows_pct=0.0,
+        dup_target_rows_pct=0.0,
+        source_only_rows_pct=0.0,
+        target_only_rows_pct=0.0,
+        issue_rows_pct=0.0,
+        max_issue_pct=0.0,
+        median_issue_pct=0.0,
+        final_diff_score=final_diff_score,
+        final_score=final_score,
+    )
+
+
 @dataclass
 class CheckDetails:
     """Examples and per-column details for a single check."""

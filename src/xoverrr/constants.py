@@ -19,6 +19,7 @@ CHECK_SKIPPED = 'skipped'
 
 # Check types
 CHECK_TYPE_COUNTS = 'counts'
+CHECK_TYPE_TOTAL_COUNTS = 'total_counts'
 CHECK_TYPE_SAMPLES = 'samples'
 CHECK_TYPE_CUSTOM_QUERIES = 'custom_queries'
 CHECK_TYPE_SNIFF_QUERY = 'sniff_query'
@@ -29,9 +30,6 @@ FLAG_VALUE_NO = 'n'
 
 # Recently changed exclusion column (check_samples / check_custom_queries).
 XRECENTLY_CHANGED_COLUMN = 'xrecently_changed'
-
-# Sentinel `dt` value when check_counts runs without date_column (whole-table COUNT(*)).
-COUNTS_TOTAL_DT = 'total'
 
 # Pass/fail flag column for check_sniff_query (row-level or scalar).
 # ``y`` = passed, ``n`` = failed.
