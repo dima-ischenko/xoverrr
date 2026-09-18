@@ -66,7 +66,7 @@ class TestPostgresChunkedCheck:
         source_ref = DataReference('test_chunked_source', 'test')
         target_ref = DataReference('test_chunked_target', 'test')
 
-        result = checker.check_counts_group_by_day(
+        result = checker.check_counts_group_by_date(
             source_table=source_ref,
             target_table=target_ref,
             date_column='created_at',
@@ -75,7 +75,7 @@ class TestPostgresChunkedCheck:
         )
         status_non_chunked = result.status
         stats_non_chunked = result.stats
-        result = checker.check_counts_group_by_day(
+        result = checker.check_counts_group_by_date(
             source_table=source_ref,
             target_table=target_ref,
             date_column='created_at',

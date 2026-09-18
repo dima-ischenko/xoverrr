@@ -73,7 +73,7 @@ class TestOracleYearlyChunking:
         )
         table_ref = DataReference('test_ora_chunking_yearly', 'test')
 
-        result = checker.check_counts_group_by_day(
+        result = checker.check_counts_group_by_date(
             source_table=table_ref,
             target_table=table_ref,
             date_column='created_at',
@@ -82,7 +82,7 @@ class TestOracleYearlyChunking:
         )
         status_counts_full = result.status
         stats_counts_full = result.stats
-        result = checker.check_counts_group_by_day(
+        result = checker.check_counts_group_by_date(
             source_table=table_ref,
             target_table=table_ref,
             date_column='created_at',

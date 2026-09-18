@@ -8,7 +8,7 @@ Supported databases: **Oracle**, **PostgreSQL** (+ Greenplum), **ClickHouse**.
 
 ## Features
 
-- **Five check strategies** - row samples, counts grouped by day, whole-table counts, custom SQL, and source-only sniff checks
+- **Five check strategies** - row samples, counts grouped by date, whole-table counts, custom SQL, and source-only sniff checks
 - **Multi-DBMS** - tables and views, extensible via adapters
 - **SQLAlchemy engines** - pass any supported source, target, or results connection
 - **Recent-row exclusion** - optionally skip rows that may still be delayed (batch load, replication, or calculation)
@@ -105,7 +105,7 @@ result.details
 | Method | When to use | Requires a target database? |
 |--------|-------------|------------------|
 | `check_samples` | Compare row values between two tables/views | Yes |
-| `check_counts_group_by_day` | Volume grouped by day (missing / extra rows) | Yes |
+| `check_counts_group_by_date` | Volume grouped by a date/timestamp column (missing / extra rows) | Yes |
 | `check_total_counts` | Whole-table `COUNT(*)`, optional date-window chunks | Yes |
 | `check_custom_queries` | Complex joins, renamed columns, custom SQL | Yes |
 | `check_sniff_query` | Source-only rule: "does this data look wrong?" | No |
@@ -159,12 +159,12 @@ If `custom_primary_key` is omitted, the primary key is inferred from metadata (i
 
 ---
 
-### 2. Counts grouped by day (`check_counts_group_by_day`)
+### 2. Counts grouped by date (`check_counts_group_by_date`)
 
-Per-day aggregates (`GROUP BY` the date column) - suitable for large volumes and for spotting missing or extra rows.
+Compares row counts grouped by a date or timestamp column. Currently only daily aggregates are supported (hour / month / year grouping is not). Suitable for large volumes and for spotting missing or extra rows.
 
 ```python
-result = checker.check_counts_group_by_day(
+result = checker.check_counts_group_by_date(
     source_table=DataReference("users", "schema1"),
     target_table=DataReference("users", "schema2"),
     date_column="created_at",
@@ -181,7 +181,7 @@ result = checker.check_counts_group_by_day(
 
 ### 3. Total counts (`check_total_counts`)
 
-Whole-table `COUNT(*)` on each side. No metadata lookup unless `date_column` is set. Optional `date_range` / `chunk_size_days` split the scan into date windows and sum the counts (no group-by-day breakdown).
+Whole-table `COUNT(*)` on each side. Optional `date_range` / `chunk_size_days` split the scan into date windows and sum the counts (no per-date breakdown).
 
 ```python
 result = checker.check_total_counts(
@@ -369,11 +369,11 @@ final_diff_score =
   + (issue_rows_pct * 0.5)
 ```
 
-### `check_counts_group_by_day` / `check_total_counts`
+### `check_counts_group_by_date` / `check_total_counts`
 
 ```
-sum_of_absolute_differences = abs(source_count - target_count)  per day (or one total)
-sum_of_common_counts        = min(source_count, target_count)   per day (or one total)
+sum_of_absolute_differences = abs(source_count - target_count)  per date (or one total)
+sum_of_common_counts        = min(source_count, target_count)   per date (or one total)
 
 final_diff_score = 100 * sum_of_absolute_differences
                        / (sum_of_absolute_differences + sum_of_common_counts)
@@ -396,7 +396,7 @@ With the issues-only filter pattern (`WHERE ...` plus a literal `'n' AS xsniff_p
 
 ### Chunked processing (`chunk_size_days`)
 
-Available on `check_samples`, `check_counts_group_by_day`, `check_total_counts`, `check_custom_queries`, and `check_sniff_query`. It splits a date range into N-day windows, runs each chunk, then aggregates the metrics and examples. This is useful for long ranges or large tables. Open-ended ranges (`None` on either side) are rejected: both bounds must be set.
+Available on `check_samples`, `check_counts_group_by_date`, `check_total_counts`, `check_custom_queries`, and `check_sniff_query`. It splits a date range into N-day windows, runs each chunk, then aggregates the metrics and examples. This is useful for long ranges or large tables. Open-ended ranges (`None` on either side) are rejected: both bounds must be set.
 
 - `check_custom_queries`: both sides must supply `start_date` and `end_date` in their parameters
 - `check_sniff_query`: chunking uses `start_date` / `end_date` in `source_params`

@@ -34,7 +34,7 @@ class CheckResult:
     """
     timestamp: str
     run_id: str
-    check_type: str  # CHECK_TYPE_SAMPLES, CHECK_TYPE_COUNTS_GROUP_BY_DAY, ...
+    check_type: str  # CHECK_TYPE_SAMPLES, CHECK_TYPE_COUNTS_GROUP_BY_DATE, ...
     status: str
     check_name: Optional[str] = None
     check_tags: Optional[Dict[str, Any]] = None
@@ -458,7 +458,7 @@ def generate_count_report(
         source_db_type=source_db_type,
         target_db_type=target_db_type,
     )
-    lines.append('COUNTS GROUP BY DAY CHECK REPORT:')
+    lines.append('COUNTS GROUP BY DATE CHECK REPORT:')
     lines.append(f'{source_table}')
     lines.append('VS')
     lines.append(f'{target_table}')

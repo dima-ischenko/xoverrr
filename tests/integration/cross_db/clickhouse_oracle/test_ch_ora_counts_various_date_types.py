@@ -108,7 +108,7 @@ class TestClickHouseOracleCountsWithVariousDateTypes:
             timezone='Europe/Athens',
         )
 
-        result = checker.check_counts_group_by_day(
+        result = checker.check_counts_group_by_date(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_date',  # DATE type
@@ -134,7 +134,7 @@ class TestClickHouseOracleCountsWithVariousDateTypes:
             timezone='Europe/Athens',
         )
 
-        result = checker.check_counts_group_by_day(
+        result = checker.check_counts_group_by_date(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_datetime',  # ClickHouse DateTime / Oracle TIMESTAMP
@@ -162,7 +162,7 @@ class TestClickHouseOracleCountsWithVariousDateTypes:
             timezone='Europe/Athens',
         )
 
-        result = checker.check_counts_group_by_day(
+        result = checker.check_counts_group_by_date(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_datetime64',  # ClickHouse DateTime64 / Oracle TIMESTAMP
@@ -190,7 +190,7 @@ class TestClickHouseOracleCountsWithVariousDateTypes:
             timezone='Europe/Athens',  # Named timezone
         )
 
-        result = checker.check_counts_group_by_day(
+        result = checker.check_counts_group_by_date(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_datetime',

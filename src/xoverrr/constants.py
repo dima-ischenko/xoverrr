@@ -18,7 +18,7 @@ CHECK_FAILED = 'failed'
 CHECK_SKIPPED = 'skipped'
 
 # Check types
-CHECK_TYPE_COUNTS_GROUP_BY_DAY = 'counts_group_by_day'
+CHECK_TYPE_COUNTS_GROUP_BY_DATE = 'counts_group_by_date'
 CHECK_TYPE_TOTAL_COUNTS = 'total_counts'
 CHECK_TYPE_SAMPLES = 'samples'
 CHECK_TYPE_CUSTOM_QUERIES = 'custom_queries'

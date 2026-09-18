@@ -141,7 +141,7 @@ class DataQualityChecker:
                 case ct.CHECK_SKIPPED:
                     self.check_stats['tables_skipped'].add(source_table.full_name)
 
-    def check_counts_group_by_day(
+    def check_counts_group_by_date(
         self,
         source_table: DataReference,
         target_table: DataReference,
@@ -156,7 +156,7 @@ class DataQualityChecker:
         report_output_format: str = ct.REPORT_OUTPUT_FORMAT_TEXT,
     ) -> CheckResult:
         """
-        Compare row counts grouped by day between two tables or views.
+        Compare row counts grouped by a date or timestamp column.
 
         Returns:
             ``CheckResult`` including ``run_id``, ``status``, ``report``,
@@ -169,7 +169,7 @@ class DataQualityChecker:
         validate_report_output_format(report_output_format)
         persist_result = normalize_persist_result(persist_result)
         run_id, run_started_at = self._start_check_run(
-            ct.CHECK_TYPE_COUNTS_GROUP_BY_DAY, check_name
+            ct.CHECK_TYPE_COUNTS_GROUP_BY_DATE, check_name
         )
 
         start_date, end_date = date_range or (None, None)
@@ -177,7 +177,7 @@ class DataQualityChecker:
         try:
             self.check_stats['checked'] += 1
 
-            status, draft_report, stats, details = self._check_counts_group_by_day(
+            status, draft_report, stats, details = self._check_counts_group_by_date(
                 source_table,
                 target_table,
                 date_column,
@@ -195,7 +195,7 @@ class DataQualityChecker:
                 report=draft_report,
                 stats=stats,
                 details=details,
-                check_type=ct.CHECK_TYPE_COUNTS_GROUP_BY_DAY,
+                check_type=ct.CHECK_TYPE_COUNTS_GROUP_BY_DATE,
                 check_tags=check_tags,
                 source_table=source_table.full_name,
                 target_table=target_table.full_name,
@@ -213,7 +213,7 @@ class DataQualityChecker:
                 report=None,
                 stats=None,
                 details=None,
-                check_type=ct.CHECK_TYPE_COUNTS_GROUP_BY_DAY,
+                check_type=ct.CHECK_TYPE_COUNTS_GROUP_BY_DATE,
                 check_tags=check_tags,
                 source_table=source_table.full_name,
                 target_table=target_table.full_name,
@@ -438,7 +438,7 @@ class DataQualityChecker:
         self._run_timings = CheckRunTimings(run_started_at=run_started_at)
         return run_id, run_started_at
 
-    def _check_counts_group_by_day(
+    def _check_counts_group_by_date(
         self,
         source_table: DataReference,
         target_table: DataReference,
@@ -2035,7 +2035,7 @@ class DataQualityChecker:
     def _require_target_engine(self) -> Engine:
         if self.target_engine is None:
             raise ValueError(
-                'target_engine is required for check_samples, check_counts_group_by_day, '
+                'target_engine is required for check_samples, check_counts_group_by_date, '
                 'check_total_counts, and check_custom_queries'
             )
         return self.target_engine

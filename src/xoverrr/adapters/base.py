@@ -52,7 +52,7 @@ class BaseDatabaseAdapter(ABC):
         columns_meta: Optional[pd.DataFrame],
         timezone: Optional[str],
     ) -> Tuple[str, Dict]:
-        """Return a (query, params) tuple for counts grouped by day."""
+        """Return a (query, params) tuple for counts grouped by date."""
         return self.build_count_query(
             data_ref, date_column, start_date, end_date, columns_meta, timezone
         )

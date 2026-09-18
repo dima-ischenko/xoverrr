@@ -75,7 +75,7 @@ class TestPostgresOracleMixedTimezoneOffsets:
             timezone='US/Pacific',
         )
 
-        result = checker.check_counts_group_by_day(
+        result = checker.check_counts_group_by_date(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='created_on',

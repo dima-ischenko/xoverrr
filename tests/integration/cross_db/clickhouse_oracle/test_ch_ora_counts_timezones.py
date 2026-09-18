@@ -93,7 +93,7 @@ class TestClickHouseOracleMixedTimezoneOffsets:
                 timezone=timezone,
             )
 
-            result = checker.check_counts_group_by_day(
+            result = checker.check_counts_group_by_date(
                 source_table=DataReference(table_name, 'test'),
                 target_table=DataReference(table_name, 'test'),
                 date_column='record_date',
