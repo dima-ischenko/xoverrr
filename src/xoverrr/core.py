@@ -442,21 +442,24 @@ class DataQualityChecker:
                 result_diff_in_counters = abs(merged['cnt_x'] - merged['cnt_y']).sum()
                 result_equal_in_counters = merged[['cnt_x', 'cnt_y']].min(axis=1).sum()
 
-                discrepancies_counters_pct = (
-                    100
-                    * result_diff_in_counters
-                    / (result_diff_in_counters + result_equal_in_counters)
-                )
                 stats, details = self._check_dataframes_timed(
                     source_df=source_counts_filled,
                     target_df=target_counts_filled,
                     key_columns=['dt'],
                     max_examples=max_examples,
                 )
+                # Volume metric, not date-bucket row comparison from
+                # compare_dataframes (one mismatched `dt` row scores 50).
+                stats.final_diff_score = float(
+                    100
+                    * result_diff_in_counters
+                    / (result_diff_in_counters + result_equal_in_counters)
+                )
+                stats.final_score = 100.0 - stats.final_diff_score
 
                 status = (
                     ct.CHECK_FAILED
-                    if discrepancies_counters_pct > tolerance_pct
+                    if stats.final_diff_score > tolerance_pct
                     else ct.CHECK_SUCCESS
                 )
 
@@ -467,7 +470,6 @@ class DataQualityChecker:
                     details,
                     total_count_source,
                     total_count_taget,
-                    discrepancies_counters_pct,
                     result_diff_in_counters,
                     result_equal_in_counters,
                     self.timezone,

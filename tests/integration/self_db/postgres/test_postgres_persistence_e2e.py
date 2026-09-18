@@ -109,7 +109,8 @@ class TestPostgresPersistenceE2E:
             row = conn.execute(
                 text(
                     f"""
-                    SELECT check_type, status, report
+                    SELECT check_type, status, report,
+                           stats_final_score, stats_final_diff_score
                     FROM {RESULTS_TABLE_COUNTS}
                     """
                 )
@@ -117,6 +118,8 @@ class TestPostgresPersistenceE2E:
 
         assert row[:2] == ('counts', CHECK_SUCCESS)
         assert 'COUNTS CHECK REPORT' in row[2]
+        assert row[3] == 100.0
+        assert row[4] == 0.0
 
     def test_postgres_persistence_custom_query_e2e(self, postgres_engine):
         source_query = f"""

@@ -415,7 +415,6 @@ def generate_count_report(
     details: CheckDetails,
     total_source_count: int,
     total_target_count: int,
-    discrepancies_pct: float,
     diff_count: int,
     equal_count: int,
     timezone: str,
@@ -439,7 +438,6 @@ def generate_count_report(
         details: Discrepancy details
         total_source_count: Total rows in source
         total_target_count: Total rows in target
-        discrepancies_pct: Overall discrepancy pct
         diff_count: Sum of absolute differences
         equal_count: Sum of common minimum counts
         timezone: Timezone used for the check
@@ -483,9 +481,9 @@ def generate_count_report(
     lines.append(f'  Target total count: {total_target_count}')
     lines.append(f'  Common total count: {equal_count}')
     lines.append(f'  Diff total count: {diff_count}')
-    lines.append(f'  Discrepancies %: {discrepancies_pct:.5f}%')
-    lines.append(f'  Final discrepancies score: {discrepancies_pct:.5f}')
-    lines.append(f'  Final data quality score: {(100 - discrepancies_pct):.5f}')
+    lines.append(f'  Discrepancies %: {stats.final_diff_score:.5f}%')
+    lines.append(f'  Final discrepancies score: {stats.final_diff_score:.5f}')
+    lines.append(f'  Final data quality score: {stats.final_score:.5f}')
 
     if not details.issue_breakdown.empty:
         lines.append('\nISSUE BREAKDOWN:')

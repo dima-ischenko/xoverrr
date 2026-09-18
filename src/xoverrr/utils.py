@@ -714,7 +714,6 @@ def _legacy_generate_count_report(
     details: CheckDetails,
     total_source_count: int,
     total_target_count: int,
-    discrepancies_counters_pct: int,
     result_diff_in_counters: int,
     result_equal_in_counters: int,
     timezone: str,
@@ -767,11 +766,9 @@ def _legacy_generate_count_report(
     rl.append(f'  Target total count: {total_target_count}')
     rl.append(f'  Common total count: {result_equal_in_counters}')
     rl.append(f'  Diff total count: {result_diff_in_counters}')
-    rl.append(f'  Discrepancies %: {discrepancies_counters_pct:.5f}%')
-    rl.append(f'  Final discrepancies score: {discrepancies_counters_pct:.5f}')
-    rl.append(
-        f'  Final data quality score: {(100 - discrepancies_counters_pct):.5f}'
-    )
+    rl.append(f'  Discrepancies %: {stats.final_diff_score:.5f}%')
+    rl.append(f'  Final discrepancies score: {stats.final_diff_score:.5f}')
+    rl.append(f'  Final data quality score: {stats.final_score:.5f}')
     if not details.issue_breakdown.empty:
         rl.append(f'\nISSUE BREAKDOWN:')
         rl.append(details.issue_breakdown.to_string(index=False))
