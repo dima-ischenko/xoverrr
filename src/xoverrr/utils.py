@@ -1,15 +1,12 @@
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 
 from .constants import (
-    DATETIME_FORMAT,
     DEFAULT_MAX_EXAMPLES,
-    FLAG_VALUE_NO,
     FLAG_VALUE_YES,
     NULL_REPLACEMENT,
     XSNIFF_PASSED_COLUMN,
@@ -624,206 +621,6 @@ def _create_keys_set(df: pd.DataFrame, key_columns: List[str]) -> set:
     return set(df[key_columns].itertuples(index=False, name=None))
 
 
-def _legacy_generate_sample_report(
-    source_table: str,
-    target_table: str,
-    stats: CheckStats,
-    details: CheckDetails,
-    timezone: str,
-    run_id: str,
-    run_started_at: str,
-    source_query: str = None,
-    source_params: Dict = None,
-    target_query: str = None,
-    target_params: Dict = None,
-    date_chunks: Optional[List[Tuple[str, str]]] = None,
-    library_version: Optional[str] = None,
-    source_db_type: Optional[str] = None,
-    target_db_type: Optional[str] = None,
-) -> str:
-    """Generate a sample-check report (logger output is hard to read)."""
-    rl = []
-    append_report_run_header(
-        rl,
-        run_id,
-        run_started_at,
-        library_version=library_version,
-        source_db_type=source_db_type,
-        target_db_type=target_db_type,
-    )
-    rl.append('SAMPLES CHECK REPORT: ')
-    if source_table and target_table:
-        rl.append(f'{source_table}')
-        rl.append('VS')
-        rl.append(f'{target_table}')
-        rl.append('=' * 80)
-
-    if date_chunks and len(date_chunks) > 1:
-        rl.append(f'\nchunks processed ({len(date_chunks)} intervals):')
-        for start, end in date_chunks:
-            rl.append(f'  {start} -> {end}')
-
-    if source_query and target_query:
-        rl.append(f'timezone: {timezone}')
-        rl.append(f'    {source_query}')
-        if source_params:
-            rl.append(f'    params: {source_params}')
-        rl.append('-' * 40)
-        rl.append(f'    {target_query}')
-        if target_params:
-            rl.append(f'    params: {target_params}')
-
-    rl.append('-' * 40)
-    rl.append('\nSUMMARY:')
-    rl.append(f'  Source rows: {stats.total_source_rows}')
-    rl.append(f'  Target rows: {stats.total_target_rows}')
-    rl.append(f'  Duplicated source rows: {stats.dup_source_rows}')
-    rl.append(f'  Duplicated target rows: {stats.dup_target_rows}')
-    rl.append(f'  Only source rows: {stats.only_source_rows}')
-    rl.append(f'  Only target rows: {stats.only_target_rows}')
-    rl.append(f'  Comparable rows: {stats.comparable_rows}')
-    rl.append(f'  Passed rows: {stats.passed_rows}')
-    rl.append('-' * 40)
-    rl.append(f'  Source only rows %: {stats.source_only_rows_pct:.5f}')
-    rl.append(f'  Target only rows %: {stats.target_only_rows_pct:.5f}')
-    rl.append(f'  Duplicated source rows %: {stats.dup_source_rows_pct:.5f}')
-    rl.append(f'  Duplicated target rows %: {stats.dup_target_rows_pct:.5f}')
-    rl.append(f'  Issue rows %: {stats.issue_rows_pct:.5f}')
-    rl.append(f'  Final discrepancies score: {stats.final_diff_score:.5f}')
-    rl.append(f'  Final data quality score: {stats.final_score:.5f}')
-    rl.append(
-        f'  Source-only key examples: {format_report_collection(details.source_only_keys_examples)}'
-    )
-    rl.append(
-        f'  Target-only key examples: {format_report_collection(details.target_only_keys_examples)}'
-    )
-    rl.append(
-        f'  Duplicated source key examples: {format_report_collection(details.dup_source_keys_examples)}'
-    )
-    rl.append(
-        f'  Duplicated target key examples: {format_report_collection(details.dup_target_keys_examples)}'
-    )
-    rl.append(
-        f'  Skipped source columns: {format_report_collection(details.skipped_source_columns)}'
-    )
-    rl.append(
-        f'  Skipped target columns: {format_report_collection(details.skipped_target_columns)}'
-    )
-
-    if stats.max_issue_pct > 0 and not details.issue_breakdown.empty:
-        rl.append('\nISSUE BREAKDOWN:')
-        rl.append(f'  Max issue %: {stats.max_issue_pct:.5f}')
-        rl.append('  Issue counts by column:\n')
-        rl.append(details.issue_breakdown.to_string(index=False))
-        rl.append('  Issue examples:\n')
-        rl.append(
-            details.issue_examples.to_string(
-                index=False, max_colwidth=64, justify='left'
-            )
-        )
-
-    # Horizontal wide row dumps are hard to use in text reports.
-    # Keep the code for a future optional report parameter (e.g. include_issue_row_examples).
-    if False and (
-        details.issue_row_examples is not None
-        and not details.issue_row_examples.empty
-    ):
-        rl.append('\nISSUE ROW EXAMPLES:')
-        rl.append('Sorted by primary key and dataset:')
-        rl.append('')
-        rl.append(
-            details.issue_row_examples.to_string(
-                index=False, max_colwidth=64, justify='left'
-            )
-        )
-        rl.append('')
-
-    rl.append('=' * 80)
-    return '\n'.join(rl)
-
-
-def _legacy_generate_count_report(
-    source_table: str,
-    target_table: str,
-    stats: CheckStats,
-    details: CheckDetails,
-    total_source_count: int,
-    total_target_count: int,
-    result_diff_in_counters: int,
-    result_equal_in_counters: int,
-    timezone: str,
-    run_id: str,
-    run_started_at: str,
-    source_query: str = None,
-    source_params: Dict = None,
-    target_query: str = None,
-    target_params: Dict = None,
-    date_chunks: Optional[List[Tuple[str, str]]] = None,
-    library_version: Optional[str] = None,
-    source_db_type: Optional[str] = None,
-    target_db_type: Optional[str] = None,
-) -> None:
-    """Generate a counts-check report (logger output is hard to read)."""
-    rl = []
-    append_report_run_header(
-        rl,
-        run_id,
-        run_started_at,
-        library_version=library_version,
-        source_db_type=source_db_type,
-        target_db_type=target_db_type,
-    )
-    rl.append(f'COUNTS GROUP BY DAY CHECK REPORT:')
-    rl.append(f'{source_table}')
-    rl.append(f'VS')
-    rl.append(f'{target_table}')
-    rl.append('=' * 80)
-
-    if date_chunks and len(date_chunks) > 1:
-        rl.append(f'\nchunks processed ({len(date_chunks)} intervals):')
-        for start, end in date_chunks:
-            rl.append(f'  {start} -> {end}') 
-
-    if source_query and target_query:
-        rl.append(f'timezone: {timezone}')
-        rl.append(f'    {source_query}')
-        if source_params:
-            rl.append(f'    params: {source_params}')
-        rl.append('-' * 40)
-        rl.append(f'    {target_query}')
-        if target_params:
-            rl.append(f'    params: {target_params}')
-
-    rl.append('-' * 40)
-
-    rl.append(f'\nSUMMARY:')
-    rl.append(f'  Source total count: {total_source_count}')
-    rl.append(f'  Target total count: {total_target_count}')
-    rl.append(f'  Common total count: {result_equal_in_counters}')
-    rl.append(f'  Diff total count: {result_diff_in_counters}')
-    rl.append(f'  Discrepancies %: {stats.final_diff_score:.5f}%')
-    rl.append(f'  Final discrepancies score: {stats.final_diff_score:.5f}')
-    rl.append(f'  Final data quality score: {stats.final_score:.5f}')
-    if not details.issue_breakdown.empty:
-        rl.append(f'\nISSUE BREAKDOWN:')
-        rl.append(details.issue_breakdown.to_string(index=False))
-
-    # Horizontal wide row dumps are hard to use in text reports.
-    # Keep the code for a future optional report parameter (e.g. include_issue_row_examples).
-    if False and (
-        details.issue_row_examples is not None
-        and not details.issue_row_examples.empty
-    ):
-        rl.append(f'\nISSUE ROW EXAMPLES:')
-        rl.append('Sorted by primary key and dataset:')
-        rl.append(f'\n')
-        rl.append(details.issue_row_examples.to_string(index=False))
-        rl.append(f'\n')
-    rl.append('=' * 80)
-
-    return '\n'.join(rl)
-
-
 def safe_remove_zeros(x):
     if pd.isna(x):
         return x
@@ -932,32 +729,7 @@ def clean_recently_changed_data(
     return df1_processed, df2_processed
 
 
-def find_count_discrepancies(
-    source_counts: pd.DataFrame, target_counts: pd.DataFrame
-) -> pd.DataFrame:
-    """Find discrepancies in row counts grouped by day between source and target."""
-    source_counts['flg'] = 'source'
-    target_counts['flg'] = 'target'
-
-    # Find mismatches in counts per date
-    all_counts = pd.concat([source_counts, target_counts])
-    discrepancies = all_counts.drop_duplicates(
-        subset=['dt', 'cnt'], keep=False
-    ).sort_values(by=['dt', 'flg'], ascending=[False, True])
-
-    return discrepancies
-
-
-def filter_columns(
-    df: pd.DataFrame, columns: List[str], exclude: Optional[List[str]] = None
-) -> pd.DataFrame:
-    """Filter DataFrame columns, with optional exclusions."""
-    if exclude:
-        columns = [col for col in columns if col not in exclude]
-    return df[columns]
-
-
-def cross_fill_missing_dates(df1, df2, date_column='dt', value_column='cnt'):
+def cross_fill_missing_dates(df1, df2, date_column='dt'):
     """Fill missing dates between two DataFrames."""
 
     df1_indexed = df1.set_index(date_column)

@@ -9,7 +9,7 @@ from .adapters.base import BaseDatabaseAdapter
 from .adapters.clickhouse import ClickHouseAdapter
 from .adapters.oracle import OracleAdapter
 from .adapters.postgres import PostgresAdapter
-from .exceptions import DQCheckException, MetadataError
+from .exceptions import MetadataError
 from .logger import app_logger
 from .models import DataReference, DBMSType, ObjectType
 from .persistence import (
@@ -196,7 +196,6 @@ class DataQualityChecker:
                 stats=stats,
                 details=details,
                 check_type=ct.CHECK_TYPE_COUNTS_GROUP_BY_DAY,
-                check_name=check_name,
                 check_tags=check_tags,
                 source_table=source_table.full_name,
                 target_table=target_table.full_name,
@@ -215,7 +214,6 @@ class DataQualityChecker:
                 stats=None,
                 details=None,
                 check_type=ct.CHECK_TYPE_COUNTS_GROUP_BY_DAY,
-                check_name=check_name,
                 check_tags=check_tags,
                 source_table=source_table.full_name,
                 target_table=target_table.full_name,
@@ -282,7 +280,6 @@ class DataQualityChecker:
                 stats=stats,
                 details=None,
                 check_type=ct.CHECK_TYPE_TOTAL_COUNTS,
-                check_name=check_name,
                 check_tags=check_tags,
                 source_table=source_table.full_name,
                 target_table=target_table.full_name,
@@ -301,7 +298,6 @@ class DataQualityChecker:
                 stats=None,
                 details=None,
                 check_type=ct.CHECK_TYPE_TOTAL_COUNTS,
-                check_name=check_name,
                 check_tags=check_tags,
                 source_table=source_table.full_name,
                 target_table=target_table.full_name,
@@ -400,7 +396,6 @@ class DataQualityChecker:
                 stats=stats,
                 details=details,
                 check_type=ct.CHECK_TYPE_SAMPLES,
-                check_name=check_name,
                 check_tags=check_tags,
                 source_table=source_table.full_name,
                 target_table=target_table.full_name,
@@ -419,7 +414,6 @@ class DataQualityChecker:
                 stats=None,
                 details=None,
                 check_type=ct.CHECK_TYPE_SAMPLES,
-                check_name=check_name,
                 check_tags=check_tags,
                 source_table=source_table.full_name,
                 target_table=target_table.full_name,
@@ -938,7 +932,6 @@ class DataQualityChecker:
                 stats=stats,
                 details=details,
                 check_type=ct.CHECK_TYPE_SNIFF_QUERY,
-                check_name=check_name,
                 check_tags=check_tags,
                 source_table=None,
                 target_table=None,
@@ -959,7 +952,6 @@ class DataQualityChecker:
                 stats=None,
                 details=None,
                 check_type=ct.CHECK_TYPE_SNIFF_QUERY,
-                check_name=check_name,
                 check_tags=check_tags,
                 source_table=None,
                 target_table=None,
@@ -1097,7 +1089,6 @@ class DataQualityChecker:
                 stats=stats,
                 details=details,
                 check_type=ct.CHECK_TYPE_CUSTOM_QUERIES,
-                check_name=check_name,
                 check_tags=check_tags,
                 source_table=None,
                 target_table=None,
@@ -1120,7 +1111,6 @@ class DataQualityChecker:
                 stats=None,
                 details=None,
                 check_type=ct.CHECK_TYPE_CUSTOM_QUERIES,
-                check_name=check_name,
                 check_tags=check_tags,
                 source_table=None,
                 target_table=None,
@@ -1144,7 +1134,6 @@ class DataQualityChecker:
         check_type: str,
         persist_result: Optional[DataReference] = None,
         report_output_format: str,
-        check_name: Optional[str] = None,
         check_tags: Optional[Dict] = None,
         source_table: Optional[str] = None,
         target_table: Optional[str] = None,

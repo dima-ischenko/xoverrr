@@ -14,9 +14,3 @@ class QueryExecutionError(DQCheckException):
     """Raised when a query fails to execute."""
 
     pass
-
-
-class TypeConversionError(DQCheckException):
-    """Raised when a type conversion fails."""
-
-    pass
