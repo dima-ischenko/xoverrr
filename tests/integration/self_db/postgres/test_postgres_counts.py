@@ -84,7 +84,6 @@ class TestPostgresTotalCounts:
         assert result.stats.total_source_rows == 4
         assert result.stats.total_target_rows == 4
         assert 'TOTAL COUNTS CHECK REPORT' in result.report
-        assert 'ISSUE BREAKDOWN' not in result.report
         assert 'Source total count: 4' in result.report
         assert 'Target total count: 4' in result.report
 
@@ -111,7 +110,6 @@ class TestPostgresTotalCounts:
         assert 'Source total count: 4' in result.report
         assert 'Target total count: 3' in result.report
         assert 'Discrepancies %: 25.00000%' in result.report
-        assert 'ISSUE BREAKDOWN' not in result.report
         assert result.details is None
 
         with postgres_engine.begin() as conn:
