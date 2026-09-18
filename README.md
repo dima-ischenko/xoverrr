@@ -179,7 +179,7 @@ result = checker.check_counts(
 
 ### 3. Total counts (`check_total_counts`)
 
-Whole-table `COUNT(*)` on each side. No date column, no metadata lookup, no per-day breakdown.
+Whole-table `COUNT(*)` on each side. No date column, no metadata lookup, no per-day breakdown, no `chunk_size_days`. For volume over a date range, use `check_counts`.
 
 ```python
 result = checker.check_total_counts(
@@ -385,7 +385,7 @@ With the issues-only filter pattern (`WHERE …` plus a literal `'n' AS xsniff_p
 
 ### Chunked processing (`chunk_size_days`)
 
-Available on `check_samples`, `check_counts`, `check_custom_queries`, and `check_sniff_query`. It splits a date range into N-day windows, runs each chunk, then aggregates the metrics and examples. This is useful for long ranges or large tables.
+Available on `check_samples`, `check_counts`, `check_custom_queries`, and `check_sniff_query`. It splits a date range into N-day windows, runs each chunk, then aggregates the metrics and examples. This is useful for long ranges or large tables. `check_total_counts` has no date window, so it is not chunked.
 
 - `check_custom_queries`: both sides must supply `start_date` and `end_date` in their parameters
 - `check_sniff_query`: chunking uses `start_date` / `end_date` in `source_params`

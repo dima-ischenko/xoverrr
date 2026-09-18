@@ -233,6 +233,9 @@ class DataQualityChecker:
         """
         Compare whole-table ``COUNT(*)`` between two tables or views.
 
+        Date-interval chunking is not supported. For volume by day or over
+        a date range, use ``check_counts``.
+
         Returns:
             ``CheckResult`` including ``run_id``, ``status``, ``report``,
             and ``stats``.
