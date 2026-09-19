@@ -66,9 +66,7 @@ class TestClickHouseOracleDataWithDiscrepancies:
 
         yield
 
-    def test_sample_check_with_discrepancies(
-        self, clickhouse_engine, oracle_engine
-    ):
+    def test_sample_check_with_discrepancies(self, clickhouse_engine, oracle_engine):
         """
         Test sample check with intentional discrepancies.
         """

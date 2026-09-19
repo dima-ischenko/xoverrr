@@ -5,21 +5,14 @@ import pytest
 from sqlalchemy import create_engine
 
 from xoverrr import constants as ct
+from xoverrr.adapters.base import PERSIST_INSERTED_AT_COLUMN
 from xoverrr.core import DataQualityChecker
 from xoverrr.models import DataReference
-from xoverrr.adapters.base import PERSIST_INSERTED_AT_COLUMN
-from xoverrr.persistence import (
-    CheckResultPersister,
-    CheckRunTimings,
-    build_run_id,
-    normalize_persist_result,
-    validate_run_id,
-)
-from xoverrr.reporting import (
-    build_check_result,
-    format_check_result,
-    validate_report_output_format,
-)
+from xoverrr.persistence import (CheckResultPersister, CheckRunTimings,
+                                 build_run_id, normalize_persist_result,
+                                 validate_run_id)
+from xoverrr.reporting import (build_check_result, format_check_result,
+                               validate_report_output_format)
 from xoverrr.utils import CheckDetails, CheckStats
 
 RUN_STARTED_AT = '2026-01-01 00:00:00'
@@ -156,7 +149,7 @@ def test_persist_writes_to_results_engine():
         report='COUNT REPORT',
         stats=_build_stats(),
         details=_build_details(),
-        check_type=ct.CHECK_TYPE_COUNTS,
+        check_type=ct.CHECK_TYPE_COUNTS_GROUP_BY_DATE,
         source_table='public.a',
         target_table='public.b',
     )
@@ -167,7 +160,7 @@ def test_persist_writes_to_results_engine():
     row = stored.iloc[0]
     assert len(stored) == 1
     assert row['run_id'] == RUN_ID
-    assert row['check_type'] == ct.CHECK_TYPE_COUNTS
+    assert row['check_type'] == ct.CHECK_TYPE_COUNTS_GROUP_BY_DATE
     assert row['status'] == 'failed'
     assert row['report'] == 'COUNT REPORT'
     assert row['stats_final_score'] == 100.0
@@ -336,9 +329,7 @@ def test_oracle_persist_insert_avoids_ora_24816_for_large_varchar_binds():
 def test_persist_writes_oversized_json_details():
     results_engine = create_engine('sqlite:///:memory:')
     persister = CheckResultPersister(results_engine=results_engine)
-    oversized_json = [
-        {'column_name': 'value', 'payload': 'x' * 200} for _ in range(40)
-    ]
+    oversized_json = [{'column_name': 'value', 'payload': 'x' * 200} for _ in range(40)]
     details = _build_details()
     details.issue_examples = pd.DataFrame(oversized_json)
 
@@ -365,9 +356,7 @@ def test_persist_writes_oversized_json_details():
 
 def test_persist_returns_false_on_storage_error():
     persister = CheckResultPersister(
-        results_engine=create_engine(
-            'sqlite:////this/path/does/not/exist/xoverrr.db'
-        ),
+        results_engine=create_engine('sqlite:////this/path/does/not/exist/xoverrr.db'),
     )
     result = build_check_result(
         run_id=RUN_ID,
@@ -377,7 +366,7 @@ def test_persist_returns_false_on_storage_error():
         report='COUNT REPORT',
         stats=_build_stats(),
         details=_build_details(),
-        check_type=ct.CHECK_TYPE_COUNTS,
+        check_type=ct.CHECK_TYPE_COUNTS_GROUP_BY_DATE,
         source_table='public.a',
         target_table='public.b',
     )
@@ -395,7 +384,7 @@ def test_persist_returns_false_when_engine_is_missing():
         report='COUNT REPORT',
         stats=_build_stats(),
         details=_build_details(),
-        check_type=ct.CHECK_TYPE_COUNTS,
+        check_type=ct.CHECK_TYPE_COUNTS_GROUP_BY_DATE,
         source_table='public.a',
         target_table='public.b',
     )
@@ -512,9 +501,7 @@ def test_persist_with_datareference_target_and_tags():
 
     persister.persist(result, DataReference('dq_results_custom'))
 
-    stored = pd.read_sql(
-        'select * from dq_results_custom', results_engine
-    )
+    stored = pd.read_sql('select * from dq_results_custom', results_engine)
     assert stored.iloc[0]['check_name'] == 'orders_daily_compare'
     assert json.loads(stored.iloc[0]['check_tags_json']) == {
         'env': 'dev',

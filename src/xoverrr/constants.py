@@ -18,7 +18,8 @@ CHECK_FAILED = 'failed'
 CHECK_SKIPPED = 'skipped'
 
 # Check types
-CHECK_TYPE_COUNTS = 'counts'
+CHECK_TYPE_COUNTS_GROUP_BY_DATE = 'counts_group_by_date'
+CHECK_TYPE_TOTAL_COUNTS = 'total_counts'
 CHECK_TYPE_SAMPLES = 'samples'
 CHECK_TYPE_CUSTOM_QUERIES = 'custom_queries'
 CHECK_TYPE_SNIFF_QUERY = 'sniff_query'
@@ -39,10 +40,12 @@ XSNIFF_PASSED_VALUE_NO = FLAG_VALUE_NO
 # Report output formats
 REPORT_OUTPUT_FORMAT_JSON = 'json'
 REPORT_OUTPUT_FORMAT_TEXT = 'text'
-REPORT_OUTPUT_FORMATS = frozenset({
-    REPORT_OUTPUT_FORMAT_JSON,
-    REPORT_OUTPUT_FORMAT_TEXT,
-})
+REPORT_OUTPUT_FORMATS = frozenset(
+    {
+        REPORT_OUTPUT_FORMAT_JSON,
+        REPORT_OUTPUT_FORMAT_TEXT,
+    }
+)
 
 # Float precision used in text reports and persisted stats columns.
 STATS_REPORT_FLOAT_DECIMALS = 5

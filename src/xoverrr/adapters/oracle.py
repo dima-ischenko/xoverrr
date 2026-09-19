@@ -4,7 +4,8 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 import pandas as pd
 from sqlalchemy import text
 
-from ..constants import DATETIME_FORMAT, FLAG_VALUE_YES, XRECENTLY_CHANGED_COLUMN
+from ..constants import (DATETIME_FORMAT, FLAG_VALUE_YES,
+                         XRECENTLY_CHANGED_COLUMN)
 from ..exceptions import QueryExecutionError
 from ..logger import app_logger
 from ..models import DataReference, ObjectType
@@ -378,6 +379,35 @@ class OracleAdapter(BaseDatabaseAdapter):
             f" GROUP BY to_char(trunc({date_expr}, 'dd'),'YYYY-MM-DD') ORDER BY dt DESC"
         )
         return query, params
+
+    def _total_count_date_filters(
+        self,
+        date_column: Optional[str],
+        start_date: Optional[str],
+        end_date: Optional[str],
+        columns_meta: Optional[pd.DataFrame],
+        timezone: Optional[str],
+    ) -> Tuple[str, Dict]:
+        if not date_column:
+            return '', {}
+        tz_columns = self._identify_timestamp_tz_columns(columns_meta)
+        date_expr = self._build_cast_tz_column_expression(
+            column_name=date_column,
+            tz_columns=tz_columns,
+            target_timezone=timezone,
+            as_alias=False,
+        )
+        extra_sql = ''
+        params = {}
+        if start_date:
+            extra_sql += (
+                f" AND {date_expr} >= trunc(to_date(:start_date, 'YYYY-MM-DD'), 'dd')\n"
+            )
+            params['start_date'] = start_date
+        if end_date:
+            extra_sql += f" AND {date_expr} < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1\n"
+            params['end_date'] = end_date
+        return extra_sql, params
 
     def build_data_query(
         self,

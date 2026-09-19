@@ -1,6 +1,5 @@
 import re
 from abc import ABC, abstractmethod
-from datetime import datetime, timedelta
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
@@ -53,11 +52,40 @@ class BaseDatabaseAdapter(ABC):
         columns_meta: Optional[pd.DataFrame],
         timezone: Optional[str],
     ) -> Tuple[str, Dict]:
-        """Return a (query, params) tuple with optional recent-row exclusion."""
-        result = self.build_count_query(
+        """Return a (query, params) tuple for counts grouped by date."""
+        return self.build_count_query(
             data_ref, date_column, start_date, end_date, columns_meta, timezone
         )
-        return result
+
+    def build_total_count_query(
+        self,
+        data_ref: DataReference,
+        date_column: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        columns_meta: Optional[pd.DataFrame] = None,
+        timezone: Optional[str] = None,
+    ) -> Tuple[str, Dict]:
+        """Return a ``COUNT(*)`` query, optionally filtered by a date window."""
+        query = f"""
+            SELECT count(*) as cnt
+            FROM {data_ref.full_name}
+            WHERE 1=1
+        """
+        extra_sql, params = self._total_count_date_filters(
+            date_column, start_date, end_date, columns_meta, timezone
+        )
+        return query + extra_sql, params
+
+    def _total_count_date_filters(
+        self,
+        date_column: Optional[str],
+        start_date: Optional[str],
+        end_date: Optional[str],
+        columns_meta: Optional[pd.DataFrame],
+        timezone: Optional[str],
+    ) -> Tuple[str, Dict]:
+        return '', {}
 
     @abstractmethod
     def build_count_query(

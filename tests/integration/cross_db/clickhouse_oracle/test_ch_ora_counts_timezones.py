@@ -1,6 +1,6 @@
 """
 Test for bug fix: Mixed timezone offsets in timestamptz columns should be handled correctly.
-Oracle ↔ ClickHouse checks must handle timezone conversions properly.
+Oracle / ClickHouse checks must handle timezone conversions properly.
 """
 
 import pytest
@@ -11,7 +11,7 @@ from xoverrr.core import DataQualityChecker, DataReference
 
 
 class TestClickHouseOracleMixedTimezoneOffsets:
-    """Test for mixed timezone offsets in timestamptz columns bug fix - Oracle ↔ ClickHouse"""
+    """Test for mixed timezone offsets in timestamptz columns bug fix - Oracle / ClickHouse"""
 
     @pytest.fixture(autouse=True)
     def setup_mixed_timezone_data(self, oracle_engine, clickhouse_engine, table_helper):
@@ -93,7 +93,7 @@ class TestClickHouseOracleMixedTimezoneOffsets:
                 timezone=timezone,
             )
 
-            result = checker.check_counts(
+            result = checker.check_counts_group_by_date(
                 source_table=DataReference(table_name, 'test'),
                 target_table=DataReference(table_name, 'test'),
                 date_column='record_date',

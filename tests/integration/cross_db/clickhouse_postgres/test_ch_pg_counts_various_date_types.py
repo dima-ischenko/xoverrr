@@ -108,7 +108,7 @@ class TestClickHousePostgresCountsWithVariousDateTypes:
             timezone='Europe/Athens',
         )
 
-        result = checker.check_counts(
+        result = checker.check_counts_group_by_date(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_date',  # ClickHouse Date type
@@ -122,9 +122,7 @@ class TestClickHousePostgresCountsWithVariousDateTypes:
 
         assert status == CHECK_SUCCESS
         assert stats.final_score == 100.0
-        print(
-            f'ClickHouse Date column count check passed: {stats.final_score:.2f}%'
-        )
+        print(f'ClickHouse Date column count check passed: {stats.final_score:.2f}%')
 
     def test_counts_with_datetime_column(self, clickhouse_engine, postgres_engine):
         """Test count comparison using ClickHouse DateTime column type"""
@@ -136,7 +134,7 @@ class TestClickHousePostgresCountsWithVariousDateTypes:
             timezone='Europe/Athens',
         )
 
-        result = checker.check_counts(
+        result = checker.check_counts_group_by_date(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_datetime',  # ClickHouse DateTime type
@@ -164,7 +162,7 @@ class TestClickHousePostgresCountsWithVariousDateTypes:
             timezone='Europe/Athens',
         )
 
-        result = checker.check_counts(
+        result = checker.check_counts_group_by_date(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_datetime64',  # ClickHouse DateTime64 type

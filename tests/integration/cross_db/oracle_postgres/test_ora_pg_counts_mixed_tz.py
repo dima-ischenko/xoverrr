@@ -5,7 +5,7 @@ from xoverrr.core import DataQualityChecker, DataReference
 
 
 class TestPostgresOracleMixedTimezoneOffsets:
-    """Test for mixed timezone offsets in timestamptz columns bug fix - PostgreSQL ↔ Oracle"""
+    """Test for mixed timezone offsets in timestamptz columns bug fix - PostgreSQL / Oracle"""
 
     @pytest.fixture(autouse=True)
     def setup_mixed_timezone_data(self, postgres_engine, oracle_engine, table_helper):
@@ -75,7 +75,7 @@ class TestPostgresOracleMixedTimezoneOffsets:
             timezone='US/Pacific',
         )
 
-        result = checker.check_counts(
+        result = checker.check_counts_group_by_date(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='created_on',

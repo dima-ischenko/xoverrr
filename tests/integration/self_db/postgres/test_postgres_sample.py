@@ -5,7 +5,7 @@ Test PostgreSQL self-check with identical data.
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import CHECK_SUCCESS, CHECK_SKIPPED
+from xoverrr.constants import CHECK_SKIPPED, CHECK_SUCCESS
 from xoverrr.core import DataQualityChecker, DataReference
 
 
@@ -89,7 +89,7 @@ class TestPostgresSelfCheck:
             """,
         )
 
-        yield        
+        yield
 
     @pytest.fixture(autouse=True)
     def setup_postgres_data_mv(self, postgres_engine, table_helper):
@@ -130,9 +130,7 @@ class TestPostgresSelfCheck:
 
         yield
 
-    def test_postgres_self_check_identical(
-        self, postgres_engine, setup_postgres_data
-    ):
+    def test_postgres_self_check_identical(self, postgres_engine, setup_postgres_data):
         """
         Compare identical tables within same PostgreSQL database.
         """
@@ -234,11 +232,11 @@ class TestPostgresSelfCheck:
             update_column='updated_at',
             date_range=('2024-01-01', '2024-01-03'),
             tolerance_pct=0.0,
-            exclude_recent_hours=9000000, #exclude all data in fact
+            exclude_recent_hours=9000000,  # exclude all data in fact
         )
         status = result.status
         report = result.report
         stats = result.stats
         details = result.details
 
-        assert status == CHECK_SKIPPED 
+        assert status == CHECK_SKIPPED

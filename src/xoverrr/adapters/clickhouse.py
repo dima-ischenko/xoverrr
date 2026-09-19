@@ -4,7 +4,8 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 import pandas as pd
 from sqlalchemy import text
 
-from ..constants import DATE_FORMAT, DATETIME_FORMAT, FLAG_VALUE_YES, XRECENTLY_CHANGED_COLUMN
+from ..constants import (DATE_FORMAT, DATETIME_FORMAT, FLAG_VALUE_YES,
+                         XRECENTLY_CHANGED_COLUMN)
 from ..exceptions import QueryExecutionError
 from ..logger import app_logger
 from ..models import DataReference, ObjectType
@@ -13,6 +14,7 @@ from .base import BaseDatabaseAdapter, Engine
 
 class ClickHouseAdapter(BaseDatabaseAdapter):
     """ClickHouse adapter with parameterised queries."""
+
     PERSIST_TYPE_MAP = {
         'short_string': 'Nullable(String)',
         'string': 'Nullable(String)',
@@ -211,6 +213,26 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
 
         query += ' GROUP BY dt ORDER BY dt DESC'
         return query, params
+
+    def _total_count_date_filters(
+        self,
+        date_column: Optional[str],
+        start_date: Optional[str],
+        end_date: Optional[str],
+        columns_meta: Optional[pd.DataFrame],
+        timezone: Optional[str],
+    ) -> Tuple[str, Dict]:
+        if not date_column:
+            return '', {}
+        extra_sql = ''
+        params = {}
+        if start_date:
+            extra_sql += f' AND {date_column} >= toDate(:start_date)\n'
+            params['start_date'] = start_date
+        if end_date:
+            extra_sql += f' AND {date_column} < toDate(:end_date) + INTERVAL 1 day\n'
+            params['end_date'] = end_date
+        return extra_sql, params
 
     def build_data_query(
         self,

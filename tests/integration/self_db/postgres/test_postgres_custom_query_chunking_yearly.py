@@ -55,9 +55,7 @@ class TestPostgresCustomQueryYearlyChunking:
         yield
 
     def test_custom_query_chunking_yearly_positive(self, postgres_engine):
-        checker = DataQualityChecker(
-            postgres_engine, postgres_engine, timezone='UTC'
-        )
+        checker = DataQualityChecker(postgres_engine, postgres_engine, timezone='UTC')
         query = """
             SELECT id, name, created_at
             FROM test.test_pg_custom_query_chunking_yearly
@@ -92,9 +90,7 @@ class TestPostgresCustomQueryYearlyChunking:
         assert stats_chunked.final_diff_score == stats_full.final_diff_score
 
     def test_custom_query_chunking_yearly_negative(self, postgres_engine):
-        checker = DataQualityChecker(
-            postgres_engine, postgres_engine, timezone='UTC'
-        )
+        checker = DataQualityChecker(postgres_engine, postgres_engine, timezone='UTC')
         source_query = """
             SELECT id, name, created_at
             FROM test.test_pg_custom_query_chunking_yearly
@@ -121,14 +117,14 @@ class TestPostgresCustomQueryYearlyChunking:
         stats_full = result.stats
         details_full = result.details
         result = checker.check_custom_queries(
-                source_query=source_query,
-                source_params=params,
-                target_query=target_query,
-                target_params=params,
-                custom_primary_key=['id'],
-                chunk_size_days=30,
-                tolerance_pct=0.0,
-            )
+            source_query=source_query,
+            source_params=params,
+            target_query=target_query,
+            target_params=params,
+            custom_primary_key=['id'],
+            chunk_size_days=30,
+            tolerance_pct=0.0,
+        )
         status_chunked = result.status
         stats_chunked = result.stats
         details_chunked = result.details

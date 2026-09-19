@@ -183,11 +183,11 @@ class TestOracleComplexDataTypes:
             update_column='created_at',
             date_range=('2024-01-01', '2024-01-03'),
             tolerance_pct=0.0,
-            exclude_recent_hours=9000000, #exclude all data in fact
+            exclude_recent_hours=9000000,  # exclude all data in fact
         )
         status = result.status
         report = result.report
         stats = result.stats
         details = result.details
         print(report)
-        assert status == CHECK_SKIPPED     
+        assert status == CHECK_SKIPPED

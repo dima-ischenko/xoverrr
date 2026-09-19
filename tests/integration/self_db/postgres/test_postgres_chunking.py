@@ -66,7 +66,7 @@ class TestPostgresChunkedCheck:
         source_ref = DataReference('test_chunked_source', 'test')
         target_ref = DataReference('test_chunked_target', 'test')
 
-        result = checker.check_counts(
+        result = checker.check_counts_group_by_date(
             source_table=source_ref,
             target_table=target_ref,
             date_column='created_at',
@@ -75,7 +75,7 @@ class TestPostgresChunkedCheck:
         )
         status_non_chunked = result.status
         stats_non_chunked = result.stats
-        result = checker.check_counts(
+        result = checker.check_counts_group_by_date(
             source_table=source_ref,
             target_table=target_ref,
             date_column='created_at',
@@ -104,13 +104,13 @@ class TestPostgresChunkedCheck:
         target_ref = DataReference('test_chunked_target', 'test')
 
         result = checker.check_samples(
-                source_table=source_ref,
-                target_table=target_ref,
-                date_column='created_at',
-                update_column='updated_at',
-                date_range=('2024-01-01', '2024-01-04'),
-                tolerance_pct=0.0,
-            )
+            source_table=source_ref,
+            target_table=target_ref,
+            date_column='created_at',
+            update_column='updated_at',
+            date_range=('2024-01-01', '2024-01-04'),
+            tolerance_pct=0.0,
+        )
         status_non_chunked = result.status
         stats_non_chunked = result.stats
         details_non_chunked = result.details
@@ -136,7 +136,49 @@ class TestPostgresChunkedCheck:
         non_chunked_mismatch = details_non_chunked.issue_breakdown.set_index(
             'column_name'
         )['issue_count']
-        chunked_mismatch = details_chunked.issue_breakdown.set_index(
-            'column_name'
-        )['issue_count']
+        chunked_mismatch = details_chunked.issue_breakdown.set_index('column_name')[
+            'issue_count'
+        ]
         assert int(chunked_mismatch['name']) == int(non_chunked_mismatch['name']) == 2
+
+    def test_chunked_total_counts_matches_non_chunked(self, postgres_engine):
+        checker = DataQualityChecker(
+            source_engine=postgres_engine,
+            target_engine=postgres_engine,
+            timezone='UTC',
+        )
+        source_ref = DataReference('test_chunked_source', 'test')
+        target_ref = DataReference('test_chunked_target', 'test')
+
+        result_full = checker.check_total_counts(
+            source_table=source_ref,
+            target_table=target_ref,
+            date_column='created_at',
+            date_range=('2024-01-01', '2024-01-04'),
+            tolerance_pct=0.0,
+        )
+        result_chunked = checker.check_total_counts(
+            source_table=source_ref,
+            target_table=target_ref,
+            date_column='created_at',
+            date_range=('2024-01-01', '2024-01-04'),
+            chunk_size_days=2,
+            tolerance_pct=0.0,
+        )
+        result_partial = checker.check_total_counts(
+            source_table=source_ref,
+            target_table=target_ref,
+            date_column='created_at',
+            date_range=('2024-01-01', '2024-01-02'),
+            tolerance_pct=0.0,
+        )
+
+        assert result_full.status == CHECK_SUCCESS
+        assert result_chunked.status == CHECK_SUCCESS
+        assert result_full.stats.total_source_rows == 4
+        assert result_chunked.stats.total_source_rows == 4
+        assert result_chunked.stats.total_target_rows == 4
+        assert 'chunks processed (2 intervals)' in result_chunked.report
+        assert result_partial.status == CHECK_SUCCESS
+        assert result_partial.stats.total_source_rows == 2
+        assert result_partial.stats.total_target_rows == 2

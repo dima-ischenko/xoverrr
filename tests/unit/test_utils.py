@@ -4,18 +4,15 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from xoverrr.constants import (
-    FLAG_VALUE_NO,
-    FLAG_VALUE_YES,
-    XRECENTLY_CHANGED_COLUMN,
-)
+from xoverrr.constants import (FLAG_VALUE_NO, FLAG_VALUE_YES,
+                               XRECENTLY_CHANGED_COLUMN)
+from xoverrr.reporting import generate_sample_report
 from xoverrr.utils import (CheckDetails, CheckStats,
                            clean_recently_changed_data, compare_dataframes,
                            cross_fill_missing_dates, format_report_collection,
                            get_dataframe_size_gb, prepare_dataframe,
                            validate_dataframe_size)
 
-from xoverrr.reporting import generate_sample_report
 
 class TestUtils:
     """Unit tests for utility functions"""

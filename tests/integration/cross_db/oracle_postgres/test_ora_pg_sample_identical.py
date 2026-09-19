@@ -96,9 +96,7 @@ class TestOraclePostgresHRData:
 
         assert status == CHECK_SUCCESS
         assert stats.final_diff_score == 0.0
-        print(
-            f'Oracle   PostgreSQL HR data check passed: {stats.final_score:.2f}%'
-        )
+        print(f'Oracle   PostgreSQL HR data check passed: {stats.final_score:.2f}%')
 
     def test_hr_data_check_uppercase(self, oracle_engine, postgres_engine):
         # pytest.skip("issue #31")

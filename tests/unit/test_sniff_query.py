@@ -1,14 +1,13 @@
 import pandas as pd
 import pytest
 
-from xoverrr.constants import FLAG_VALUE_NO, FLAG_VALUE_YES, XSNIFF_PASSED_COLUMN
+from xoverrr.constants import (FLAG_VALUE_NO, FLAG_VALUE_YES,
+                               XSNIFF_PASSED_COLUMN)
 from xoverrr.core import DataQualityChecker
-from xoverrr.utils import (
-    build_sniff_issue_stats,
-    evaluate_check_sniff_query_data,
-    resolve_check_sniff_query_passed_column,
-    sniff_issue_row_count,
-)
+from xoverrr.utils import (build_sniff_issue_stats,
+                           evaluate_check_sniff_query_data,
+                           resolve_check_sniff_query_passed_column,
+                           sniff_issue_row_count)
 
 
 def test_evaluate_sniff_query_row_level():

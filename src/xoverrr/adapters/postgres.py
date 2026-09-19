@@ -5,7 +5,8 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 import pandas as pd
 from sqlalchemy import text
 
-from ..constants import DATETIME_FORMAT, FLAG_VALUE_YES, XRECENTLY_CHANGED_COLUMN
+from ..constants import (DATETIME_FORMAT, FLAG_VALUE_YES,
+                         XRECENTLY_CHANGED_COLUMN)
 from ..exceptions import MetadataError, QueryExecutionError
 from ..logger import app_logger
 from ..models import DataReference, ObjectType
@@ -262,6 +263,31 @@ class PostgresAdapter(BaseDatabaseAdapter):
 
         query += f" GROUP BY to_char(date_trunc('day', {date_column}),'YYYY-MM-DD') ORDER BY dt DESC"
         return query, params
+
+    def _total_count_date_filters(
+        self,
+        date_column: Optional[str],
+        start_date: Optional[str],
+        end_date: Optional[str],
+        columns_meta: Optional[pd.DataFrame],
+        timezone: Optional[str],
+    ) -> Tuple[str, Dict]:
+        if not date_column:
+            return '', {}
+        extra_sql = ''
+        params = {}
+        if start_date:
+            extra_sql += (
+                f" AND {date_column} >= date_trunc('day', cast(:start_date as date))\n"
+            )
+            params['start_date'] = start_date
+        if end_date:
+            extra_sql += (
+                f" AND {date_column} < date_trunc('day', cast(:end_date as date))"
+                f"  + interval '1 days'\n"
+            )
+            params['end_date'] = end_date
+        return extra_sql, params
 
     def build_data_query(
         self,

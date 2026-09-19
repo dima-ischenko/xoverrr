@@ -66,9 +66,7 @@ class TestClickHouseNumericTypes:
 
         yield
 
-    def test_clickhouse_numeric_types_check(
-        self, clickhouse_engine, postgres_engine
-    ):
+    def test_clickhouse_numeric_types_check(self, clickhouse_engine, postgres_engine):
         """
         Compare numeric types between ClickHouse and PostgreSQL.
         """

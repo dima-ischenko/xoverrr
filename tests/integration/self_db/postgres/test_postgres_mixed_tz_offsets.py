@@ -248,9 +248,7 @@ class TestPostgresMixedTimezoneOffsets:
 
         assert status == CHECK_SUCCESS
         assert stats.final_diff_score == 0.0
-        print(
-            f'PostgreSQL cross-table check with UTC passed: {stats.final_score:.2f}%'
-        )
+        print(f'PostgreSQL cross-table check with UTC passed: {stats.final_score:.2f}%')
 
     def test_tz_naive_vs_tz_aware_separate_comparisons(self, postgres_engine):
         """

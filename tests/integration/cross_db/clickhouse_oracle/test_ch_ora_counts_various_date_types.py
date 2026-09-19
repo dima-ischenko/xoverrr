@@ -108,7 +108,7 @@ class TestClickHouseOracleCountsWithVariousDateTypes:
             timezone='Europe/Athens',
         )
 
-        result = checker.check_counts(
+        result = checker.check_counts_group_by_date(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_date',  # DATE type
@@ -134,7 +134,7 @@ class TestClickHouseOracleCountsWithVariousDateTypes:
             timezone='Europe/Athens',
         )
 
-        result = checker.check_counts(
+        result = checker.check_counts_group_by_date(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_datetime',  # ClickHouse DateTime / Oracle TIMESTAMP
@@ -148,9 +148,7 @@ class TestClickHouseOracleCountsWithVariousDateTypes:
 
         assert status == CHECK_SUCCESS
         assert stats.final_score == 100.0
-        print(
-            f'DateTime/TIMESTAMP column count check passed: {stats.final_score:.2f}%'
-        )
+        print(f'DateTime/TIMESTAMP column count check passed: {stats.final_score:.2f}%')
 
     def test_counts_with_datetime64_column(self, clickhouse_engine, oracle_engine):
         """Test count comparison using ClickHouse DateTime64 vs Oracle TIMESTAMP"""
@@ -162,7 +160,7 @@ class TestClickHouseOracleCountsWithVariousDateTypes:
             timezone='Europe/Athens',
         )
 
-        result = checker.check_counts(
+        result = checker.check_counts_group_by_date(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_datetime64',  # ClickHouse DateTime64 / Oracle TIMESTAMP
@@ -190,7 +188,7 @@ class TestClickHouseOracleCountsWithVariousDateTypes:
             timezone='Europe/Athens',  # Named timezone
         )
 
-        result = checker.check_counts(
+        result = checker.check_counts_group_by_date(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_datetime',

@@ -1,9 +1,8 @@
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import CHECK_SUCCESS
+from xoverrr.constants import CHECK_SUCCESS, CHECK_TYPE_COUNTS_GROUP_BY_DATE
 from xoverrr.core import DataQualityChecker, DataReference
-
 
 SRC_TABLE = 'test_persist_oracle_src'
 TRG_TABLE = 'test_persist_oracle_trg'
@@ -88,7 +87,7 @@ class TestOraclePersistenceE2E:
         assert 'SAMPLES CHECK REPORT' in row[2]
 
     def test_oracle_persistence_counts_e2e(self, oracle_engine):
-        result = self._build_checker(oracle_engine).check_counts(
+        result = self._build_checker(oracle_engine).check_counts_group_by_date(
             source_table=DataReference(SRC_TABLE, 'test'),
             target_table=DataReference(TRG_TABLE, 'test'),
             date_column='created_at',
@@ -111,8 +110,8 @@ class TestOraclePersistenceE2E:
                 )
             ).fetchone()
 
-        assert row[:2] == ('counts', CHECK_SUCCESS)
-        assert 'COUNTS CHECK REPORT' in row[2]
+        assert row[:2] == (CHECK_TYPE_COUNTS_GROUP_BY_DATE, CHECK_SUCCESS)
+        assert 'COUNTS GROUP BY DATE CHECK REPORT' in row[2]
 
     def test_oracle_persistence_custom_query_e2e(self, oracle_engine):
         source_query = f"""

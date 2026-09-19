@@ -1,9 +1,8 @@
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import CHECK_SUCCESS
+from xoverrr.constants import CHECK_SUCCESS, CHECK_TYPE_COUNTS_GROUP_BY_DATE
 from xoverrr.core import DataQualityChecker, DataReference
-
 
 SRC_TABLE = 'test_persist_clickhouse_src'
 TRG_TABLE = 'test_persist_clickhouse_trg'
@@ -90,7 +89,7 @@ class TestClickHousePersistenceE2E:
         assert 'SAMPLES CHECK REPORT' in row[2]
 
     def test_clickhouse_persistence_counts_e2e(self, clickhouse_engine):
-        result = self._build_checker(clickhouse_engine).check_counts(
+        result = self._build_checker(clickhouse_engine).check_counts_group_by_date(
             source_table=DataReference(SRC_TABLE, 'test'),
             target_table=DataReference(TRG_TABLE, 'test'),
             date_column='created_at',
@@ -113,8 +112,8 @@ class TestClickHousePersistenceE2E:
                 )
             ).fetchone()
 
-        assert row[:2] == ('counts', CHECK_SUCCESS)
-        assert 'COUNTS CHECK REPORT' in row[2]
+        assert row[:2] == (CHECK_TYPE_COUNTS_GROUP_BY_DATE, CHECK_SUCCESS)
+        assert 'COUNTS GROUP BY DATE CHECK REPORT' in row[2]
 
     def test_clickhouse_persistence_custom_query_e2e(self, clickhouse_engine):
         source_query = f"""

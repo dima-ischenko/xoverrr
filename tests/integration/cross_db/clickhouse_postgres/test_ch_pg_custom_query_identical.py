@@ -267,9 +267,7 @@ class TestCustomQueryCheckPGClickHouse:
         assert stats.passed_rows == 6
         print(f'Custom query check passed: {stats.final_score:.2f}%')
 
-    def test_custom_query_check_with_filter(
-        self, postgres_engine, clickhouse_engine
-    ):
+    def test_custom_query_check_with_filter(self, postgres_engine, clickhouse_engine):
         """Test check with LIKE filter"""
         checker = DataQualityChecker(
             source_engine=postgres_engine,
@@ -318,9 +316,7 @@ class TestCustomQueryCheckPGClickHouse:
         assert stats.passed_rows == 1  # Only Alice matches
         print(f'Custom query check passed: {stats.final_score:.2f}%')
 
-    def test_custom_query_check_date_range(
-        self, postgres_engine, clickhouse_engine
-    ):
+    def test_custom_query_check_date_range(self, postgres_engine, clickhouse_engine):
         """Test check with specific date range"""
         checker = DataQualityChecker(
             source_engine=postgres_engine,

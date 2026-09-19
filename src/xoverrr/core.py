@@ -9,33 +9,49 @@ from .adapters.base import BaseDatabaseAdapter
 from .adapters.clickhouse import ClickHouseAdapter
 from .adapters.oracle import OracleAdapter
 from .adapters.postgres import PostgresAdapter
-from .exceptions import DQCheckException, MetadataError
+from .exceptions import MetadataError
 from .logger import app_logger
 from .models import DataReference, DBMSType, ObjectType
-from .persistence import (
-    CheckResultPersister,
-    CheckRunTimings,
-    build_run_id,
-    normalize_persist_result,
-)
-from .utils import (CheckDetails, CheckStats,
-                    build_check_stats, build_sniff_issue_stats,
-                    clean_recently_changed_data,
-                    compare_dataframes, cross_fill_missing_dates,
-                    evaluate_check_sniff_query_data,
-                    normalize_column_names,
+from .persistence import (CheckResultPersister, CheckRunTimings, build_run_id,
+                          normalize_persist_result)
+from .reporting import (CheckResult, build_check_result, format_check_result,
+                        generate_check_sniff_query_report,
+                        generate_count_report, generate_sample_report,
+                        generate_total_count_report,
+                        validate_report_output_format)
+from .utils import (CheckDetails, CheckStats, build_check_stats,
+                    build_sniff_issue_stats, build_total_count_stats,
+                    clean_recently_changed_data, compare_dataframes,
+                    count_volume_scores, cross_fill_missing_dates,
+                    evaluate_check_sniff_query_data, normalize_column_names,
                     prepare_dataframe, sniff_issue_row_count,
                     validate_dataframe_size)
-from .reporting import (
-    CheckResult,
-    build_check_result,
-    format_check_result,
-    generate_count_report,
-    generate_sample_report,
-    generate_check_sniff_query_report,
-    validate_report_output_format,
-)
 from .version import __version__
+
+
+def _first_count_value(df: Optional[pd.DataFrame]) -> int:
+    if df is None or df.empty:
+        return 0
+    return int(df.iloc[0, 0])
+
+
+def _has_date_bound(value) -> bool:
+    return value is not None and str(value).strip() != ''
+
+
+def _normalize_date_bound(value) -> Optional[str]:
+    if not _has_date_bound(value):
+        return None
+    return str(value).strip()
+
+
+def _unpack_date_range(
+    date_range: Optional[Tuple[Optional[str], Optional[str]]],
+) -> Tuple[Optional[str], Optional[str]]:
+    if date_range is None:
+        return None, None
+    start_date, end_date = date_range
+    return _normalize_date_bound(start_date), _normalize_date_bound(end_date)
 
 
 class DataQualityChecker:
@@ -116,9 +132,7 @@ class DataQualityChecker:
     def _update_stats(self, status: str, source_table: DataReference):
         """Update the checker run statistics."""
         self.check_stats[status] += 1
-        self.check_stats['end_time'] = pd.Timestamp.now().strftime(
-            ct.DATETIME_FORMAT
-        )
+        self.check_stats['end_time'] = pd.Timestamp.now().strftime(ct.DATETIME_FORMAT)
         if source_table:
             match status:
                 case ct.CHECK_SUCCESS:
@@ -128,13 +142,13 @@ class DataQualityChecker:
                 case ct.CHECK_SKIPPED:
                     self.check_stats['tables_skipped'].add(source_table.full_name)
 
-    def check_counts(
+    def check_counts_group_by_date(
         self,
         source_table: DataReference,
         target_table: DataReference,
+        date_column: str,
         check_name: Optional[str] = None,
-        date_column: Optional[str] = None,
-        date_range: Optional[Tuple[str, str]] = None,
+        date_range: Optional[Tuple[Optional[str], Optional[str]]] = None,
         chunk_size_days: Optional[int] = None,
         tolerance_pct: float = 0.0,
         max_examples: Optional[int] = ct.DEFAULT_MAX_EXAMPLES,
@@ -143,7 +157,7 @@ class DataQualityChecker:
         report_output_format: str = ct.REPORT_OUTPUT_FORMAT_TEXT,
     ) -> CheckResult:
         """
-        Compare daily row counts between two tables or views.
+        Compare row counts grouped by a date or timestamp column.
 
         Returns:
             ``CheckResult`` including ``run_id``, ``status``, ``report``,
@@ -152,18 +166,19 @@ class DataQualityChecker:
 
         self._validate_inputs(source_table, target_table)
         self._require_target_engine()
+        self._validate_date_window_args(date_column, date_range, chunk_size_days)
         validate_report_output_format(report_output_format)
         persist_result = normalize_persist_result(persist_result)
         run_id, run_started_at = self._start_check_run(
-            ct.CHECK_TYPE_COUNTS, check_name
+            ct.CHECK_TYPE_COUNTS_GROUP_BY_DATE, check_name
         )
 
-        start_date, end_date = date_range or (None, None)
+        start_date, end_date = _unpack_date_range(date_range)
 
         try:
             self.check_stats['checked'] += 1
 
-            status, draft_report, stats, details = self._check_counts(
+            status, draft_report, stats, details = self._check_counts_group_by_date(
                 source_table,
                 target_table,
                 date_column,
@@ -181,8 +196,7 @@ class DataQualityChecker:
                 report=draft_report,
                 stats=stats,
                 details=details,
-                check_type=ct.CHECK_TYPE_COUNTS,
-                check_name=check_name,
+                check_type=ct.CHECK_TYPE_COUNTS_GROUP_BY_DATE,
                 check_tags=check_tags,
                 source_table=source_table.full_name,
                 target_table=target_table.full_name,
@@ -200,8 +214,91 @@ class DataQualityChecker:
                 report=None,
                 stats=None,
                 details=None,
-                check_type=ct.CHECK_TYPE_COUNTS,
-                check_name=check_name,
+                check_type=ct.CHECK_TYPE_COUNTS_GROUP_BY_DATE,
+                check_tags=check_tags,
+                source_table=source_table.full_name,
+                target_table=target_table.full_name,
+                persist_result=persist_result,
+                report_output_format=report_output_format,
+            )
+            self._update_stats(result.status, source_table)
+            return result
+
+    def check_total_counts(
+        self,
+        source_table: DataReference,
+        target_table: DataReference,
+        check_name: Optional[str] = None,
+        date_column: Optional[str] = None,
+        date_range: Optional[Tuple[Optional[str], Optional[str]]] = None,
+        chunk_size_days: Optional[int] = None,
+        tolerance_pct: float = 0.0,
+        persist_result: Optional[DataReference] = None,
+        check_tags: Optional[Dict] = None,
+        report_output_format: str = ct.REPORT_OUTPUT_FORMAT_TEXT,
+    ) -> CheckResult:
+        """
+        Compare ``COUNT(*)`` between two tables or views.
+
+        Omit ``date_column`` for a whole-table count. Pass ``date_column``
+        with ``date_range`` (one or both bounds) and optional
+        ``chunk_size_days`` to scan in date windows and sum the chunk
+        counts (avoids one heavy query). Chunking requires both bounds.
+
+        Returns:
+            ``CheckResult`` including ``run_id``, ``status``, ``report``,
+            and ``stats``.
+        """
+        self._validate_inputs(source_table, target_table)
+        self._require_target_engine()
+        self._validate_date_window_args(date_column, date_range, chunk_size_days)
+        validate_report_output_format(report_output_format)
+        persist_result = normalize_persist_result(persist_result)
+        run_id, run_started_at = self._start_check_run(
+            ct.CHECK_TYPE_TOTAL_COUNTS, check_name
+        )
+
+        start_date, end_date = _unpack_date_range(date_range)
+
+        try:
+            self.check_stats['checked'] += 1
+
+            status, draft_report, stats = self._check_total_counts(
+                source_table,
+                target_table,
+                date_column,
+                start_date,
+                end_date,
+                chunk_size_days,
+                tolerance_pct,
+                run_id=run_id,
+                run_started_at=run_started_at,
+            )
+
+            result = self._finalize_check(
+                status=status,
+                report=draft_report,
+                stats=stats,
+                details=None,
+                check_type=ct.CHECK_TYPE_TOTAL_COUNTS,
+                check_tags=check_tags,
+                source_table=source_table.full_name,
+                target_table=target_table.full_name,
+                persist_result=persist_result,
+                report_output_format=report_output_format,
+            )
+            self._update_stats(result.status, source_table)
+            return result
+
+        except Exception as e:
+            app_logger.exception(f'Total counts check failed: {str(e)}')
+            status = ct.CHECK_FAILED
+            result = self._finalize_check(
+                status=status,
+                report=None,
+                stats=None,
+                details=None,
+                check_type=ct.CHECK_TYPE_TOTAL_COUNTS,
                 check_tags=check_tags,
                 source_table=source_table.full_name,
                 target_table=target_table.full_name,
@@ -218,7 +315,7 @@ class DataQualityChecker:
         check_name: Optional[str] = None,
         date_column: Optional[str] = None,
         update_column: Optional[str] = None,
-        date_range: Optional[Tuple[str, str]] = None,
+        date_range: Optional[Tuple[Optional[str], Optional[str]]] = None,
         chunk_size_days: Optional[int] = None,
         exclude_columns: Optional[List[str]] = None,
         include_columns: Optional[List[str]] = None,
@@ -245,7 +342,7 @@ class DataQualityChecker:
             include_columns : `Optional[List[str]] = None`
                 Columns to include in the check (default: all columns).
             tolerance_pct : `float`
-                Tolerance percentage for discrepancies (0–100).
+                Tolerance percentage for discrepancies (0-100).
             max_examples
                 Maximum number of discrepancy examples per column.
 
@@ -255,6 +352,7 @@ class DataQualityChecker:
         """
         self._validate_inputs(source_table, target_table)
         self._require_target_engine()
+        self._validate_date_window_args(date_column, date_range, chunk_size_days)
         validate_report_output_format(report_output_format)
         persist_result = normalize_persist_result(persist_result)
         run_id, run_started_at = self._start_check_run(
@@ -263,7 +361,7 @@ class DataQualityChecker:
 
         exclude_hours = exclude_recent_hours or self.default_exclude_recent_hours
 
-        start_date, end_date = date_range or (None, None)
+        start_date, end_date = _unpack_date_range(date_range)
         exclude_cols = normalize_column_names(exclude_columns or [])
         custom_keys = (
             normalize_column_names(custom_primary_key or [])
@@ -299,7 +397,6 @@ class DataQualityChecker:
                 stats=stats,
                 details=details,
                 check_type=ct.CHECK_TYPE_SAMPLES,
-                check_name=check_name,
                 check_tags=check_tags,
                 source_table=source_table.full_name,
                 target_table=target_table.full_name,
@@ -318,7 +415,6 @@ class DataQualityChecker:
                 stats=None,
                 details=None,
                 check_type=ct.CHECK_TYPE_SAMPLES,
-                check_name=check_name,
                 check_tags=check_tags,
                 source_table=source_table.full_name,
                 target_table=target_table.full_name,
@@ -343,7 +439,7 @@ class DataQualityChecker:
         self._run_timings = CheckRunTimings(run_started_at=run_started_at)
         return run_id, run_started_at
 
-    def _check_counts(
+    def _check_counts_group_by_date(
         self,
         source_table: DataReference,
         target_table: DataReference,
@@ -377,7 +473,7 @@ class DataQualityChecker:
             target_chunks = []
             source_query, source_params = None, None
             target_query, target_params = None, None
-            
+
             date_chunks = self._iter_date_chunks(
                 date_column, start_date, end_date, chunk_size_days
             )
@@ -437,21 +533,19 @@ class DataQualityChecker:
                 result_diff_in_counters = abs(merged['cnt_x'] - merged['cnt_y']).sum()
                 result_equal_in_counters = merged[['cnt_x', 'cnt_y']].min(axis=1).sum()
 
-                discrepancies_counters_pct = (
-                    100
-                    * result_diff_in_counters
-                    / (result_diff_in_counters + result_equal_in_counters)
-                )
                 stats, details = self._check_dataframes_timed(
                     source_df=source_counts_filled,
                     target_df=target_counts_filled,
                     key_columns=['dt'],
                     max_examples=max_examples,
                 )
+                stats.final_diff_score, stats.final_score = count_volume_scores(
+                    result_diff_in_counters, result_equal_in_counters
+                )
 
                 status = (
                     ct.CHECK_FAILED
-                    if discrepancies_counters_pct > tolerance_pct
+                    if stats.final_diff_score > tolerance_pct
                     else ct.CHECK_SUCCESS
                 )
 
@@ -462,7 +556,6 @@ class DataQualityChecker:
                     details,
                     total_count_source,
                     total_count_taget,
-                    discrepancies_counters_pct,
                     result_diff_in_counters,
                     result_equal_in_counters,
                     self.timezone,
@@ -479,6 +572,104 @@ class DataQualityChecker:
 
         except Exception as e:
             app_logger.error(f'Counts check failed: {str(e)}')
+            raise
+
+    def _check_total_counts(
+        self,
+        source_table: DataReference,
+        target_table: DataReference,
+        date_column: Optional[str],
+        start_date: Optional[str],
+        end_date: Optional[str],
+        chunk_size_days: Optional[int],
+        tolerance_pct: float,
+        run_id: str,
+        run_started_at: str,
+    ) -> Tuple[str, Optional[str], Optional[CheckStats]]:
+        try:
+            source_adapter = self._get_adapter(self.source_db_type)
+            target_adapter = self._get_adapter(self.target_db_type)
+
+            source_columns_meta = None
+            target_columns_meta = None
+            if date_column:
+                source_columns_meta = self._get_metadata_cols(
+                    source_table, self.source_engine
+                )
+                target_columns_meta = self._get_metadata_cols(
+                    target_table, self.target_engine
+                )
+
+            date_chunks = self._iter_date_chunks(
+                date_column, start_date, end_date, chunk_size_days
+            )
+
+            source_count = 0
+            target_count = 0
+            source_query, source_params = None, None
+            target_query, target_params = None, None
+
+            for chunk_start, chunk_end in date_chunks:
+                source_query, source_params = source_adapter.build_total_count_query(
+                    source_table,
+                    date_column,
+                    chunk_start,
+                    chunk_end,
+                    source_columns_meta,
+                    self.timezone,
+                )
+                source_df = self._execute_query(
+                    (source_query, source_params),
+                    self.source_engine,
+                    self.timezone,
+                    query_side='source',
+                )
+                source_count += _first_count_value(source_df)
+
+                target_query, target_params = target_adapter.build_total_count_query(
+                    target_table,
+                    date_column,
+                    chunk_start,
+                    chunk_end,
+                    target_columns_meta,
+                    self.timezone,
+                )
+                target_df = self._execute_query(
+                    (target_query, target_params),
+                    self.target_engine,
+                    self.timezone,
+                    query_side='target',
+                )
+                target_count += _first_count_value(target_df)
+
+            if (source_count, target_count) == (0, 0):
+                app_logger.warning('nothing to compare to you')
+                return ct.CHECK_SKIPPED, None, None
+
+            stats = build_total_count_stats(source_count, target_count)
+            status = (
+                ct.CHECK_FAILED
+                if stats.final_diff_score > tolerance_pct
+                else ct.CHECK_SUCCESS
+            )
+            report = generate_total_count_report(
+                source_table.full_name,
+                target_table.full_name,
+                stats,
+                self.timezone,
+                run_id,
+                run_started_at,
+                source_query,
+                source_params,
+                target_query,
+                target_params,
+                date_chunks=date_chunks,
+                **self._report_context,
+            )
+            return status, report, stats
+
+        except Exception as e:
+            app_logger.error(f'Total counts check failed: {str(e)}')
             raise
 
     def _check_samples(
@@ -742,7 +933,6 @@ class DataQualityChecker:
                 stats=stats,
                 details=details,
                 check_type=ct.CHECK_TYPE_SNIFF_QUERY,
-                check_name=check_name,
                 check_tags=check_tags,
                 source_table=None,
                 target_table=None,
@@ -763,7 +953,6 @@ class DataQualityChecker:
                 stats=None,
                 details=None,
                 check_type=ct.CHECK_TYPE_SNIFF_QUERY,
-                check_name=check_name,
                 check_tags=check_tags,
                 source_table=None,
                 target_table=None,
@@ -901,7 +1090,6 @@ class DataQualityChecker:
                 stats=stats,
                 details=details,
                 check_type=ct.CHECK_TYPE_CUSTOM_QUERIES,
-                check_name=check_name,
                 check_tags=check_tags,
                 source_table=None,
                 target_table=None,
@@ -924,7 +1112,6 @@ class DataQualityChecker:
                 stats=None,
                 details=None,
                 check_type=ct.CHECK_TYPE_CUSTOM_QUERIES,
-                check_name=check_name,
                 check_tags=check_tags,
                 source_table=None,
                 target_table=None,
@@ -948,7 +1135,6 @@ class DataQualityChecker:
         check_type: str,
         persist_result: Optional[DataReference] = None,
         report_output_format: str,
-        check_name: Optional[str] = None,
         check_tags: Optional[Dict] = None,
         source_table: Optional[str] = None,
         target_table: Optional[str] = None,
@@ -1045,9 +1231,7 @@ class DataQualityChecker:
         source_end = source_params.get('end_date')
 
         if not (
-            chunk_size_days
-            and source_start is not None
-            and source_end is not None
+            chunk_size_days and source_start is not None and source_end is not None
         ):
             return [source_params]
 
@@ -1339,9 +1523,7 @@ class DataQualityChecker:
                 chunk_details.issue_examples is not None
                 and not chunk_details.issue_examples.empty
             ):
-                for row in chunk_details.issue_examples.to_dict(
-                    'records'
-                ):
+                for row in chunk_details.issue_examples.to_dict('records'):
                     col = row['column_name']
                     if discrepancy_examples_by_col[col] < examples_limit:
                         discrepancy_examples_rows.append(row)
@@ -1363,9 +1545,7 @@ class DataQualityChecker:
         )
         issue_breakdown = (
             pd.DataFrame(
-                sorted(
-                    issue_counter.items(), key=lambda item: item[1], reverse=True
-                ),
+                sorted(issue_counter.items(), key=lambda item: item[1], reverse=True),
                 columns=['column_name', 'issue_count'],
             )
             if issue_counter
@@ -1479,6 +1659,34 @@ class DataQualityChecker:
         except KeyError:
             raise ValueError(f'No adapter available for {db_type}')
 
+    def _validate_date_window_args(
+        self,
+        date_column: Optional[str],
+        date_range: Optional[Tuple[Optional[str], Optional[str]]],
+        chunk_size_days: Optional[int],
+    ) -> None:
+        start_date = end_date = None
+        if date_range is not None:
+            if not isinstance(date_range, (tuple, list)) or len(date_range) != 2:
+                raise ValueError('date_range must be (start_date, end_date)')
+            start_date, end_date = _unpack_date_range(date_range)
+            if start_date is None and end_date is None:
+                raise ValueError('date_range requires start_date and/or end_date')
+        if chunk_size_days is not None:
+            if date_range is None:
+                raise ValueError('date_range is required when chunk_size_days is set')
+            if start_date is None or end_date is None:
+                raise ValueError(
+                    'date_range requires both start_date and end_date'
+                    ' when chunk_size_days is set'
+                )
+        if date_column:
+            return
+        if date_range is not None or chunk_size_days is not None:
+            raise ValueError(
+                'date_column is required when date_range or chunk_size_days is set'
+            )
+
     def _iter_date_chunks(
         self,
         date_column: Optional[str],
@@ -1492,8 +1700,8 @@ class DataQualityChecker:
         if not (
             chunk_size_days
             and date_column
-            and start_date is not None
-            and end_date is not None
+            and _has_date_bound(start_date)
+            and _has_date_bound(end_date)
         ):
             return [(start_date, end_date)]
 
@@ -1665,9 +1873,7 @@ class DataQualityChecker:
                 chunk_details.issue_examples is not None
                 and not chunk_details.issue_examples.empty
             ):
-                for row in chunk_details.issue_examples.to_dict(
-                    'records'
-                ):
+                for row in chunk_details.issue_examples.to_dict('records'):
                     col = row['column_name']
                     if discrepancy_examples_by_col[col] < examples_limit:
                         discrepancy_examples_rows.append(row)
@@ -1766,9 +1972,7 @@ class DataQualityChecker:
     ):
         self._run_timings.mark_dataset_check_start()
         try:
-            return compare_dataframes(
-                source_df, target_df, key_columns, max_examples
-            )
+            return compare_dataframes(source_df, target_df, key_columns, max_examples)
         finally:
             self._run_timings.mark_dataset_check_end()
 
@@ -1825,7 +2029,7 @@ class DataQualityChecker:
     def _require_target_engine(self) -> Engine:
         if self.target_engine is None:
             raise ValueError(
-                'target_engine is required for check_samples, check_counts, '
-                'and check_custom_queries'
+                'target_engine is required for check_samples, check_counts_group_by_date, '
+                'check_total_counts, and check_custom_queries'
             )
         return self.target_engine

@@ -1,21 +1,13 @@
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 
-from .constants import (
-    DATETIME_FORMAT,
-    DEFAULT_MAX_EXAMPLES,
-    FLAG_VALUE_NO,
-    FLAG_VALUE_YES,
-    NULL_REPLACEMENT,
-    XSNIFF_PASSED_COLUMN,
-    XSNIFF_PASSED_VALUE_NO,
-    XRECENTLY_CHANGED_COLUMN,
-)
+from .constants import (DEFAULT_MAX_EXAMPLES, FLAG_VALUE_YES, NULL_REPLACEMENT,
+                        XRECENTLY_CHANGED_COLUMN, XSNIFF_PASSED_COLUMN,
+                        XSNIFF_PASSED_VALUE_NO)
 from .logger import app_logger
 
 
@@ -94,12 +86,8 @@ def build_check_stats(
     issue_rows_pct = (1 - passed_rows / comparable_rows) * 100
 
     issue_pcts = [(cnt / comparable_rows) * 100 for cnt in issue_counts]
-    max_issue_pct = (
-        float(np.max(issue_pcts)) if issue_pcts else 0.0
-    )
-    median_issue_pct = (
-        float(np.median(issue_pcts)) if issue_pcts else 0.0
-    )
+    max_issue_pct = float(np.max(issue_pcts)) if issue_pcts else 0.0
+    median_issue_pct = float(np.median(issue_pcts)) if issue_pcts else 0.0
 
     final_diff_score = (
         dup_source_rows_pct * 0.1
@@ -170,9 +158,45 @@ class CheckStats:
     final_score: float
 
 
+def count_volume_scores(diff_count, equal_count) -> Tuple[float, float]:
+    """Return ``(final_diff_score, final_score)`` from count totals."""
+    total = float(diff_count) + float(equal_count)
+    if not total:
+        return 0.0, 100.0
+    final_diff_score = 100.0 * float(diff_count) / total
+    return final_diff_score, 100.0 - final_diff_score
+
+
+def build_total_count_stats(source_count: int, target_count: int) -> CheckStats:
+    """Build CheckStats for a whole-table COUNT(*) comparison."""
+    diff_count = abs(source_count - target_count)
+    equal_count = min(source_count, target_count)
+    final_diff_score, final_score = count_volume_scores(diff_count, equal_count)
+    return CheckStats(
+        total_source_rows=source_count,
+        total_target_rows=target_count,
+        dup_source_rows=0,
+        dup_target_rows=0,
+        only_source_rows=0,
+        only_target_rows=0,
+        comparable_rows=0,
+        passed_rows=0,
+        dup_source_rows_pct=0.0,
+        dup_target_rows_pct=0.0,
+        source_only_rows_pct=0.0,
+        target_only_rows_pct=0.0,
+        issue_rows_pct=0.0,
+        max_issue_pct=0.0,
+        median_issue_pct=0.0,
+        final_diff_score=final_diff_score,
+        final_score=final_score,
+    )
+
+
 @dataclass
 class CheckDetails:
     """Examples and per-column details for a single check."""
+
     issue_breakdown: pd.DataFrame
     issue_examples: pd.DataFrame
 
@@ -253,7 +277,7 @@ def resolve_check_sniff_query_passed_column(columns: List[str]) -> str:
     if XSNIFF_PASSED_COLUMN not in normalized_columns:
         raise ValueError(
             f"Sniff query requires '{XSNIFF_PASSED_COLUMN}' column; "
-            f"got columns: {', '.join(normalized_columns)}"
+            f'got columns: {", ".join(normalized_columns)}'
         )
     return XSNIFF_PASSED_COLUMN
 
@@ -268,7 +292,9 @@ def evaluate_check_sniff_query_data(
     ``y`` means passed, ``n`` means failed.
     """
     prepared_df = prepare_dataframe(df)
-    passed_column = resolve_check_sniff_query_passed_column(prepared_df.columns.tolist())
+    passed_column = resolve_check_sniff_query_passed_column(
+        prepared_df.columns.tolist()
+    )
 
     is_failed = prepared_df[passed_column] == XSNIFF_PASSED_VALUE_NO
     issue_rows = int(is_failed.sum())
@@ -589,209 +615,6 @@ def _create_keys_set(df: pd.DataFrame, key_columns: List[str]) -> set:
     return set(df[key_columns].itertuples(index=False, name=None))
 
 
-def _legacy_generate_sample_report(
-    source_table: str,
-    target_table: str,
-    stats: CheckStats,
-    details: CheckDetails,
-    timezone: str,
-    run_id: str,
-    run_started_at: str,
-    source_query: str = None,
-    source_params: Dict = None,
-    target_query: str = None,
-    target_params: Dict = None,
-    date_chunks: Optional[List[Tuple[str, str]]] = None,
-    library_version: Optional[str] = None,
-    source_db_type: Optional[str] = None,
-    target_db_type: Optional[str] = None,
-) -> str:
-    """Generate a sample-check report (logger output is hard to read)."""
-    rl = []
-    append_report_run_header(
-        rl,
-        run_id,
-        run_started_at,
-        library_version=library_version,
-        source_db_type=source_db_type,
-        target_db_type=target_db_type,
-    )
-    rl.append('SAMPLES CHECK REPORT: ')
-    if source_table and target_table:
-        rl.append(f'{source_table}')
-        rl.append('VS')
-        rl.append(f'{target_table}')
-        rl.append('=' * 80)
-
-    if date_chunks and len(date_chunks) > 1:
-        rl.append(f'\nchunks processed ({len(date_chunks)} intervals):')
-        for start, end in date_chunks:
-            rl.append(f'  {start} → {end}')
-
-    if source_query and target_query:
-        rl.append(f'timezone: {timezone}')
-        rl.append(f'    {source_query}')
-        if source_params:
-            rl.append(f'    params: {source_params}')
-        rl.append('-' * 40)
-        rl.append(f'    {target_query}')
-        if target_params:
-            rl.append(f'    params: {target_params}')
-
-    rl.append('-' * 40)
-    rl.append('\nSUMMARY:')
-    rl.append(f'  Source rows: {stats.total_source_rows}')
-    rl.append(f'  Target rows: {stats.total_target_rows}')
-    rl.append(f'  Duplicated source rows: {stats.dup_source_rows}')
-    rl.append(f'  Duplicated target rows: {stats.dup_target_rows}')
-    rl.append(f'  Only source rows: {stats.only_source_rows}')
-    rl.append(f'  Only target rows: {stats.only_target_rows}')
-    rl.append(f'  Comparable rows: {stats.comparable_rows}')
-    rl.append(f'  Passed rows: {stats.passed_rows}')
-    rl.append('-' * 40)
-    rl.append(f'  Source only rows %: {stats.source_only_rows_pct:.5f}')
-    rl.append(f'  Target only rows %: {stats.target_only_rows_pct:.5f}')
-    rl.append(f'  Duplicated source rows %: {stats.dup_source_rows_pct:.5f}')
-    rl.append(f'  Duplicated target rows %: {stats.dup_target_rows_pct:.5f}')
-    rl.append(f'  Issue rows %: {stats.issue_rows_pct:.5f}')
-    rl.append(f'  Final discrepancies score: {stats.final_diff_score:.5f}')
-    rl.append(f'  Final data quality score: {stats.final_score:.5f}')
-    rl.append(
-        f'  Source-only key examples: {format_report_collection(details.source_only_keys_examples)}'
-    )
-    rl.append(
-        f'  Target-only key examples: {format_report_collection(details.target_only_keys_examples)}'
-    )
-    rl.append(
-        f'  Duplicated source key examples: {format_report_collection(details.dup_source_keys_examples)}'
-    )
-    rl.append(
-        f'  Duplicated target key examples: {format_report_collection(details.dup_target_keys_examples)}'
-    )
-    rl.append(
-        f'  Skipped source columns: {format_report_collection(details.skipped_source_columns)}'
-    )
-    rl.append(
-        f'  Skipped target columns: {format_report_collection(details.skipped_target_columns)}'
-    )
-
-    if stats.max_issue_pct > 0 and not details.issue_breakdown.empty:
-        rl.append('\nISSUE BREAKDOWN:')
-        rl.append(f'  Max issue %: {stats.max_issue_pct:.5f}')
-        rl.append('  Issue counts by column:\n')
-        rl.append(details.issue_breakdown.to_string(index=False))
-        rl.append('  Issue examples:\n')
-        rl.append(
-            details.issue_examples.to_string(
-                index=False, max_colwidth=64, justify='left'
-            )
-        )
-
-    # Horizontal wide row dumps are hard to use in text reports.
-    # Keep the code for a future optional report parameter (e.g. include_issue_row_examples).
-    if False and (
-        details.issue_row_examples is not None
-        and not details.issue_row_examples.empty
-    ):
-        rl.append('\nISSUE ROW EXAMPLES:')
-        rl.append('Sorted by primary key and dataset:')
-        rl.append('')
-        rl.append(
-            details.issue_row_examples.to_string(
-                index=False, max_colwidth=64, justify='left'
-            )
-        )
-        rl.append('')
-
-    rl.append('=' * 80)
-    return '\n'.join(rl)
-
-
-def _legacy_generate_count_report(
-    source_table: str,
-    target_table: str,
-    stats: CheckStats,
-    details: CheckDetails,
-    total_source_count: int,
-    total_target_count: int,
-    discrepancies_counters_pct: int,
-    result_diff_in_counters: int,
-    result_equal_in_counters: int,
-    timezone: str,
-    run_id: str,
-    run_started_at: str,
-    source_query: str = None,
-    source_params: Dict = None,
-    target_query: str = None,
-    target_params: Dict = None,
-    date_chunks: Optional[List[Tuple[str, str]]] = None,
-    library_version: Optional[str] = None,
-    source_db_type: Optional[str] = None,
-    target_db_type: Optional[str] = None,
-) -> None:
-    """Generate a counts-check report (logger output is hard to read)."""
-    rl = []
-    append_report_run_header(
-        rl,
-        run_id,
-        run_started_at,
-        library_version=library_version,
-        source_db_type=source_db_type,
-        target_db_type=target_db_type,
-    )
-    rl.append(f'COUNTS CHECK REPORT:')
-    rl.append(f'{source_table}')
-    rl.append(f'VS')
-    rl.append(f'{target_table}')
-    rl.append('=' * 80)
-
-    if date_chunks and len(date_chunks) > 1:
-        rl.append(f'\nchunks processed ({len(date_chunks)} intervals):')
-        for start, end in date_chunks:
-            rl.append(f'  {start} → {end}') 
-
-    if source_query and target_query:
-        rl.append(f'timezone: {timezone}')
-        rl.append(f'    {source_query}')
-        if source_params:
-            rl.append(f'    params: {source_params}')
-        rl.append('-' * 40)
-        rl.append(f'    {target_query}')
-        if target_params:
-            rl.append(f'    params: {target_params}')
-
-    rl.append('-' * 40)
-
-    rl.append(f'\nSUMMARY:')
-    rl.append(f'  Source total count: {total_source_count}')
-    rl.append(f'  Target total count: {total_target_count}')
-    rl.append(f'  Common total count: {result_equal_in_counters}')
-    rl.append(f'  Diff total count: {result_diff_in_counters}')
-    rl.append(f'  Discrepancies %: {discrepancies_counters_pct:.5f}%')
-    rl.append(f'  Final discrepancies score: {discrepancies_counters_pct:.5f}')
-    rl.append(
-        f'  Final data quality score: {(100 - discrepancies_counters_pct):.5f}'
-    )
-    if not details.issue_breakdown.empty:
-        rl.append(f'\nISSUE BREAKDOWN:')
-        rl.append(details.issue_breakdown.to_string(index=False))
-
-    # Horizontal wide row dumps are hard to use in text reports.
-    # Keep the code for a future optional report parameter (e.g. include_issue_row_examples).
-    if False and (
-        details.issue_row_examples is not None
-        and not details.issue_row_examples.empty
-    ):
-        rl.append(f'\nISSUE ROW EXAMPLES:')
-        rl.append('Sorted by primary key and dataset:')
-        rl.append(f'\n')
-        rl.append(details.issue_row_examples.to_string(index=False))
-        rl.append(f'\n')
-    rl.append('=' * 80)
-
-    return '\n'.join(rl)
-
-
 def safe_remove_zeros(x):
     if pd.isna(x):
         return x
@@ -838,14 +661,11 @@ def clean_recently_changed_data(
     Returns:
         tuple: (df1_processed, df2_processed)
     """
-    app_logger.info(
-        f'Before exclusion: source={len(df1)}, target={len(df2)}'
-    )
+    app_logger.info(f'Before exclusion: source={len(df1)}, target={len(df2)}')
 
     if df1.empty and df2.empty:
         app_logger.info('Both dataframes are empty, skipping exclusion')
         return df1, df2
-
 
     has_flag_df1 = XRECENTLY_CHANGED_COLUMN in df1.columns
     has_flag_df2 = XRECENTLY_CHANGED_COLUMN in df2.columns
@@ -900,52 +720,7 @@ def clean_recently_changed_data(
     return df1_processed, df2_processed
 
 
-def find_count_discrepancies(
-    source_counts: pd.DataFrame, target_counts: pd.DataFrame
-) -> pd.DataFrame:
-    """Find discrepancies in daily row counts between source and target."""
-    source_counts['flg'] = 'source'
-    target_counts['flg'] = 'target'
-
-    # Find mismatches in counts per date
-    all_counts = pd.concat([source_counts, target_counts])
-    discrepancies = all_counts.drop_duplicates(
-        subset=['dt', 'cnt'], keep=False
-    ).sort_values(by=['dt', 'flg'], ascending=[False, True])
-
-    return discrepancies
-
-
-def create_result_message(
-    source_total: int,
-    target_total: int,
-    discrepancies: pd.DataFrame,
-    check_type: str,
-) -> str:
-    """Create a standardised result message."""
-    if discrepancies.empty:
-        return f'{check_type} match: Source={source_total}, Target={target_total}'
-
-    issue_count = len(discrepancies)
-    diff = source_total - target_total
-    diff_msg = f' (Δ={diff})' if diff != 0 else ''
-
-    return (
-        f'{check_type} mismatch: Source={source_total}, Target={target_total}{diff_msg}, '
-        f'{issue_count} discrepancies found'
-    )
-
-
-def filter_columns(
-    df: pd.DataFrame, columns: List[str], exclude: Optional[List[str]] = None
-) -> pd.DataFrame:
-    """Filter DataFrame columns, with optional exclusions."""
-    if exclude:
-        columns = [col for col in columns if col not in exclude]
-    return df[columns]
-
-
-def cross_fill_missing_dates(df1, df2, date_column='dt', value_column='cnt'):
+def cross_fill_missing_dates(df1, df2, date_column='dt'):
     """Fill missing dates between two DataFrames."""
 
     df1_indexed = df1.set_index(date_column)
