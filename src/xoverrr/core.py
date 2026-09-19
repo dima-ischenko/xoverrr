@@ -134,13 +134,12 @@ class DataQualityChecker:
         self.check_stats[status] += 1
         self.check_stats['end_time'] = pd.Timestamp.now().strftime(ct.DATETIME_FORMAT)
         if source_table:
-            match status:
-                case ct.CHECK_SUCCESS:
-                    self.check_stats['tables_success'].add(source_table.full_name)
-                case ct.CHECK_FAILED:
-                    self.check_stats['tables_failed'].add(source_table.full_name)
-                case ct.CHECK_SKIPPED:
-                    self.check_stats['tables_skipped'].add(source_table.full_name)
+            if status == ct.CHECK_SUCCESS:
+                self.check_stats['tables_success'].add(source_table.full_name)
+            elif status == ct.CHECK_FAILED:
+                self.check_stats['tables_failed'].add(source_table.full_name)
+            elif status == ct.CHECK_SKIPPED:
+                self.check_stats['tables_skipped'].add(source_table.full_name)
 
     def check_counts_group_by_date(
         self,
