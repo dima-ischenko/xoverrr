@@ -1,0 +1,9 @@
+ALTER SESSION SET CONTAINER = FREEPDB1;
+
+CREATE TABLE test.imalive (
+    id NUMBER
+);
+
+INSERT INTO test.imalive (id) SELECT 1 FROM dual;
+
+COMMIT;

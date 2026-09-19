@@ -120,6 +120,10 @@ cd tests/integration
 # Start all databases in detached mode
 docker-compose -f docker/docker-compose.yml up -d
 
+# From the project root you can also use:
+# make up-dbs
+# make down-dbs
+
 # Wait until the databases are ready (the health checks will complete)
 # Check status
 docker-compose -f docker/docker-compose.yml ps
@@ -143,12 +147,19 @@ From the project root directory (with the virtual environment activated):
 # Run all integration tests
 python -m pytest tests/integration -v
 
+# Or from the project root:
+# make test-integration
+
 # Run specific test file
 python -m pytest tests/integration/data_types/test_data_types.py -v
 
 # Run specific test method
 python -m pytest tests/integration/test_edge_cases.py::TestCustomQueryCheck::test_custom_query_check -v
 ```
+
+## GitHub Actions
+
+CI uses `tests/integration/docker/docker-compose.ci.yml` so the workflow can pull a public Oracle image (`gvenzl/oracle-free`) without Oracle Container Registry credentials. Connection URLs can be overridden with `XOVERRR_TEST_POSTGRES_URL`, `XOVERRR_TEST_ORACLE_URL`, and `XOVERRR_TEST_CLICKHOUSE_URL`. Local development keeps `docker-compose.yml` and the default URLs above.
 
 ## Test database credentials
 
