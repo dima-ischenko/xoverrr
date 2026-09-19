@@ -52,7 +52,7 @@ pytest tests/unit -v
 * **Description:** provide a concise summary of the changes, the problem solved, and any relevant context. Link to related issues.
 * **Review:** request a review. Be prepared to discuss the changes and to make iterative improvements in response to feedback.
 
-GitHub Actions runs unit tests on every push to a branch. From the **Actions** tab you can also run the **CI** workflow manually and tick **Run Docker integration tests** to exercise PostgreSQL, Oracle, and ClickHouse.
+GitHub Actions runs unit tests on every push to a branch. To run Docker integration tests, open **Actions -> Integration tests -> Run workflow** and pick a branch. **Re-run** on a push-triggered CI run will not start integration: that job is skipped on push, and a re-run keeps the original event.
 
 ## Releasing
 
@@ -75,8 +75,8 @@ The same `Makefile` targets (`test-unit`, `test-integration`, `build`) are what 
 
 One-time PyPI setup (repository owner):
 
-1. In GitHub: **Settings → Environments → New environment** named `pypi` (optional: require a reviewer).
-2. In PyPI: **Publishing → Add a new pending publisher** (or add a publisher on the existing `xoverrr` project):
+1. In GitHub: **Settings -> Environments -> New environment** named `pypi` (optional: require a reviewer).
+2. In PyPI: **Publishing -> Add a new pending publisher** (or add a publisher on the existing `xoverrr` project):
    * Owner: `dima-ischenko`
    * Repository: `xoverrr`
    * Workflow: `release.yml`

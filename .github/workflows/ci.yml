@@ -7,11 +7,6 @@ on:
     tags-ignore:
       - '**'
   workflow_dispatch:
-    inputs:
-      run_integration:
-        description: Run Docker integration tests (PostgreSQL, Oracle, ClickHouse)
-        type: boolean
-        default: false
   workflow_call:
 
 permissions:
@@ -52,7 +47,7 @@ jobs:
 
   integration:
     name: Integration tests
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_integration == 'true'
+    if: github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/integration.yml
     permissions:
       contents: read
