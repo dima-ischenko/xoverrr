@@ -168,7 +168,7 @@ class TestClickHouseOracleCountsCheck:
             tolerance_pct=0.0,
         )
 
-        assert result.status == CHECK_FAILED #! todo 
+        assert result.status == CHECK_SUCCESS
         assert result.stats.final_score == 100.0
         assert result.stats.total_source_rows == 3
         assert result.stats.total_target_rows == 3
