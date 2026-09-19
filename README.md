@@ -531,3 +531,19 @@ source_query = """
     WHERE status = 'completed'
 """
 ```
+
+---
+
+## CI/CD
+
+GitHub Actions (see `.github/workflows/`):
+
+| Event | What runs |
+|-------|-----------|
+| Push to any branch, or **Actions → CI → Run workflow** | Unit tests on Python 3.9 and 3.12 |
+| **Run workflow** with *Run Docker integration tests* enabled | Unit tests plus PostgreSQL / Oracle / ClickHouse integration tests |
+| Tag `vX.Y.Z` whose commit is on `main` | All tests, then publish to PyPI |
+
+The tag must match the version in `pyproject.toml` and `src/xoverrr/version.py` (for example tag `v1.4.6`). Release details and the one-time PyPI Trusted Publishing setup are in `COTRIBUTE.md`.
+
+Local commands used by CI are in the `Makefile` (`make test-unit`, `make up-dbs`, `make build`).
