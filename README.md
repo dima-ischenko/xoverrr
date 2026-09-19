@@ -541,8 +541,8 @@ GitHub Actions (see `.github/workflows/`):
 | Event | What runs |
 |-------|-----------|
 | Push to any branch | Unit tests on Python 3.9 and 3.12 |
-| **Actions -> CI -> Run workflow** | Unit tests plus integration tests |
-| **Actions -> Integration tests -> Run workflow** | Integration tests only (PostgreSQL / Oracle / ClickHouse) |
+| Push with `[integration]` in the commit message | Unit tests plus integration tests |
+| **Actions → CI / Integration tests → Run workflow** (after workflows are on `main`) | Manual run on the chosen branch |
 | Tag `vX.Y.Z` whose commit is on `main` | All tests, then publish to PyPI |
 
 The tag must match the version in `pyproject.toml` and `src/xoverrr/version.py` (for example tag `v1.4.6`). Release details and the one-time PyPI Trusted Publishing setup are in `COTRIBUTE.md`.

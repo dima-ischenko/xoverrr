@@ -52,7 +52,16 @@ pytest tests/unit -v
 * **Description:** provide a concise summary of the changes, the problem solved, and any relevant context. Link to related issues.
 * **Review:** request a review. Be prepared to discuss the changes and to make iterative improvements in response to feedback.
 
-GitHub Actions runs unit tests on every push to a branch. To run Docker integration tests, open **Actions -> Integration tests -> Run workflow** and pick a branch. **Re-run** on a push-triggered CI run will not start integration: that job is skipped on push, and a re-run keeps the original event.
+GitHub Actions runs unit tests on every push to a branch.
+
+**Run workflow** is a GitHub UI control that only appears after the workflow file exists on `main`. Until then it will not show on a feature branch. To run Docker integration tests from this branch, push a commit whose message contains `[integration]`:
+
+```bash
+git commit --allow-empty -m "Run integration tests [integration]"
+git push
+```
+
+After merge to `main`: **Actions** → left sidebar **CI** or **Integration tests** → **Run workflow** on the right. That button is not on an existing run page (there you only get **Re-run**).
 
 ## Releasing
 

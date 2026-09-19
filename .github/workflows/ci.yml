@@ -47,7 +47,7 @@ jobs:
 
   integration:
     name: Integration tests
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[integration]')
     uses: ./.github/workflows/integration.yml
     permissions:
       contents: read
