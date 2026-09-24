@@ -61,10 +61,11 @@ class TestPostgresYearlyChunking:
         )
         yield
 
-    def test_postgres_chunking_30_days_matches_non_chunked(self, postgres_engine):
-        checker = DataQualityChecker(
-            source_engine=postgres_engine,
-            target_engine=postgres_engine,
+    def test_postgres_chunking_30_days_matches_non_chunked(
+        self, postgres_engine, make_self_db_checker
+    ):
+        checker = make_self_db_checker(
+            postgres_engine,
             timezone='UTC',
         )
         table_ref = DataReference('test_pg_chunking_yearly', 'test')
@@ -123,10 +124,11 @@ class TestPostgresYearlyChunking:
             stats_sample_chunked.final_diff_score == stats_sample_full.final_diff_score
         )
 
-    def test_postgres_chunking_30_days_negative_sample(self, postgres_engine):
-        checker = DataQualityChecker(
-            source_engine=postgres_engine,
-            target_engine=postgres_engine,
+    def test_postgres_chunking_30_days_negative_sample(
+        self, postgres_engine, make_self_db_checker
+    ):
+        checker = make_self_db_checker(
+            postgres_engine,
             timezone='UTC',
         )
         source_ref = DataReference('test_pg_chunking_yearly', 'test')
@@ -201,10 +203,11 @@ class TestPostgresYearlyChunking:
         assert result_chunked.stats.final_diff_score == 0.0
         assert 'chunks processed' in result_chunked.report
 
-    def test_open_ended_date_range_without_chunking(self, postgres_engine):
-        checker = DataQualityChecker(
-            source_engine=postgres_engine,
-            target_engine=postgres_engine,
+    def test_open_ended_date_range_without_chunking(
+        self, postgres_engine, make_self_db_checker
+    ):
+        checker = make_self_db_checker(
+            postgres_engine,
             timezone='UTC',
         )
         source_ref = DataReference('test_pg_chunking_yearly', 'test')

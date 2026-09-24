@@ -65,10 +65,11 @@ class TestOracleYearlyChunking:
         )
         yield
 
-    def test_oracle_chunking_30_days_matches_non_chunked(self, oracle_engine):
-        checker = DataQualityChecker(
-            source_engine=oracle_engine,
-            target_engine=oracle_engine,
+    def test_oracle_chunking_30_days_matches_non_chunked(
+        self, oracle_engine, make_self_db_checker
+    ):
+        checker = make_self_db_checker(
+            oracle_engine,
             timezone='UTC',
         )
         table_ref = DataReference('test_ora_chunking_yearly', 'test')
@@ -127,10 +128,11 @@ class TestOracleYearlyChunking:
             stats_sample_chunked.final_diff_score == stats_sample_full.final_diff_score
         )
 
-    def test_oracle_chunking_30_days_negative_sample(self, oracle_engine):
-        checker = DataQualityChecker(
-            source_engine=oracle_engine,
-            target_engine=oracle_engine,
+    def test_oracle_chunking_30_days_negative_sample(
+        self, oracle_engine, make_self_db_checker
+    ):
+        checker = make_self_db_checker(
+            oracle_engine,
             timezone='UTC',
         )
         source_ref = DataReference('test_ora_chunking_yearly', 'test')
@@ -205,10 +207,11 @@ class TestOracleYearlyChunking:
         assert result_chunked.stats.final_diff_score == 0.0
         assert 'chunks processed' in result_chunked.report
 
-    def test_open_ended_date_range_without_chunking(self, oracle_engine):
-        checker = DataQualityChecker(
-            source_engine=oracle_engine,
-            target_engine=oracle_engine,
+    def test_open_ended_date_range_without_chunking(
+        self, oracle_engine, make_self_db_checker
+    ):
+        checker = make_self_db_checker(
+            oracle_engine,
             timezone='UTC',
         )
         source_ref = DataReference('test_ora_chunking_yearly', 'test')

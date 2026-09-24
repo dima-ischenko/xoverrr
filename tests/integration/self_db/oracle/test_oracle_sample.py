@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import text
 
 from xoverrr.constants import CHECK_SUCCESS
-from xoverrr.core import DataQualityChecker, DataReference
+from xoverrr.core import DataReference
 
 
 class TestOracleSelfCheck:
@@ -42,13 +42,12 @@ class TestOracleSelfCheck:
 
         yield
 
-    def test_oracle_self_check_identical(self, oracle_engine):
+    def test_oracle_self_check_identical(self, oracle_engine, make_self_db_checker):
         """
         Compare identical tables within same Oracle database.
         """
-        checker = DataQualityChecker(
-            source_engine=oracle_engine,
-            target_engine=oracle_engine,
+        checker = make_self_db_checker(
+            oracle_engine,
             timezone='Europe/Athens',
         )
 
@@ -69,7 +68,9 @@ class TestOracleSelfCheck:
         assert stats.final_diff_score == 0.0
         print(f'Oracle self-check passed: {stats.final_score:.2f}%')
 
-    def test_oracle_table_vs_view(self, oracle_engine, table_helper):
+    def test_oracle_table_vs_view(
+        self, oracle_engine, table_helper, make_self_db_checker
+    ):
         """
         Compare Oracle table with view on the same data.
         """
@@ -84,9 +85,8 @@ class TestOracleSelfCheck:
             """,
         )
 
-        checker = DataQualityChecker(
-            source_engine=oracle_engine,
-            target_engine=oracle_engine,
+        checker = make_self_db_checker(
+            oracle_engine,
             timezone='Europe/Athens',
         )
 

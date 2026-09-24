@@ -153,6 +153,90 @@ class BaseDatabaseAdapter(ABC):
         """Build the DBMS-specific predicate for recent-row exclusion."""
         pass
 
+    def quote_ident(self, col: str) -> str:
+        if col.lower() in RESERVED_WORDS:
+            return f'"{col}"'
+        return col
+
+    def sql_string_literal(self, value: str) -> str:
+        return "'" + str(value).replace("'", "''") + "'"
+
+    def sql_cast_text(self, expr: str) -> str:
+        return f'CAST({expr} AS VARCHAR)'
+
+    def sql_cast_bigint(self, expr: str) -> str:
+        return f'CAST({expr} AS BIGINT)'
+
+    def sql_null_text(self) -> str:
+        return 'NULL'
+
+    def sql_chr(self, code: int) -> str:
+        return f'CHR({code})'
+
+    def sql_concat(self, parts: List[str]) -> str:
+        if not parts:
+            return self.sql_string_literal('')
+        if len(parts) == 1:
+            return parts[0]
+        return ' || '.join(parts)
+
+    def sql_join_eq(self, left: str, right: str) -> str:
+        return f'{left} = {right}'
+
+    def sql_null_safe_eq(self, left: str, right: str) -> str:
+        return f'{left} IS NOT DISTINCT FROM {right}'
+
+    def sql_null_safe_neq(self, left: str, right: str) -> str:
+        return f'{left} IS DISTINCT FROM {right}'
+
+    def sql_diff_flag(self, left: str, right: str) -> str:
+        return f'CASE WHEN {self.sql_null_safe_eq(left, right)} THEN 0 ELSE 1 END'
+
+    def sql_nulls_first(self, expr: str) -> str:
+        return f'{expr} NULLS FIRST'
+
+    def compare_query_settings_suffix(self) -> str:
+        return ''
+
+    def sql_dummy_from(self) -> str:
+        """FROM clause for a one-row SELECT of scalar subqueries."""
+        return ''
+
+    def build_compare_query(
+        self,
+        source_table: DataReference,
+        target_table: DataReference,
+        common_columns: List[str],
+        key_columns: List[str],
+        source_columns_meta: pd.DataFrame,
+        target_columns_meta: pd.DataFrame,
+        date_column: Optional[str],
+        update_column: Optional[str],
+        start_date: Optional[str],
+        end_date: Optional[str],
+        exclude_recent_hours: Optional[int] = None,
+        timezone: Optional[str] = None,
+        max_examples: int = 3,
+    ) -> Tuple[str, Dict]:
+        from ..sql_compare import render_compare_query
+
+        return render_compare_query(
+            self,
+            source_table,
+            target_table,
+            common_columns,
+            key_columns,
+            source_columns_meta,
+            target_columns_meta,
+            date_column,
+            update_column,
+            start_date,
+            end_date,
+            exclude_recent_hours,
+            timezone,
+            max_examples,
+        )
+
     def convert_types(
         self, df: pd.DataFrame, metadata: pd.DataFrame, timezone: str
     ) -> pd.DataFrame:

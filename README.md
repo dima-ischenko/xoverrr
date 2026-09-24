@@ -18,6 +18,7 @@ Supported databases: **Oracle**, **PostgreSQL** (+ Greenplum), **ClickHouse**.
 - **Chunked date ranges** - process long periods in N-day windows
 - **Reports** - text or JSON, with example mismatched rows
 - **Optional persistence** - write run results to a third engine for dashboards and audit
+- **In-database sample compare** - `InDatabaseChecker` runs `check_samples` as one SQL query when both tables are in the same database
 - **Tests** - unit coverage plus Docker-backed integration tests
 
 ---
@@ -111,6 +112,22 @@ result.details
 | `check_sniff_query` | Source-only rule: "does this data look wrong?" | No |
 
 A target engine is required for the first four methods, but it may be the same as `source_engine` (two tables or schemas in one database). Pass a second engine only when the sides live in different databases.
+
+When both tables are in **one** database and the sample is large, use `InDatabaseChecker` instead of pulling both sides into pandas:
+
+```python
+from xoverrr import InDatabaseChecker, DataReference
+
+checker = InDatabaseChecker(engine=pg_engine, timezone='Europe/Athens')
+result = checker.check_samples(
+    source_table=DataReference("employees", "hr"),
+    target_table=DataReference("employees_v", "ods"),
+    date_column="hire_date",
+    custom_primary_key=["employee_id"],
+)
+```
+
+`InDatabaseChecker` takes a single `engine`. SQL pushdown applies to `check_samples` only; counts and sniff queries still run as ordinary SQL. Both tables are assumed to have the same column types, so the query compares native values (NULL-safe) instead of pandas-style string canonicalization. Cross-database checks still use `DataQualityChecker` with two engines.
 
 ---
 

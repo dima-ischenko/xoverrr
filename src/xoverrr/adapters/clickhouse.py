@@ -1,3 +1,4 @@
+import re
 import time
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
@@ -54,13 +55,13 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
             if isinstance(query, tuple):
                 query, params = query
                 if tz_set:
-                    query = f'{query} {tz_set}'
+                    query = self._append_setting(query, tz_set)
                 app_logger.info(f'query\n {query}')
                 app_logger.info(f'{params=}')
                 df = pd.read_sql(text(query), engine, params=params, coerce_float=False)
             else:
                 if tz_set:
-                    query = f'{query} {tz_set}'
+                    query = self._append_setting(query, tz_set)
                 app_logger.info(f'query\n {query}')
                 df = pd.read_sql(text(query), engine, coerce_float=False)
 
@@ -75,6 +76,15 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
             )
 
             raise QueryExecutionError(f'Query failed: {str(e)}')
+
+    @staticmethod
+    def _append_setting(query: str, setting: str) -> str:
+        setting = setting.strip()
+        if setting.upper().startswith('SETTINGS '):
+            setting = setting[9:].strip()
+        if re.search(r'\bSETTINGS\b', query, re.IGNORECASE):
+            return f'{query.rstrip()} , {setting}'
+        return f'{query} SETTINGS {setting}'
 
     def get_object_type(self, data_ref: DataReference, engine: Engine) -> ObjectType:
         """Determine whether the object is a table or a view in ClickHouse."""
@@ -287,6 +297,31 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
             return condition, params
 
         return None, None
+
+    def sql_cast_text(self, expr: str) -> str:
+        return f'CAST({expr} AS Nullable(String))'
+
+    def sql_cast_bigint(self, expr: str) -> str:
+        return f'CAST({expr} AS Nullable(Int64))'
+
+    def sql_chr(self, code: int) -> str:
+        return f'char({code})'
+
+    def sql_concat(self, parts: List[str]) -> str:
+        if not parts:
+            return self.sql_string_literal('')
+        if len(parts) == 1:
+            return parts[0]
+        return 'concat(' + ', '.join(parts) + ')'
+
+    def sql_null_safe_eq(self, left: str, right: str) -> str:
+        return f'(({left} = {right}) OR ({left} IS NULL AND {right} IS NULL))'
+
+    def sql_null_safe_neq(self, left: str, right: str) -> str:
+        return f'NOT (({left} = {right}) OR ({left} IS NULL AND {right} IS NULL))'
+
+    def compare_query_settings_suffix(self) -> str:
+        return ' SETTINGS join_use_nulls = 1'
 
     def _get_type_conversion_rules(self, timezone: str) -> Dict[str, Callable]:
         return {

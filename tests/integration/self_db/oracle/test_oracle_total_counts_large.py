@@ -73,8 +73,16 @@ class TestOracleTotalCountsLarge:
         assert result_chunked.status == CHECK_SUCCESS
         assert result_full.stats.total_source_rows == 100000
         assert result_full.stats.total_target_rows == 100000
-        assert result_chunked.stats.total_source_rows == result_full.stats.total_source_rows
-        assert result_chunked.stats.total_target_rows == result_full.stats.total_target_rows
-        assert result_chunked.stats.final_diff_score == result_full.stats.final_diff_score
+        assert (
+            result_chunked.stats.total_source_rows
+            == result_full.stats.total_source_rows
+        )
+        assert (
+            result_chunked.stats.total_target_rows
+            == result_full.stats.total_target_rows
+        )
+        assert (
+            result_chunked.stats.final_diff_score == result_full.stats.final_diff_score
+        )
         assert 'chunks processed' not in result_full.report
         assert 'chunks processed' in result_chunked.report

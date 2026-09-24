@@ -19,6 +19,7 @@ from .reporting import (CheckResult, build_check_result, format_check_result,
                         generate_count_report, generate_sample_report,
                         generate_total_count_report,
                         validate_report_output_format)
+from .sql_compare import parse_compare_query_result
 from .utils import (CheckDetails, CheckStats, build_check_stats,
                     build_sniff_issue_stats, build_total_count_stats,
                     clean_recently_changed_data, compare_dataframes,
@@ -1774,50 +1775,33 @@ class DataQualityChecker:
             date_column, start_date, end_date, chunk_size_days
         )
         for chunk_start, chunk_end in date_chunks:
-            source_data, source_query, source_params = self._get_table_data(
-                self.source_engine,
+            (
+                chunk_stats,
+                chunk_details,
+                source_query,
+                source_params,
+                target_query,
+                target_params,
+                source_rows_raw,
+                target_rows_raw,
+            ) = self._run_sample_chunk(
                 source_table,
-                source_columns_meta,
-                common_cols,
-                date_column,
-                update_column,
-                chunk_start,
-                chunk_end,
-                exclude_recent_hours,
-                query_side='source',
-            )
-            target_data, target_query, target_params = self._get_table_data(
-                self.target_engine,
                 target_table,
+                source_columns_meta,
                 target_columns_meta,
                 common_cols,
+                key_columns,
                 date_column,
                 update_column,
                 chunk_start,
                 chunk_end,
                 exclude_recent_hours,
-                query_side='target',
+                examples_limit,
             )
 
-            total_source_rows_raw += len(source_data)
-            total_target_rows_raw += len(target_data)
+            total_source_rows_raw += source_rows_raw
+            total_target_rows_raw += target_rows_raw
 
-            if source_data.empty and target_data.empty:
-                continue
-
-            source_data = prepare_dataframe(source_data)
-            target_data = prepare_dataframe(target_data)
-            if update_column and exclude_recent_hours:
-                source_data, target_data = clean_recently_changed_data(
-                    source_data, target_data, key_columns
-                )
-
-            if source_data.empty and target_data.empty:
-                continue
-
-            chunk_stats, chunk_details = self._check_dataframes_timed(
-                source_data, target_data, key_columns, examples_limit
-            )
             if not chunk_stats:
                 continue
 
@@ -1952,6 +1936,92 @@ class DataQualityChecker:
         )
         return status, report, stats, details
 
+    def _run_sample_chunk(
+        self,
+        source_table: DataReference,
+        target_table: DataReference,
+        source_columns_meta: pd.DataFrame,
+        target_columns_meta: pd.DataFrame,
+        common_cols: List[str],
+        key_columns: List[str],
+        date_column: Optional[str],
+        update_column: Optional[str],
+        chunk_start: Optional[str],
+        chunk_end: Optional[str],
+        exclude_recent_hours: Optional[int],
+        examples_limit: int,
+    ):
+        """Fetch both sides and compare one date chunk in pandas."""
+        source_data, source_query, source_params = self._get_table_data(
+            self.source_engine,
+            source_table,
+            source_columns_meta,
+            common_cols,
+            date_column,
+            update_column,
+            chunk_start,
+            chunk_end,
+            exclude_recent_hours,
+            query_side='source',
+        )
+        target_data, target_query, target_params = self._get_table_data(
+            self.target_engine,
+            target_table,
+            target_columns_meta,
+            common_cols,
+            date_column,
+            update_column,
+            chunk_start,
+            chunk_end,
+            exclude_recent_hours,
+            query_side='target',
+        )
+        source_rows_raw = len(source_data)
+        target_rows_raw = len(target_data)
+        if source_data.empty and target_data.empty:
+            return (
+                None,
+                None,
+                source_query,
+                source_params,
+                target_query,
+                target_params,
+                0,
+                0,
+            )
+
+        source_data = prepare_dataframe(source_data)
+        target_data = prepare_dataframe(target_data)
+        if update_column and exclude_recent_hours:
+            source_data, target_data = clean_recently_changed_data(
+                source_data, target_data, key_columns
+            )
+        if source_data.empty and target_data.empty:
+            return (
+                None,
+                None,
+                source_query,
+                source_params,
+                target_query,
+                target_params,
+                source_rows_raw,
+                target_rows_raw,
+            )
+
+        chunk_stats, chunk_details = self._check_dataframes_timed(
+            source_data, target_data, key_columns, examples_limit
+        )
+        return (
+            chunk_stats,
+            chunk_details,
+            source_query,
+            source_params,
+            target_query,
+            target_params,
+            source_rows_raw,
+            target_rows_raw,
+        )
+
     def _merge_examples_set(
         self, target_set: set, source_items, max_examples: int
     ) -> None:
@@ -2032,3 +2102,87 @@ class DataQualityChecker:
                 'check_total_counts, and check_custom_queries'
             )
         return self.target_engine
+
+
+class InDatabaseChecker(DataQualityChecker):
+    """
+    Intra-database checker that compares sample rows with SQL on the engine.
+
+    Use this when source and target tables live in the same database. Cross-database
+    checks still use :class:`DataQualityChecker`. SQL pushdown applies to
+    ``check_samples``; counts and sniff queries use ordinary SQL as before.
+    """
+
+    def __init__(
+        self,
+        engine: Engine,
+        default_exclude_recent_hours: Optional[int] = 24,
+        timezone: str = ct.DEFAULT_TZ,
+        results_engine: Optional[Engine] = None,
+        max_dataframe_size_gb: float = ct.DEFAULT_MAX_DATAFRAME_SIZE_GB,
+    ):
+        super().__init__(
+            source_engine=engine,
+            target_engine=engine,
+            default_exclude_recent_hours=default_exclude_recent_hours,
+            timezone=timezone,
+            results_engine=results_engine,
+            max_dataframe_size_gb=max_dataframe_size_gb,
+        )
+        self.engine = engine
+
+    def _run_sample_chunk(
+        self,
+        source_table: DataReference,
+        target_table: DataReference,
+        source_columns_meta: pd.DataFrame,
+        target_columns_meta: pd.DataFrame,
+        common_cols: List[str],
+        key_columns: List[str],
+        date_column: Optional[str],
+        update_column: Optional[str],
+        chunk_start: Optional[str],
+        chunk_end: Optional[str],
+        exclude_recent_hours: Optional[int],
+        examples_limit: int,
+    ):
+        adapter = self._get_adapter(self.source_db_type)
+        query, params = adapter.build_compare_query(
+            source_table,
+            target_table,
+            common_cols,
+            key_columns,
+            source_columns_meta,
+            target_columns_meta,
+            date_column,
+            update_column,
+            chunk_start,
+            chunk_end,
+            exclude_recent_hours,
+            self.timezone,
+            examples_limit,
+        )
+        tagged = self._execute_query(
+            (query, params), self.engine, self.timezone, query_side='source'
+        )
+        non_key_columns = [col for col in common_cols if col not in key_columns]
+        self._run_timings.mark_dataset_check_start()
+        try:
+            chunk_stats, chunk_details = parse_compare_query_result(
+                tagged, key_columns, non_key_columns, examples_limit
+            )
+        finally:
+            self._run_timings.mark_dataset_check_end()
+
+        source_rows_raw = chunk_stats.total_source_rows if chunk_stats else 0
+        target_rows_raw = chunk_stats.total_target_rows if chunk_stats else 0
+        return (
+            chunk_stats,
+            chunk_details,
+            query,
+            params,
+            None,
+            None,
+            source_rows_raw,
+            target_rows_raw,
+        )

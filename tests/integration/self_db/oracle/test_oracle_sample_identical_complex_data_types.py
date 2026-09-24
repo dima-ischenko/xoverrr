@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import text
 
 from xoverrr.constants import CHECK_SKIPPED, CHECK_SUCCESS
-from xoverrr.core import DataQualityChecker, DataReference
+from xoverrr.core import DataReference
 
 
 class TestOracleComplexDataTypes:
@@ -74,13 +74,12 @@ class TestOracleComplexDataTypes:
 
         yield
 
-    def test_oracle_complex_types_self_check(self, oracle_engine):
+    def test_oracle_complex_types_self_check(self, oracle_engine, make_self_db_checker):
         """
         Compare Oracle table with itself containing complex data types.
         """
-        checker = DataQualityChecker(
-            source_engine=oracle_engine,
-            target_engine=oracle_engine,
+        checker = make_self_db_checker(
+            oracle_engine,
             timezone='Europe/Athens',
         )
 
@@ -103,13 +102,12 @@ class TestOracleComplexDataTypes:
         assert stats.final_diff_score == 0.0
         print(f'Oracle complex types self-check passed: {stats.final_score:.2f}%')
 
-    def test_oracle_with_column_exclusions(self, oracle_engine):
+    def test_oracle_with_column_exclusions(self, oracle_engine, make_self_db_checker):
         """
         Test Oracle self-check with excluded columns.
         """
-        checker = DataQualityChecker(
-            source_engine=oracle_engine,
-            target_engine=oracle_engine,
+        checker = make_self_db_checker(
+            oracle_engine,
             timezone='Europe/Athens',
         )
 
@@ -139,13 +137,12 @@ class TestOracleComplexDataTypes:
         assert status == CHECK_SUCCESS
         print(f'Oracle with column exclusions passed: {stats.final_score:.2f}%')
 
-    def test_oracle_empty_date_range(self, oracle_engine):
+    def test_oracle_empty_date_range(self, oracle_engine, make_self_db_checker):
         """
         Test Oracle self-check with empty date range.
         """
-        checker = DataQualityChecker(
-            source_engine=oracle_engine,
-            target_engine=oracle_engine,
+        checker = make_self_db_checker(
+            oracle_engine,
             timezone='Europe/Athens',
         )
 

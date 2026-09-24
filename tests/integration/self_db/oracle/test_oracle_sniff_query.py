@@ -2,8 +2,13 @@
 
 import pytest
 
-from xoverrr.constants import (CHECK_FAILED, CHECK_SUCCESS, FLAG_VALUE_NO,
-                               FLAG_VALUE_YES, XSNIFF_PASSED_COLUMN)
+from xoverrr.constants import (
+    CHECK_FAILED,
+    CHECK_SUCCESS,
+    FLAG_VALUE_NO,
+    FLAG_VALUE_YES,
+    XSNIFF_PASSED_COLUMN,
+)
 from xoverrr.core import DataQualityChecker
 
 TABLE_NAME = 'test_sniff_query_data'

@@ -5,7 +5,7 @@ from .constants import (CHECK_FAILED, CHECK_SKIPPED, CHECK_SUCCESS,
                         FLAG_VALUE_NO, FLAG_VALUE_YES,
                         XRECENTLY_CHANGED_COLUMN, XSNIFF_PASSED_COLUMN,
                         XSNIFF_PASSED_VALUE_NO, XSNIFF_PASSED_VALUE_YES)
-from .core import DataQualityChecker, DataReference
+from .core import DataQualityChecker, DataReference, InDatabaseChecker
 from .reporting import (CheckResult, generate_check_sniff_query_report,
                         generate_count_report, generate_sample_report,
                         generate_total_count_report)
@@ -13,6 +13,7 @@ from .utils import CheckDetails, CheckStats
 
 __all__ = [
     'DataQualityChecker',
+    'InDatabaseChecker',
     'DataReference',
     'CheckStats',
     'CheckDetails',

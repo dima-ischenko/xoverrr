@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import text
 
 from xoverrr.constants import CHECK_SUCCESS
-from xoverrr.core import DataQualityChecker, DataReference
+from xoverrr.core import DataReference
 
 
 class TestClickHouseTableVsView:
@@ -58,16 +58,15 @@ class TestClickHouseTableVsView:
         )
         yield
 
-    def test_clickhouse_table_vs_view(self, clickhouse_engine):
+    def test_clickhouse_table_vs_view(self, clickhouse_engine, make_self_db_checker):
         """
         Test comparison between ClickHouse table and view.
         """
         table_name = 'test_self_ch_table_view_main'
         view_name = 'v_test_self_ch_table_view'
 
-        checker = DataQualityChecker(
-            source_engine=clickhouse_engine,
-            target_engine=clickhouse_engine,
+        checker = make_self_db_checker(
+            clickhouse_engine,
             timezone='Europe/Athens',
         )
 

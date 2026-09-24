@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import text
 
 from xoverrr.constants import CHECK_SKIPPED, CHECK_SUCCESS
-from xoverrr.core import DataQualityChecker, DataReference
+from xoverrr.core import DataReference
 
 
 class TestPostgresSelfCheck:
@@ -130,13 +130,14 @@ class TestPostgresSelfCheck:
 
         yield
 
-    def test_postgres_self_check_identical(self, postgres_engine, setup_postgres_data):
+    def test_postgres_self_check_identical(
+        self, postgres_engine, setup_postgres_data, make_self_db_checker
+    ):
         """
         Compare identical tables within same PostgreSQL database.
         """
-        checker = DataQualityChecker(
-            source_engine=postgres_engine,
-            target_engine=postgres_engine,
+        checker = make_self_db_checker(
+            postgres_engine,
             timezone='Europe/Athens',
         )
 
@@ -158,14 +159,13 @@ class TestPostgresSelfCheck:
         print(f'PostgreSQL self-check passed: {stats.final_score:.2f}%')
 
     def test_postgres_self_check_identical_view(
-        self, postgres_engine, setup_postgres_data
+        self, postgres_engine, setup_postgres_data, make_self_db_checker
     ):
         """
         Compare identical tables within same PostgreSQL database.
         """
-        checker = DataQualityChecker(
-            source_engine=postgres_engine,
-            target_engine=postgres_engine,
+        checker = make_self_db_checker(
+            postgres_engine,
             timezone='Europe/Athens',
         )
 
@@ -187,15 +187,14 @@ class TestPostgresSelfCheck:
         print(f'PostgreSQL self-check passed: {stats.final_score:.2f}%')
 
     def test_postgres_self_check_identical_mview(
-        self, postgres_engine, setup_postgres_data_mv
+        self, postgres_engine, setup_postgres_data_mv, make_self_db_checker
     ):
         """
         Compare identical tables within same PostgreSQL database.
         """
         # pytest.skip('issue #50')
-        checker = DataQualityChecker(
-            source_engine=postgres_engine,
-            target_engine=postgres_engine,
+        checker = make_self_db_checker(
+            postgres_engine,
             timezone='Europe/Athens',
         )
 
@@ -217,11 +216,10 @@ class TestPostgresSelfCheck:
         print(f'PostgreSQL self-check passed: {stats.final_score:.2f}%')
 
     def test_postgres_self_check_empty_one_side(
-        self, postgres_engine, setup_postgres_data_empty_one_side
+        self, postgres_engine, setup_postgres_data_empty_one_side, make_self_db_checker
     ):
-        checker = DataQualityChecker(
-            source_engine=postgres_engine,
-            target_engine=postgres_engine,
+        checker = make_self_db_checker(
+            postgres_engine,
             timezone='Europe/Athens',
         )
 

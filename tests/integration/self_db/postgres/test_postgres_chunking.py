@@ -93,10 +93,11 @@ class TestPostgresChunkedCheck:
         assert stats_chunked.total_source_rows == stats_non_chunked.total_source_rows
         assert stats_chunked.total_target_rows == stats_non_chunked.total_target_rows
 
-    def test_chunked_sample_aggregates_differences_across_chunks(self, postgres_engine):
-        checker = DataQualityChecker(
-            source_engine=postgres_engine,
-            target_engine=postgres_engine,
+    def test_chunked_sample_aggregates_differences_across_chunks(
+        self, postgres_engine, make_self_db_checker
+    ):
+        checker = make_self_db_checker(
+            postgres_engine,
             timezone='UTC',
         )
 

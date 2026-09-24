@@ -481,6 +481,24 @@ class OracleAdapter(BaseDatabaseAdapter):
 
         return None, None
 
+    def sql_cast_text(self, expr: str) -> str:
+        return f'CAST({expr} AS VARCHAR2(4000))'
+
+    def sql_cast_bigint(self, expr: str) -> str:
+        return f'CAST({expr} AS NUMBER)'
+
+    def sql_dummy_from(self) -> str:
+        return 'FROM dual'
+
+    def sql_null_safe_eq(self, left: str, right: str) -> str:
+        return f'DECODE({left}, {right}, 1, 0) = 1'
+
+    def sql_null_safe_neq(self, left: str, right: str) -> str:
+        return f'DECODE({left}, {right}, 1, 0) = 0'
+
+    def sql_diff_flag(self, left: str, right: str) -> str:
+        return f'DECODE({left}, {right}, 0, 1)'
+
     def _get_type_conversion_rules(self, timezone: str) -> Dict[str, Callable]:
         return {
             # errors='coerce' is needed as a workaround for years >= 2262
