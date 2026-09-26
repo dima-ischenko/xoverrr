@@ -5,7 +5,7 @@ import pandas as pd
 from sqlalchemy import text
 
 from ..constants import (DATE_FORMAT, DATETIME_FORMAT, FLAG_VALUE_YES,
-                         XRECENTLY_CHANGED_COLUMN)
+                         XRECENTLY_CHANGED_COLUMN, TO_CHAR_CAST_DATETIME_CH)
 from ..exceptions import QueryExecutionError
 from ..logger import app_logger
 from ..models import DataReference, ObjectType
@@ -53,7 +53,7 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
         try:
             if isinstance(query, tuple):
                 query, params = query
-                if tz_set:
+                if tz_set: 
                     query = f'{query} {tz_set}'
                 app_logger.info(f'query\n {query}')
                 app_logger.info(f'{params=}')
@@ -245,16 +245,31 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
         exclude_recent_hours: Optional[int] = None,
         columns_meta: pd.DataFrame = None,
         timezone: str = None,
+        key_column: List[str] =None,
+        hash_pct: int = None
     ) -> Tuple[str, Dict]:
         params = {}
         # Add recent data exclusion flag
         exclusion_condition, exclusion_params = self._build_exclusion_condition(
             update_column, exclude_recent_hours
         )
+        hash_condition = None
+        ts_mask = (
+                    columns_meta['data_type']
+                    .str.lower()
+                    .str.contains(r'timestamp.*', regex=True, na=False)
+                )
+
+        ts_columns = columns_meta[ts_mask]['column_name'].tolist()
 
         if exclusion_condition:
             columns.append(exclusion_condition)
             params.update(exclusion_params)
+
+        if hash_pct:
+            ts_columns = self._build_cast_timestamp_column_expression(ts_columns)
+            hash_keys = [ts_columns.get(i) if ts_columns.get(i) else i for i in key_column ]
+            hash_condition = self._build_hash_filter(hash_keys, hash_pct)
 
         query = f"""
         SELECT {', '.join(columns)}
@@ -269,9 +284,17 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
                 f'            AND {date_column} < toDate(:end_date) + INTERVAL 1 day\n'
             )
             params['end_date'] = end_date
+        if hash_condition:
+            query += f"             AND {hash_condition}\n"
 
         return query, params
-
+    
+    def _build_cast_timestamp_column_expression(
+        self,
+        ts_columns: List[str]
+    ):
+        return {i:f'formatDateTime({i}, {TO_CHAR_CAST_DATETIME_CH})' for i in ts_columns}
+    
     def _build_exclusion_condition(
         self, update_column: str, exclude_recent_hours: int
     ) -> Tuple[str, Dict]:
@@ -348,3 +371,8 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
         insert_sql = self.build_persistence_insert_sql(table_ref, record)
         with engine.begin() as conn:
             conn.execute(text(insert_sql), record)
+
+
+    def _build_hash_filter(self, fields, percent):
+        fields_to_char = [f'cast({i} as text)' for i in fields]
+        return f"""reinterpretAsUInt32(reverse(substring(MD5(toString({'||'.join(fields_to_char)})), 1, 4))) % 100 < {percent}"""

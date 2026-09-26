@@ -5,7 +5,7 @@ import pandas as pd
 from sqlalchemy import text
 
 from ..constants import (DATETIME_FORMAT, FLAG_VALUE_YES,
-                         XRECENTLY_CHANGED_COLUMN)
+                         XRECENTLY_CHANGED_COLUMN, TO_CHAR_CAST_DATETIME)
 from ..exceptions import QueryExecutionError
 from ..logger import app_logger
 from ..models import DataReference, ObjectType
@@ -348,7 +348,7 @@ class OracleAdapter(BaseDatabaseAdapter):
     ) -> Tuple[str, Dict]:
 
         tz_columns = []
-        tz_columns = self._identify_timestamp_tz_columns(columns_meta)
+        tz_columns,_ = self._identify_timestamp_tz_columns(columns_meta)
 
         date_expr = None
         date_expr = self._build_cast_tz_column_expression(
@@ -390,7 +390,7 @@ class OracleAdapter(BaseDatabaseAdapter):
     ) -> Tuple[str, Dict]:
         if not date_column:
             return '', {}
-        tz_columns = self._identify_timestamp_tz_columns(columns_meta)
+        tz_columns,_ = self._identify_timestamp_tz_columns(columns_meta)
         date_expr = self._build_cast_tz_column_expression(
             column_name=date_column,
             tz_columns=tz_columns,
@@ -420,10 +420,12 @@ class OracleAdapter(BaseDatabaseAdapter):
         exclude_recent_hours: Optional[int] = None,
         columns_meta: pd.DataFrame = None,
         timezone: str = None,
+        key_column: List[str] =None,
+        hash_pct: int = None
     ) -> Tuple[str, Dict]:
 
         tz_columns = []
-        tz_columns = self._identify_timestamp_tz_columns(columns_meta)
+        tz_columns, ts_columns = self._identify_timestamp_tz_columns(columns_meta)
 
         converted_columns = self._apply_timestamp_tz_casts(
             columns=columns,
@@ -443,11 +445,17 @@ class OracleAdapter(BaseDatabaseAdapter):
             converted_columns.append(exclusion_condition)
             params.update(exclusion_params)
 
+        if hash_pct:
+            ts_columns = self._build_cast_timestamp_column_expression(ts_columns)
+            hash_keys = [ts_columns.get(i) if ts_columns.get(i) else i for i in key_column ]
+            hash_condition = self._build_hash_filter(hash_keys,hash_pct)
+
         query = f"""
         SELECT {', '.join(converted_columns)}
         FROM {data_ref.full_name}
         WHERE 1=1\n"""
 
+        hash_condition = None
         date_expr = None
         if date_column:
             date_expr = self._build_cast_tz_column_expression(
@@ -464,6 +472,9 @@ class OracleAdapter(BaseDatabaseAdapter):
         if end_date and date_expr:
             query += f"            AND {date_expr} < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1\n"
             params['end_date'] = end_date
+
+        if hash_condition:
+            query += f"            AND {hash_condition}\n"
 
         return query, params
 
@@ -510,7 +521,7 @@ class OracleAdapter(BaseDatabaseAdapter):
 
     def _identify_timestamp_tz_columns(
         self, columns_metadata: pd.DataFrame
-    ) -> List[str]:
+    ) -> Tuple[List[str], List[str]]:
         """
         Identify columns that need timezone casting, because of the thin driver as well (missed tz info in the result column)
 
@@ -522,13 +533,19 @@ class OracleAdapter(BaseDatabaseAdapter):
             List of column names that are TIMESTAMP WITH TIME ZONE (not LOCAL)
         """
         if columns_metadata is None or columns_metadata.empty:
-            return []
+            return [], []
 
         # Filter for TIMESTAMP WITH TIME ZONE (excluding LOCAL TIME ZONE)
         tz_mask = (
             columns_metadata['data_type']
             .str.lower()
             .str.contains(r'timestamp.*time zone', regex=True, na=False)
+        )
+
+        ts_mask = (
+            columns_metadata['data_type']
+            .str.lower()
+            .str.contains(r'timestamp.*', regex=True, na=False)
         )
 
         # Exclude LOCAL TIME ZONE
@@ -539,13 +556,15 @@ class OracleAdapter(BaseDatabaseAdapter):
         )
 
         tz_columns = columns_metadata[tz_mask & ~local_mask]['column_name'].tolist()
+        ts_columns = columns_metadata[ts_mask]['column_name'].tolist()
 
         if tz_columns:
             app_logger.info(
                 f'Identified TIMESTAMP WITH TIME ZONE columns: {tz_columns}'
             )
 
-        return tz_columns
+        return tz_columns, ts_columns
+
 
     def _build_cast_tz_column_expression(
         self,
@@ -578,6 +597,12 @@ class OracleAdapter(BaseDatabaseAdapter):
             return f'{cast_expr} AS {column_name}'
 
         return cast_expr
+
+    def _build_cast_timestamp_column_expression(
+        self,
+        ts_columns: List[str]
+    ):
+        return {i:f'to_char({i}, {TO_CHAR_CAST_DATETIME})' for i in ts_columns}
 
     def _apply_timestamp_tz_casts(
         self,
@@ -690,3 +715,7 @@ class OracleAdapter(BaseDatabaseAdapter):
         )
         with engine.begin() as conn:
             conn.execute(text(insert_sql), bind_record)
+
+    def _build_hash_filter(self, fields, percent):
+        fields_to_char = [f'to_char({i})' for i in fields]
+        return f"""MOD(TO_NUMBER(SUBSTR(RAWTOHEX(STANDARD_HASH(({'||'.join(fields_to_char)}), 'MD5')), 1, 8), 'XXXXXXXX'), 100) < {percent}"""
