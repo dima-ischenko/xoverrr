@@ -22,6 +22,7 @@ CHECK_TYPE_COUNTS_GROUP_BY_DATE = 'counts_group_by_date'
 CHECK_TYPE_TOTAL_COUNTS = 'total_counts'
 CHECK_TYPE_SAMPLES = 'samples'
 CHECK_TYPE_CUSTOM_QUERIES = 'custom_queries'
+CHECK_TYPE_CUSTOM_QUERIES_AGG = 'custom_queries_agg'
 CHECK_TYPE_SNIFF_QUERY = 'sniff_query'
 
 # Shared y/n flag convention for x-prefixed check columns.
@@ -30,6 +31,9 @@ FLAG_VALUE_NO = 'n'
 
 # Recently changed exclusion column (check_samples / check_custom_queries).
 XRECENTLY_CHANGED_COLUMN = 'xrecently_changed'
+
+# Synthetic key for the single-row aggregate comparison.
+XAGG_ROW_COLUMN = 'xagg'
 
 # Pass/fail flag column for check_sniff_query (row-level or scalar).
 # ``y`` = passed, ``n`` = failed.

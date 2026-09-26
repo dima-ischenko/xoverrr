@@ -149,7 +149,7 @@ class PostgresAdapter(BaseDatabaseAdapter):
         SELECT *
         FROM (
             {query_text}
-        ) xoverrr_subq
+        ) x_subq
         LIMIT 0
         """
 

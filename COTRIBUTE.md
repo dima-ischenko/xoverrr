@@ -61,7 +61,7 @@ git commit --allow-empty -m "Run integration tests [integration]"
 git push
 ```
 
-After merge to `main`: **Actions** → left sidebar **CI** or **Integration tests** → **Run workflow** on the right. That button is not on an existing run page (there you only get **Re-run**).
+After merge to `main`: **Actions** -> left sidebar **CI** or **Integration tests** -> **Run workflow** on the right. That button is not on an existing run page (there you only get **Re-run**).
 
 ## Releasing
 
@@ -74,8 +74,8 @@ Publish only from `main`, with a version tag that matches both `pyproject.toml` 
 ```bash
 git checkout main
 git pull
-git tag -a v1.4.6 -m "v1.4.6"
-git push origin v1.4.6
+git tag -a vX.X.X -m "vX.X.X"
+git push origin vX.X.X
 ```
 
 The **Release** workflow then runs unit tests, Docker integration tests, builds the package, and publishes to PyPI via Trusted Publishing.

@@ -77,6 +77,40 @@ class BaseDatabaseAdapter(ABC):
         )
         return query + extra_sql, params
 
+    def build_custom_query_aggregate_sql(
+        self,
+        query: str,
+        max_columns: Optional[List[str]] = None,
+        sum_columns: Optional[List[str]] = None,
+        include_count: bool = False,
+    ) -> str:
+        """Wrap a custom query so the database computes MAX / SUM / COUNT(*)."""
+        select_parts = []
+        for column in self._normalize_aggregate_columns(max_columns):
+            select_parts.append(f'max({column}) as max_{column}')
+        for column in self._normalize_aggregate_columns(sum_columns):
+            select_parts.append(f'sum({column}) as sum_{column}')
+        if include_count:
+            select_parts.append('count(*) as cnt')
+        if not select_parts:
+            raise ValueError('max_columns, sum_columns, or include_count is required')
+
+        inner = (query or '').strip().rstrip(';').strip()
+        if not inner:
+            raise ValueError('query is empty')
+        return f'SELECT {", ".join(select_parts)} FROM ({inner}) x_subq'
+
+    @staticmethod
+    def _normalize_aggregate_columns(columns: Optional[List[str]]) -> List[str]:
+        names: List[str] = []
+        for column in columns or []:
+            name = str(column).strip().lower()
+            if not re.match(r'^[a-z_][a-z0-9_]*$', name):
+                raise ValueError(f'Invalid aggregate column name: {column}')
+            if name not in names:
+                names.append(name)
+        return names
+
     def _total_count_date_filters(
         self,
         date_column: Optional[str],

@@ -12,21 +12,74 @@ from .adapters.postgres import PostgresAdapter
 from .exceptions import MetadataError
 from .logger import app_logger
 from .models import DataReference, DBMSType, ObjectType
-from .persistence import (CheckResultPersister, CheckRunTimings, build_run_id,
-                          normalize_persist_result)
-from .reporting import (CheckResult, build_check_result, format_check_result,
-                        generate_check_sniff_query_report,
-                        generate_count_report, generate_sample_report,
-                        generate_total_count_report,
-                        validate_report_output_format)
-from .utils import (CheckDetails, CheckStats, build_check_stats,
-                    build_sniff_issue_stats, build_total_count_stats,
-                    clean_recently_changed_data, compare_dataframes,
-                    count_volume_scores, cross_fill_missing_dates,
-                    evaluate_check_sniff_query_data, normalize_column_names,
-                    prepare_dataframe, sniff_issue_row_count,
-                    validate_dataframe_size)
+from .persistence import (
+    CheckResultPersister,
+    CheckRunTimings,
+    build_run_id,
+    normalize_persist_result,
+)
+from .reporting import (
+    CheckResult,
+    build_check_result,
+    format_check_result,
+    generate_check_sniff_query_report,
+    generate_count_report,
+    generate_custom_query_agg_report,
+    generate_sample_report,
+    generate_total_count_report,
+    validate_report_output_format,
+)
+from .utils import (
+    CheckDetails,
+    CheckStats,
+    build_check_stats,
+    build_sniff_issue_stats,
+    build_total_count_stats,
+    clean_recently_changed_data,
+    compare_dataframes,
+    count_volume_scores,
+    cross_fill_missing_dates,
+    evaluate_check_sniff_query_data,
+    normalize_column_names,
+    prepare_dataframe,
+    sniff_issue_row_count,
+    validate_dataframe_size,
+)
 from .version import __version__
+
+
+def _aggregate_result_metadata(
+    inner_metadata: pd.DataFrame,
+    max_columns: List[str],
+    sum_columns: List[str],
+    include_count: bool,
+) -> pd.DataFrame:
+    """Reuse inner-query types for ``max_*`` / ``sum_*`` / ``cnt`` columns."""
+    type_map = {
+        str(row.column_name).lower(): row.data_type
+        for row in inner_metadata.itertuples(index=False)
+        if getattr(row, 'column_name', None) is not None
+    }
+    rows = []
+    for column in max_columns:
+        name = column.lower()
+        rows.append(
+            {
+                'column_name': f'max_{name}',
+                'data_type': type_map.get(name, 'text'),
+            }
+        )
+    for column in sum_columns:
+        name = column.lower()
+        rows.append(
+            {
+                'column_name': f'sum_{name}',
+                'data_type': type_map.get(name, 'numeric'),
+            }
+        )
+    if include_count:
+        rows.append({'column_name': 'cnt', 'data_type': 'integer'})
+    return pd.DataFrame(rows)
 
 
 def _first_count_value(df: Optional[pd.DataFrame]) -> int:
@@ -966,10 +1019,10 @@ class DataQualityChecker:
     def check_custom_queries(
         self,
         source_query: str,
-        source_params: Dict,
         target_query: str,
-        target_params: Dict,
         custom_primary_key: List[str],
+        source_params: Optional[Dict] = None,
+        target_params: Optional[Dict] = None,
         check_name: Optional[str] = None,
         chunk_size_days: Optional[int] = None,
         exclude_columns: Optional[List[str]] = None,
@@ -1111,6 +1164,174 @@ class DataQualityChecker:
                 stats=None,
                 details=None,
                 check_type=ct.CHECK_TYPE_CUSTOM_QUERIES,
+                check_tags=check_tags,
+                source_table=None,
+                target_table=None,
+                source_query=source_query,
+                source_params=source_params,
+                target_query=target_query,
+                target_params=target_params,
+                persist_result=persist_result,
+                report_output_format=report_output_format,
+            )
+            self._update_stats(result.status, None)
+            return result
+
+    def _execute_custom_query_agg(
+        self,
+        query: str,
+        params: Dict,
+        engine: Engine,
+        adapter,
+        max_columns: List[str],
+        sum_columns: List[str],
+        include_count: bool,
+        query_side: str,
+    ) -> pd.DataFrame:
+        metadata = self._get_metadata_cols_for_custom_query((query, params), engine)
+        sql = adapter.build_custom_query_aggregate_sql(
+            query,
+            max_columns=max_columns,
+            sum_columns=sum_columns,
+            include_count=include_count,
+        )
+        app_logger.info(f'{query_side} aggregate query:\n{sql}')
+        frame = self._execute_query(
+            (sql, params), engine, self.timezone, query_side=query_side
+        )
+        frame = adapter.convert_types(
+            frame,
+            _aggregate_result_metadata(
+                metadata, max_columns, sum_columns, include_count
+            ),
+            self.timezone,
+        )
+        frame.columns = [str(column).lower() for column in frame.columns]
+        return prepare_dataframe(frame)
+
+    def check_custom_queries_agg(
+        self,
+        source_query: str,
+        target_query: str,
+        source_params: Optional[Dict] = None,
+        target_params: Optional[Dict] = None,
+        max_columns: Optional[List[str]] = None,
+        sum_columns: Optional[List[str]] = None,
+        include_count: bool = False,
+        check_name: Optional[str] = None,
+        persist_result: Optional[DataReference] = None,
+        check_tags: Optional[Dict] = None,
+        report_output_format: str = ct.REPORT_OUTPUT_FORMAT_TEXT,
+    ) -> CheckResult:
+        """
+        Compare MAX, SUM, and optional COUNT(*) of two custom queries.
+
+        The adapter wraps each query as
+        ``SELECT max(col) AS max_col, sum(col) AS sum_col, count(*) AS cnt
+        FROM (<query>) x_subq``.
+
+        Date filters belong in the queries, via ``source_params`` and
+        ``target_params``. The check succeeds only when every aggregate
+        matches (``final_score`` 100); otherwise it fails (``final_score`` 0).
+
+        Returns:
+            ``CheckResult`` including ``run_id``, ``status``, ``report``,
+            ``stats``, and ``details``.
+        """
+        self._require_target_engine()
+        source_params = source_params or {}
+        target_params = target_params or {}
+        if not max_columns and not sum_columns and not include_count:
+            raise ValueError('max_columns, sum_columns, or include_count is required')
+
+        validate_report_output_format(report_output_format)
+        persist_result = normalize_persist_result(persist_result)
+        run_id, run_started_at = self._start_check_run(
+            ct.CHECK_TYPE_CUSTOM_QUERIES_AGG, check_name
+        )
+
+        try:
+            self.check_stats['checked'] += 1
+
+            source_adapter = self._get_adapter(self.source_db_type)
+            target_adapter = self._get_adapter(self.target_db_type)
+            source_data = self._execute_custom_query_agg(
+                source_query,
+                source_params,
+                self.source_engine,
+                source_adapter,
+                max_columns or [],
+                sum_columns or [],
+                include_count,
+                'source',
+            )
+            target_data = self._execute_custom_query_agg(
+                target_query,
+                target_params,
+                self.target_engine,
+                target_adapter,
+                max_columns or [],
+                sum_columns or [],
+                include_count,
+                'target',
+            )
+            source_data[ct.XAGG_ROW_COLUMN] = '1'
+            target_data[ct.XAGG_ROW_COLUMN] = '1'
+            stats, details = self._check_dataframes_timed(
+                source_data,
+                target_data,
+                [ct.XAGG_ROW_COLUMN],
+                ct.DEFAULT_MAX_EXAMPLES,
+            )
+
+            if not stats:
+                status = ct.CHECK_SKIPPED
+                draft_report = None
+            else:
+                matched = stats.final_diff_score <= 0
+                stats.final_diff_score = 0.0 if matched else 100.0
+                stats.final_score = 100.0 - stats.final_diff_score
+                status = ct.CHECK_SUCCESS if matched else ct.CHECK_FAILED
+                draft_report = generate_custom_query_agg_report(
+                    stats,
+                    details,
+                    self.timezone,
+                    run_id,
+                    run_started_at,
+                    source_query,
+                    source_params,
+                    target_query,
+                    target_params,
+                    **self._report_context,
+                )
+            result = self._finalize_check(
+                status=status,
+                report=draft_report,
+                stats=stats,
+                details=details,
+                check_type=ct.CHECK_TYPE_CUSTOM_QUERIES_AGG,
+                check_tags=check_tags,
+                source_table=None,
+                target_table=None,
+                source_query=source_query,
+                source_params=source_params,
+                target_query=target_query,
+                target_params=target_params,
+                persist_result=persist_result,
+                report_output_format=report_output_format,
+            )
+            self._update_stats(result.status, None)
+            return result
+
+        except Exception:
+            app_logger.exception('Custom query aggregate check failed')
+            status = ct.CHECK_FAILED
+            result = self._finalize_check(
+                status=status,
+                report=None,
+                stats=None,
+                details=None,
+                check_type=ct.CHECK_TYPE_CUSTOM_QUERIES_AGG,
                 check_tags=check_tags,
                 source_table=None,
                 target_table=None,
@@ -2029,6 +2250,6 @@ class DataQualityChecker:
         if self.target_engine is None:
             raise ValueError(
                 'target_engine is required for check_samples, check_counts_group_by_date, '
-                'check_total_counts, and check_custom_queries'
+                'check_total_counts, check_custom_queries, and check_custom_queries_agg'
             )
         return self.target_engine

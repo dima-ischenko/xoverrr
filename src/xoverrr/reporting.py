@@ -14,10 +14,19 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 
-from .constants import (DATETIME_FORMAT, REPORT_OUTPUT_FORMAT_JSON,
-                        REPORT_OUTPUT_FORMAT_TEXT, REPORT_OUTPUT_FORMATS)
-from .utils import (CheckDetails, CheckStats, append_report_run_header,
-                    format_report_collection, sniff_issue_row_count)
+from .constants import (
+    DATETIME_FORMAT,
+    REPORT_OUTPUT_FORMAT_JSON,
+    REPORT_OUTPUT_FORMAT_TEXT,
+    REPORT_OUTPUT_FORMATS,
+)
+from .utils import (
+    CheckDetails,
+    CheckStats,
+    append_report_run_header,
+    format_report_collection,
+    sniff_issue_row_count,
+)
 
 if TYPE_CHECKING:
     from .persistence import CheckRunTimings
@@ -572,5 +581,67 @@ def generate_total_count_report(
     lines.append(f'  Discrepancies %: {stats.final_diff_score:.5f}%')
     lines.append(f'  Final discrepancies score: {stats.final_diff_score:.5f}')
     lines.append(f'  Final data quality score: {stats.final_score:.5f}')
+    lines.append('=' * 80)
+    return '\n'.join(lines)
+
+
+def generate_custom_query_agg_report(
+    stats: CheckStats,
+    details: CheckDetails,
+    timezone: str,
+    run_id: str,
+    run_started_at: str,
+    source_query: Optional[str] = None,
+    source_params: Optional[Dict] = None,
+    target_query: Optional[str] = None,
+    target_params: Optional[Dict] = None,
+    library_version: Optional[str] = None,
+    source_db_type: Optional[str] = None,
+    target_db_type: Optional[str] = None,
+) -> str:
+    """Generate a text report for a custom-query aggregate comparison."""
+    lines = []
+    append_report_run_header(
+        lines,
+        run_id,
+        run_started_at,
+        library_version=library_version,
+        source_db_type=source_db_type,
+        target_db_type=target_db_type,
+    )
+    lines.append('CUSTOM QUERIES AGG CHECK REPORT:')
+    lines.append('=' * 80)
+
+    if source_query and target_query:
+        lines.append(f'timezone: {timezone}')
+        lines.append(f'    {source_query}')
+        if source_params:
+            lines.append(f'    params: {source_params}')
+        lines.append('-' * 40)
+        lines.append(f'    {target_query}')
+        if target_params:
+            lines.append(f'    params: {target_params}')
+
+    lines.append('-' * 40)
+    lines.append('\nSUMMARY:')
+    lines.append(f'  Source rows: {stats.total_source_rows}')
+    lines.append(f'  Target rows: {stats.total_target_rows}')
+    lines.append(f'  Comparable rows: {stats.comparable_rows}')
+    lines.append(f'  Passed rows: {stats.passed_rows}')
+    lines.append(f'  Issue rows %: {stats.issue_rows_pct:.5f}')
+    lines.append(f'  Final discrepancies score: {stats.final_diff_score:.5f}')
+    lines.append(f'  Final data quality score: {stats.final_score:.5f}')
+
+    if not details.issue_breakdown.empty:
+        lines.append('\nISSUE BREAKDOWN:')
+        lines.append(details.issue_breakdown.to_string(index=False))
+        if details.issue_examples is not None and not details.issue_examples.empty:
+            lines.append('\n  Issue examples:\n')
+            lines.append(
+                details.issue_examples.to_string(
+                    index=False, max_colwidth=64, justify='left'
+                )
+            )
+
     lines.append('=' * 80)
     return '\n'.join(lines)

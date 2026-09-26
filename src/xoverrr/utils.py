@@ -5,9 +5,14 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-from .constants import (DEFAULT_MAX_EXAMPLES, FLAG_VALUE_YES, NULL_REPLACEMENT,
-                        XRECENTLY_CHANGED_COLUMN, XSNIFF_PASSED_COLUMN,
-                        XSNIFF_PASSED_VALUE_NO)
+from .constants import (
+    DEFAULT_MAX_EXAMPLES,
+    FLAG_VALUE_YES,
+    NULL_REPLACEMENT,
+    XRECENTLY_CHANGED_COLUMN,
+    XSNIFF_PASSED_COLUMN,
+    XSNIFF_PASSED_VALUE_NO,
+)
 from .logger import app_logger
 
 
