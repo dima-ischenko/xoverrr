@@ -1,0 +1,63 @@
+# GitHub Actions / CI overlay of the local stack.
+# Uses a public Oracle image so CI does not need Oracle Container Registry login.
+services:
+  postgres:
+    image: postgres:15.4
+    container_name: postgres
+    environment:
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_pass
+      POSTGRES_DB: test_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user -d test_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  oracle:
+    image: gvenzl/oracle-free:23.26.1-slim-faststart
+    container_name: oracle
+    platform: linux/amd64
+    ports:
+      - "1521:1521"
+    environment:
+      ORACLE_PASSWORD: test_pass
+      APP_USER: test
+      APP_USER_PASSWORD: test_pass
+    shm_size: 1g
+    volumes:
+      - ./oracle/init.ci.sql:/container-entrypoint-initdb.d/01_init.sql:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:23.8-alpine
+    container_name: clickhouse
+    environment:
+      CLICKHOUSE_DB: test
+      CLICKHOUSE_USER: test_user
+      CLICKHOUSE_PASSWORD: test_pass
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - ./clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql
+    mem_limit: 1g
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--user", "test_user", "--password", "test_pass", "--query", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3

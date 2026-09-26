@@ -1,15 +1,15 @@
 """
-Test PostgreSQL self-comparison with identical data.
+Test PostgreSQL self-check with identical data.
 """
 
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_SKIPPED, CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
-class TestPostgresSelfComparison:
+class TestPostgresSelfCheck:
     """
     Tests comparing PostgreSQL with itself (same engine).
     """
@@ -52,25 +52,191 @@ class TestPostgresSelfComparison:
 
         yield
 
-    def test_postgres_self_comparison_identical(self, postgres_engine):
+    @pytest.fixture(autouse=True)
+    def setup_postgres_data_empty_one_side(self, postgres_engine, table_helper):
+        """Setup PostgreSQL test data for self-comparison"""
+
+        table_name = 'test_custom_data_empty_one_side'
+
+        table_helper.create_table(
+            engine=postgres_engine,
+            table_name=table_name,
+            create_sql=f"""
+                CREATE TABLE {table_name} (
+                    id          INTEGER PRIMARY KEY,
+                    name        TEXT NOT NULL,
+                    created_at  DATE NOT NULL,
+                    updated_at  TIMESTAMP NOT NULL
+                )
+            """,
+            insert_sql=f"""
+                INSERT INTO {table_name} (id, name, created_at, updated_at) VALUES
+                (1, 'Alice',   '2024-01-01', '2024-01-03 10:00:00'),
+                (2, 'Robert',  '2024-01-02', '2024-01-03 11:00:00'),
+                (3, 'Charlie', '2024-01-03', '2024-01-03 12:00:00')
+            """,
+        )
+
+        # Create a view
+        table_helper.create_view(
+            engine=postgres_engine,
+            view_name='vtest_custom_data_empty_one_side',
+            view_sql=f"""
+                CREATE VIEW vtest_custom_data_empty_one_side AS
+                SELECT id, name, created_at, updated_at
+                FROM {table_name}
+                WHERE 1=0
+            """,
+        )
+
+        yield
+
+    @pytest.fixture(autouse=True)
+    def setup_postgres_data_mv(self, postgres_engine, table_helper):
+        """Setup PostgreSQL test data for self-comparison"""
+
+        table_name = 'test_custom_data3'
+
+        table_helper.create_table(
+            engine=postgres_engine,
+            table_name=table_name,
+            create_sql=f"""
+                CREATE TABLE {table_name} (
+                    id          INTEGER PRIMARY KEY,
+                    name        TEXT NOT NULL,
+                    created_at  DATE NOT NULL,
+                    updated_at  TIMESTAMP NOT NULL
+                )
+            """,
+            insert_sql=f"""
+                INSERT INTO {table_name} (id, name, created_at, updated_at) VALUES
+                (1, 'Alice',   '2024-01-01', '2024-01-01 10:00:00'),
+                (2, 'Robert',  '2024-01-02', '2024-01-02 11:00:00'),
+                (3, 'Charlie', '2024-01-03', '2024-01-03 12:00:00')
+            """,
+        )
+
+        # Create a view
+        table_helper.create_mview(
+            engine=postgres_engine,
+            mview_name='mvtest_custom_data3',
+            mview_sql=f"""
+              CREATE MATERIALIZED VIEW mvtest_custom_data3 AS
+                SELECT id, name, created_at, updated_at
+                FROM {table_name}
+                WITH DATA
+            """,
+        )
+
+        yield
+
+    def test_postgres_self_check_identical(self, postgres_engine, setup_postgres_data):
         """
         Compare identical tables within same PostgreSQL database.
         """
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=postgres_engine,
             target_engine=postgres_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        result = checker.check_samples(
             source_table=DataReference('test_custom_data2', 'test'),
             target_table=DataReference('test_custom_data2', 'test'),
             date_column='created_at',
             update_column='updated_at',
             date_range=('2024-01-01', '2024-01-03'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
+        )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
+
+        assert status == CHECK_SUCCESS
+        assert stats.final_diff_score == 0.0
+        print(f'PostgreSQL self-check passed: {stats.final_score:.2f}%')
+
+    def test_postgres_self_check_identical_view(
+        self, postgres_engine, setup_postgres_data
+    ):
+        """
+        Compare identical tables within same PostgreSQL database.
+        """
+        checker = DataQualityChecker(
+            source_engine=postgres_engine,
+            target_engine=postgres_engine,
+            timezone='Europe/Athens',
         )
 
-        assert status == COMPARISON_SUCCESS
+        result = checker.check_samples(
+            source_table=DataReference('test_custom_data2', 'test'),
+            target_table=DataReference('vtest_custom_data2', 'test'),
+            date_column='created_at',
+            update_column='updated_at',
+            date_range=('2024-01-01', '2024-01-03'),
+            tolerance_pct=0.0,
+        )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
+
+        assert status == CHECK_SUCCESS
         assert stats.final_diff_score == 0.0
-        print(f'PostgreSQL self-comparison passed: {stats.final_score:.2f}%')
+        print(f'PostgreSQL self-check passed: {stats.final_score:.2f}%')
+
+    def test_postgres_self_check_identical_mview(
+        self, postgres_engine, setup_postgres_data_mv
+    ):
+        """
+        Compare identical tables within same PostgreSQL database.
+        """
+        # pytest.skip('issue #50')
+        checker = DataQualityChecker(
+            source_engine=postgres_engine,
+            target_engine=postgres_engine,
+            timezone='Europe/Athens',
+        )
+
+        result = checker.check_samples(
+            source_table=DataReference('test_custom_data3', 'test'),
+            target_table=DataReference('mvtest_custom_data3', 'test'),
+            date_column='created_at',
+            update_column='updated_at',
+            date_range=('2024-01-01', '2024-01-03'),
+            tolerance_pct=0.0,
+        )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
+
+        assert status == CHECK_SUCCESS
+        assert stats.final_diff_score == 0.0
+        print(f'PostgreSQL self-check passed: {stats.final_score:.2f}%')
+
+    def test_postgres_self_check_empty_one_side(
+        self, postgres_engine, setup_postgres_data_empty_one_side
+    ):
+        checker = DataQualityChecker(
+            source_engine=postgres_engine,
+            target_engine=postgres_engine,
+            timezone='Europe/Athens',
+        )
+
+        result = checker.check_samples(
+            source_table=DataReference('test_custom_data_empty_one_side', 'test'),
+            target_table=DataReference('vtest_custom_data_empty_one_side', 'test'),
+            date_column='created_at',
+            update_column='updated_at',
+            date_range=('2024-01-01', '2024-01-03'),
+            tolerance_pct=0.0,
+            exclude_recent_hours=9000000,  # exclude all data in fact
+        )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
+
+        assert status == CHECK_SKIPPED

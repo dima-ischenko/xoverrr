@@ -1,16 +1,16 @@
 """
-Test NULL values comparison between ClickHouse and PostgreSQL.
+Test NULL values check between ClickHouse and PostgreSQL.
 """
 
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
 class TestClickHouseNullValues:
-    """Tests for NULL values comparison with ClickHouse"""
+    """Tests for NULL values check with ClickHouse"""
 
     @pytest.fixture(autouse=True)
     def setup_clickhouse_null_data(
@@ -66,25 +66,27 @@ class TestClickHouseNullValues:
 
         yield
 
-    def test_clickhouse_null_values_comparison(
-        self, clickhouse_engine, postgres_engine
-    ):
+    def test_clickhouse_null_values_check(self, clickhouse_engine, postgres_engine):
         """
         Compare tables with NULL values between ClickHouse and PostgreSQL.
         """
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=clickhouse_engine,
             target_engine=postgres_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        result = checker.check_samples(
             source_table=DataReference('test_ch_nulls', 'test'),
             target_table=DataReference('test_ch_nulls', 'test'),
             date_column='created_at',
             date_range=('2024-01-01', '2024-01-05'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
-        assert status == COMPARISON_SUCCESS
-        print(f'ClickHouse NULL values comparison passed: {stats.final_score:.2f}%')
+        assert status == CHECK_SUCCESS
+        print(f'ClickHouse NULL values check passed: {stats.final_score:.2f}%')

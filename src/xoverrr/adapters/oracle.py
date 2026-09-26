@@ -2,8 +2,10 @@ import time
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
+from sqlalchemy import text
 
-from ..constants import DATETIME_FORMAT
+from ..constants import (DATETIME_FORMAT, FLAG_VALUE_YES,
+                         XRECENTLY_CHANGED_COLUMN)
 from ..exceptions import QueryExecutionError
 from ..logger import app_logger
 from ..models import DataReference, ObjectType
@@ -11,6 +13,31 @@ from .base import BaseDatabaseAdapter, Engine
 
 
 class OracleAdapter(BaseDatabaseAdapter):
+    PERSIST_REPORT_COLUMN = 'report'  # CLOB
+    PERSIST_VARCHAR2_MAX_LENGTH = 4000
+    PERSIST_STRING_LOGICAL_TYPES = frozenset(
+        {
+            'short_string',
+            'string',
+            'name',
+            'table_ref',
+            'tz_name',
+            'text',
+        }
+    )
+    PERSIST_TYPE_MAP = {
+        'short_string': 'VARCHAR2(32)',
+        'string': 'VARCHAR2(64)',
+        'name': 'VARCHAR2(512)',
+        'table_ref': 'VARCHAR2(256)',
+        'tz_name': 'VARCHAR2(128)',
+        'datetime': 'TIMESTAMP',
+        'db_now': 'TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL',
+        'text': 'VARCHAR2(4000)',
+        'float': 'NUMBER',
+        'int': 'NUMBER(19)',
+    }
+
     def _execute_query(
         self,
         query: Union[str, Tuple[str, Dict]],
@@ -116,7 +143,7 @@ class OracleAdapter(BaseDatabaseAdapter):
                     pass
 
     def get_object_type(self, data_ref: DataReference, engine: Engine) -> ObjectType:
-        """Determine if object is table or view in Oracle"""
+        """Determine whether the object is a table or a view in Oracle."""
         query = """
             SELECT
                 CASE
@@ -292,7 +319,7 @@ class OracleAdapter(BaseDatabaseAdapter):
 
     def build_primary_key_query(self, data_ref: DataReference) -> pd.DataFrame:
 
-        # todo add suport of unique indexes when no pk?
+        # TODO: add support for unique indexes when there is no primary key.
         query = """
             SELECT lower(cols.column_name) as pk_column_name
             FROM all_constraints cons
@@ -316,24 +343,71 @@ class OracleAdapter(BaseDatabaseAdapter):
         date_column: str,
         start_date: Optional[str],
         end_date: Optional[str],
+        columns_meta: Optional[pd.DataFrame],
+        timezone: Optional[str],
     ) -> Tuple[str, Dict]:
+
+        tz_columns = []
+        tz_columns = self._identify_timestamp_tz_columns(columns_meta)
+
+        date_expr = None
+        date_expr = self._build_cast_tz_column_expression(
+            column_name=date_column,
+            tz_columns=tz_columns,
+            target_timezone=timezone,
+            as_alias=False,
+        )
+
         query = f"""
             SELECT
-                to_char(trunc({date_column}, 'dd'),'YYYY-MM-DD') as dt,
+                to_char(trunc({date_expr}, 'dd'),'YYYY-MM-DD') as dt,
                 count(*) as cnt
             FROM {data_ref.full_name}
             WHERE 1=1\n"""
         params = {}
 
         if start_date:
-            query += f" AND {date_column} >= trunc(to_date(:start_date, 'YYYY-MM-DD'), 'dd')\n"
+            query += (
+                f" AND {date_expr} >= trunc(to_date(:start_date, 'YYYY-MM-DD'), 'dd')\n"
+            )
             params['start_date'] = start_date
         if end_date:
-            query += f" AND {date_column} < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1\n"
+            query += f" AND {date_expr} < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1\n"
             params['end_date'] = end_date
 
-        query += f" GROUP BY to_char(trunc({date_column}, 'dd'),'YYYY-MM-DD') ORDER BY dt DESC"
+        query += (
+            f" GROUP BY to_char(trunc({date_expr}, 'dd'),'YYYY-MM-DD') ORDER BY dt DESC"
+        )
         return query, params
+
+    def _total_count_date_filters(
+        self,
+        date_column: Optional[str],
+        start_date: Optional[str],
+        end_date: Optional[str],
+        columns_meta: Optional[pd.DataFrame],
+        timezone: Optional[str],
+    ) -> Tuple[str, Dict]:
+        if not date_column:
+            return '', {}
+        tz_columns = self._identify_timestamp_tz_columns(columns_meta)
+        date_expr = self._build_cast_tz_column_expression(
+            column_name=date_column,
+            tz_columns=tz_columns,
+            target_timezone=timezone,
+            as_alias=False,
+        )
+        extra_sql = ''
+        params = {}
+        if start_date:
+            extra_sql += (
+                f" AND {date_expr} >= trunc(to_date(:start_date, 'YYYY-MM-DD'), 'dd')\n"
+            )
+            params['start_date'] = start_date
+        if end_date:
+            extra_sql += f" AND {date_expr} < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1\n"
+            params['end_date'] = end_date
+        return extra_sql, params
 
     def build_data_query(
         self,
@@ -344,7 +418,20 @@ class OracleAdapter(BaseDatabaseAdapter):
         start_date: Optional[str],
         end_date: Optional[str],
         exclude_recent_hours: Optional[int] = None,
+        columns_meta: pd.DataFrame = None,
+        timezone: str = None,
     ) -> Tuple[str, Dict]:
+
+        tz_columns = []
+        tz_columns = self._identify_timestamp_tz_columns(columns_meta)
+
+        converted_columns = self._apply_timestamp_tz_casts(
+            columns=columns,
+            tz_columns=tz_columns,
+            target_timezone=timezone,
+        )
+
+        app_logger.info(columns_meta)
 
         params = {}
         # Add recent data exclusion flag
@@ -353,20 +440,29 @@ class OracleAdapter(BaseDatabaseAdapter):
         )
 
         if exclusion_condition:
-            columns.append(exclusion_condition)
+            converted_columns.append(exclusion_condition)
             params.update(exclusion_params)
 
         query = f"""
-        SELECT {', '.join(columns)}
+        SELECT {', '.join(converted_columns)}
         FROM {data_ref.full_name}
         WHERE 1=1\n"""
 
-        if start_date and date_column:
-            query += f"            AND {date_column} >= trunc(to_date(:start_date, 'YYYY-MM-DD'), 'dd')\n"
+        date_expr = None
+        if date_column:
+            date_expr = self._build_cast_tz_column_expression(
+                column_name=date_column,
+                tz_columns=tz_columns,
+                target_timezone=timezone,
+                as_alias=False,  # No alias in WHERE
+            )
+
+        if start_date and date_expr:
+            query += f"            AND {date_expr} >= trunc(to_date(:start_date, 'YYYY-MM-DD'), 'dd')\n"
             params['start_date'] = start_date
 
-        if end_date and date_column:
-            query += f"            AND {date_column} < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1\n"
+        if end_date and date_expr:
+            query += f"            AND {date_expr} < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1\n"
             params['end_date'] = end_date
 
         return query, params
@@ -374,9 +470,12 @@ class OracleAdapter(BaseDatabaseAdapter):
     def _build_exclusion_condition(
         self, update_column: str, exclude_recent_hours: int
     ) -> Tuple[str, Dict]:
-        """Oracle-specific implementation for recent data exclusion"""
+        """Oracle-specific predicate for recent-row exclusion."""
         if update_column and exclude_recent_hours:
-            condition = f"""case when {update_column} > (sysdate - :exclude_recent_hours/24) then 'y' end as xrecently_changed"""
+            condition = (
+                f'case when {update_column} > (sysdate - :exclude_recent_hours/24) '
+                f"then '{FLAG_VALUE_YES}' end as {XRECENTLY_CHANGED_COLUMN}"
+            )
             params = {'exclude_recent_hours': exclude_recent_hours}
             return condition, params
 
@@ -384,16 +483,17 @@ class OracleAdapter(BaseDatabaseAdapter):
 
     def _get_type_conversion_rules(self, timezone: str) -> Dict[str, Callable]:
         return {
-            # errors='coerce' is needed as workaround for >= 2262 year: Out of bounds nanosecond timestamp (3023-04-04 00:00:00)
-            #  todo need specify explicit dateformat (nls params) in sessions, for the correct string conversion to datetime
+            # errors='coerce' is needed as a workaround for years >= 2262
+            # (out-of-bounds nanosecond timestamp).
+            # TODO: set an explicit date format (NLS parameters) in the session
+            # so that string-to-datetime conversion is correct.
             r'date': lambda x: (
                 pd.to_datetime(x, errors='coerce')
                 .dt.strftime(DATETIME_FORMAT)
                 .str.replace(r'\s00:00:00$', '', regex=True)
             ),
             r'timestamp.*\bwith\b.*time\szone': lambda x: (
-                pd.to_datetime(x, utc=True, errors='coerce')
-                .dt.tz_convert(timezone)
+                pd.to_datetime(x, errors='coerce')
                 .dt.tz_localize(None)
                 .dt.strftime(DATETIME_FORMAT)
                 .str.replace(r'\s00:00:00$', '', regex=True)
@@ -405,5 +505,188 @@ class OracleAdapter(BaseDatabaseAdapter):
             ),
             r'number|float|double': lambda x: (
                 x.astype(str).str.replace(r'\.0+$', '', regex=True).str.lower()
-            ),  # lower case for exponential form compare
+            ),  # Lowercase for exponential-form comparison.
         }
+
+    def _identify_timestamp_tz_columns(
+        self, columns_metadata: pd.DataFrame
+    ) -> List[str]:
+        """
+        Identify columns that need timezone casting, because of the thin driver as well (missed tz info in the result column)
+
+        Parameters:
+            columns_metadata: DataFrame with column metadata (from _get_metadata_cols)
+                            Must contain 'column_name' and 'data_type' columns
+
+        Returns:
+            List of column names that are TIMESTAMP WITH TIME ZONE (not LOCAL)
+        """
+        if columns_metadata is None or columns_metadata.empty:
+            return []
+
+        # Filter for TIMESTAMP WITH TIME ZONE (excluding LOCAL TIME ZONE)
+        tz_mask = (
+            columns_metadata['data_type']
+            .str.lower()
+            .str.contains(r'timestamp.*time zone', regex=True, na=False)
+        )
+
+        # Exclude LOCAL TIME ZONE
+        local_mask = (
+            columns_metadata['data_type']
+            .str.lower()
+            .str.contains(r'local', regex=True, na=False)
+        )
+
+        tz_columns = columns_metadata[tz_mask & ~local_mask]['column_name'].tolist()
+
+        if tz_columns:
+            app_logger.info(
+                f'Identified TIMESTAMP WITH TIME ZONE columns: {tz_columns}'
+            )
+
+        return tz_columns
+
+    def _build_cast_tz_column_expression(
+        self,
+        column_name: str,
+        tz_columns: List[str],
+        target_timezone: str,
+        as_alias: bool = True,  # Add AS alias for SELECT clause
+    ) -> str:
+        """
+        Wrapper to cast a single TIMESTAMP WITH TIME ZONE column if needed.
+
+        Parameters:
+            column_name: Name of the column
+            tz_columns: List of columns that need casting
+            target_timezone: Target timezone for conversion
+            as_alias: If True, adds 'AS column_name' to the expression
+
+        Returns:
+            SQL expression (original column or CAST expression)
+        """
+
+        if column_name not in tz_columns:
+            return column_name
+
+        # Build CAST expression
+        cast_expr = f"cast({column_name} at time zone '{target_timezone}' as timestamp)"
+
+        # Add alias if needed (for SELECT clause)
+        if as_alias:
+            return f'{cast_expr} AS {column_name}'
+
+        return cast_expr
+
+    def _apply_timestamp_tz_casts(
+        self,
+        columns: List[str],
+        tz_columns: List[str],
+        target_timezone: str,
+    ) -> List[str]:
+        return [
+            self._build_cast_tz_column_expression(
+                col,
+                tz_columns,
+                target_timezone,
+                as_alias=True,
+            )
+            for col in columns
+        ]
+
+    def ensure_persistence_table(
+        self,
+        engine: Engine,
+        table_ref: DataReference,
+        column_types: Dict[str, str],
+        primary_key: Optional[str] = None,
+    ) -> None:
+        columns_sql = ',\n                    '.join(
+            self._format_persist_column(name, col_type, primary_key)
+            for name, col_type in column_types.items()
+        )
+        create_table_sql = f"""
+            CREATE TABLE {table_ref.full_name} (
+                    {columns_sql}
+            )
+        """.strip()
+        escaped_create_sql = create_table_sql.replace("'", "''")
+        plsql = f"""
+            BEGIN
+                EXECUTE IMMEDIATE '{escaped_create_sql}';
+            EXCEPTION
+                WHEN OTHERS THEN
+                    IF SQLCODE != -955 THEN
+                        RAISE;
+                    END IF;
+            END;
+        """
+        with engine.begin() as conn:
+            conn.execute(text(plsql))
+
+    def _format_persist_column(
+        self, name: str, col_type: str, primary_key: Optional[str]
+    ) -> str:
+        if name == self.PERSIST_REPORT_COLUMN:
+            sql_type = 'CLOB'
+        else:
+            sql_type = self.PERSIST_TYPE_MAP[col_type]
+        if name == primary_key:
+            return f'{name} {sql_type} PRIMARY KEY'
+        return f'{name} {sql_type}'
+
+    def _truncate_varchar2_bind(self, value):
+        if not isinstance(value, str):
+            return value
+        encoded = value.encode('utf-8')
+        if len(encoded) <= self.PERSIST_VARCHAR2_MAX_LENGTH:
+            return value
+        return encoded[: self.PERSIST_VARCHAR2_MAX_LENGTH].decode(
+            'utf-8', errors='ignore'
+        )
+
+    def _prepare_persist_bind_record(
+        self, record: Dict, column_types: Dict[str, str]
+    ) -> Dict:
+        """Put CLOB ``report`` last and trim other strings to VARCHAR2(4000).
+
+        Oracle raises ORA-24816 if a >4000-byte VARCHAR2 bind follows a LOB.
+        """
+        report = self.PERSIST_REPORT_COLUMN
+        columns = [name for name in record if name != report]
+        if report in record:
+            columns.append(report)
+
+        prepared = {}
+        for column in columns:
+            value = record[column]
+            if (
+                column != report
+                and column_types.get(column) in self.PERSIST_STRING_LOGICAL_TYPES
+            ):
+                value = self._truncate_varchar2_bind(value)
+            prepared[column] = value
+        return prepared
+
+    def _build_persist_insert(
+        self,
+        table_ref: DataReference,
+        record: Dict,
+        column_types: Dict[str, str],
+    ) -> Tuple[str, Dict]:
+        bind_record = self._prepare_persist_bind_record(record, column_types)
+        return self.build_persistence_insert_sql(table_ref, bind_record), bind_record
+
+    def insert_persistence_record(
+        self,
+        engine: Engine,
+        table_ref: DataReference,
+        record: Dict,
+        column_types: Optional[Dict[str, str]] = None,
+    ) -> None:
+        insert_sql, bind_record = self._build_persist_insert(
+            table_ref, record, column_types or {}
+        )
+        with engine.begin() as conn:
+            conn.execute(text(insert_sql), bind_record)

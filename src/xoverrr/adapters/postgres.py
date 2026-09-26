@@ -5,7 +5,8 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 import pandas as pd
 from sqlalchemy import text
 
-from ..constants import DATETIME_FORMAT
+from ..constants import (DATETIME_FORMAT, FLAG_VALUE_YES,
+                         XRECENTLY_CHANGED_COLUMN)
 from ..exceptions import MetadataError, QueryExecutionError
 from ..logger import app_logger
 from ..models import DataReference, ObjectType
@@ -13,6 +14,19 @@ from .base import BaseDatabaseAdapter, Engine
 
 
 class PostgresAdapter(BaseDatabaseAdapter):
+    PERSIST_TYPE_MAP = {
+        'short_string': 'VARCHAR(32)',
+        'string': 'VARCHAR(64)',
+        'name': 'VARCHAR(512)',
+        'table_ref': 'VARCHAR(256)',
+        'tz_name': 'VARCHAR(128)',
+        'datetime': 'TIMESTAMP',
+        'db_now': 'TIMESTAMP DEFAULT now() NOT NULL',
+        'text': 'TEXT',
+        'float': 'DOUBLE PRECISION',
+        'int': 'BIGINT',
+    }
+
     def _execute_query(
         self, query: Union[str, Tuple[str, Dict]], engine: Engine, timezone: str
     ) -> pd.DataFrame:
@@ -20,6 +34,7 @@ class PostgresAdapter(BaseDatabaseAdapter):
         df = None
         tz_set = None
         start_time = time.time()
+
         app_logger.info('start')
 
         if timezone:
@@ -32,12 +47,12 @@ class PostgresAdapter(BaseDatabaseAdapter):
                     query = f'{tz_set}\n{query}'
                 app_logger.info(f'query\n {query}')
                 app_logger.info(f'{params=}')
-                df = pd.read_sql(text(query), engine, params=params)
+                df = pd.read_sql(text(query), engine, params=params, coerce_float=False)
             else:
                 if tz_set:
                     query = f'{tz_set}\n{query}'
                 app_logger.info(f'query\n {query}')
-                df = pd.read_sql(text(query), engine)
+                df = pd.read_sql(text(query), engine, coerce_float=False)
             execution_time = time.time() - start_time
             app_logger.info(f'Query executed in {execution_time:.2f}s')
             app_logger.info('complete')
@@ -50,7 +65,7 @@ class PostgresAdapter(BaseDatabaseAdapter):
             raise QueryExecutionError(f'Query failed: {str(e)}')
 
     def get_object_type(self, data_ref: DataReference, engine: Engine) -> ObjectType:
-        """Determine if object is table, view, or materialized view"""
+        """Determine whether the object is a table, view, or materialised view."""
         query = """
             SELECT
                 CASE
@@ -183,20 +198,26 @@ class PostgresAdapter(BaseDatabaseAdapter):
     def build_metadata_columns_query(self, data_ref: DataReference) -> pd.DataFrame:
 
         query = """
-            SELECT
-                lower(column_name) as column_name,
-                lower(data_type) as data_type,
-                ordinal_position as column_id
-            FROM information_schema.columns
-            WHERE table_schema = :schema
-            AND table_name = :table
-            ORDER BY ordinal_position
+              select lower(a.attname) as column_name,
+                     lower(t.typname ) as data_type,
+                     a.attnum as column_id
+                from pg_attribute a
+                join pg_class c on a.attrelid = c.oid
+                join pg_catalog.pg_namespace as ns on c.relnamespace = ns.oid
+                join pg_catalog.pg_type t
+                  on a.atttypid = t.oid
+               where 1=1
+                 and lower(ns.nspname) = :schema
+                 and lower(c.relname) = :table
+                 and a.attnum > 0
+                 and not a.attisdropped
+               order by a.attnum 
         """
         params = {'schema': data_ref.schema, 'table': data_ref.name}
         return query, params
 
     def build_primary_key_query(self, data_ref: DataReference) -> pd.DataFrame:
-        """Build primary key query with GreenPlum compatibility"""
+        """Build a primary-key query compatible with Greenplum."""
         query = """
             select
                 lower(pg_attribute.attname) as pk_column_name
@@ -220,6 +241,8 @@ class PostgresAdapter(BaseDatabaseAdapter):
         date_column: str,
         start_date: Optional[str],
         end_date: Optional[str],
+        columns_meta: Optional[pd.DataFrame],
+        timezone: Optional[str],
     ) -> Tuple[str, Dict]:
         query = f"""
             SELECT
@@ -241,6 +264,31 @@ class PostgresAdapter(BaseDatabaseAdapter):
         query += f" GROUP BY to_char(date_trunc('day', {date_column}),'YYYY-MM-DD') ORDER BY dt DESC"
         return query, params
 
+    def _total_count_date_filters(
+        self,
+        date_column: Optional[str],
+        start_date: Optional[str],
+        end_date: Optional[str],
+        columns_meta: Optional[pd.DataFrame],
+        timezone: Optional[str],
+    ) -> Tuple[str, Dict]:
+        if not date_column:
+            return '', {}
+        extra_sql = ''
+        params = {}
+        if start_date:
+            extra_sql += (
+                f" AND {date_column} >= date_trunc('day', cast(:start_date as date))\n"
+            )
+            params['start_date'] = start_date
+        if end_date:
+            extra_sql += (
+                f" AND {date_column} < date_trunc('day', cast(:end_date as date))"
+                f"  + interval '1 days'\n"
+            )
+            params['end_date'] = end_date
+        return extra_sql, params
+
     def build_data_query(
         self,
         data_ref: DataReference,
@@ -250,6 +298,8 @@ class PostgresAdapter(BaseDatabaseAdapter):
         start_date: Optional[str],
         end_date: Optional[str],
         exclude_recent_hours: Optional[int] = None,
+        columns_meta: pd.DataFrame = None,
+        timezone: str = None,
     ) -> Tuple[str, Dict]:
 
         params = {}
@@ -279,11 +329,14 @@ class PostgresAdapter(BaseDatabaseAdapter):
     def _build_exclusion_condition(
         self, update_column: str, exclude_recent_hours: int
     ) -> Tuple[str, Dict]:
-        """PostgreSQL-specific implementation for recent data exclusion"""
+        """PostgreSQL-specific predicate for recent-row exclusion."""
         if update_column and exclude_recent_hours:
             exclude_recent_hours = exclude_recent_hours
 
-            condition = f"""case when {update_column} > (now() - INTERVAL ':exclude_recent_hours hours') then 'y' end as xrecently_changed"""
+            condition = (
+                f"case when {update_column} > (now() - INTERVAL ':exclude_recent_hours hours') "
+                f"then '{FLAG_VALUE_YES}' end as {XRECENTLY_CHANGED_COLUMN}"
+            )
             params = {'exclude_recent_hours': exclude_recent_hours}
             return condition, params
 
@@ -296,7 +349,7 @@ class PostgresAdapter(BaseDatabaseAdapter):
                 .dt.strftime(DATETIME_FORMAT)
                 .str.replace(r'\s00:00:00$', '', regex=True)
             ),
-            r'boolean': lambda x: x.map({True: '1', False: '0', None: ''}),
+            r'bool': lambda x: x.map({True: '1', False: '0', None: ''}),
             r'timestamptz|timestamp.*\bwith\b.*time\szone': lambda x: (
                 pd.to_datetime(x, utc=True, errors='coerce')
                 .dt.tz_convert(timezone)
@@ -309,10 +362,59 @@ class PostgresAdapter(BaseDatabaseAdapter):
                 .dt.strftime(DATETIME_FORMAT)
                 .str.replace(r'\s00:00:00$', '', regex=True)
             ),
-            r'integer|numeric|double|float|double precision|real': lambda x: x.astype(
-                str
-            ).str.replace(r'\.0+$', '', regex=True),
+            # Lowercase numerics so that scientific notation compares consistently.
+            r'numeric|decimal|bigint|int8|double precision|real': lambda x: (
+                x.astype(str)
+                .str.lower()
+                .replace(r'\.0+$', '', regex=True)
+                .str.replace(r'^(-?\d+\.\d*?)0+$', r'\1', regex=True)
+            ),
+            r'int|float': lambda x: (
+                x.astype(str).str.lower().replace(r'\.0+$', '', regex=True)
+            ),
             r'json': lambda x: (
                 '"' + x.astype(str).str.replace(r'"', '\\"', regex=True) + '"'
             ),
         }
+
+    def ensure_persistence_table(
+        self,
+        engine: Engine,
+        table_ref: DataReference,
+        column_types: Dict[str, str],
+        primary_key: Optional[str] = None,
+    ) -> None:
+        columns_sql = ',\n                    '.join(
+            self._format_persist_column(name, col_type, primary_key)
+            for name, col_type in column_types.items()
+        )
+        create_table_sql = f"""
+            CREATE TABLE IF NOT EXISTS {table_ref.full_name} (
+                    {columns_sql}
+            )
+        """
+        if engine.dialect.name == 'sqlite':
+            create_table_sql = create_table_sql.replace(
+                'DEFAULT now()', 'DEFAULT CURRENT_TIMESTAMP'
+            )
+        with engine.begin() as conn:
+            conn.execute(text(create_table_sql))
+
+    def _format_persist_column(
+        self, name: str, col_type: str, primary_key: Optional[str]
+    ) -> str:
+        sql_type = self.PERSIST_TYPE_MAP[col_type]
+        if name == primary_key:
+            return f'{name} {sql_type} PRIMARY KEY'
+        return f'{name} {sql_type}'
+
+    def insert_persistence_record(
+        self,
+        engine: Engine,
+        table_ref: DataReference,
+        record: Dict,
+        column_types: Optional[Dict[str, str]] = None,
+    ) -> None:
+        insert_sql = self.build_persistence_insert_sql(table_ref, record)
+        with engine.begin() as conn:
+            conn.execute(text(insert_sql), record)

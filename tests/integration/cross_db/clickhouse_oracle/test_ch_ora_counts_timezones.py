@@ -1,17 +1,17 @@
 """
 Test for bug fix: Mixed timezone offsets in timestamptz columns should be handled correctly.
-Oracle ↔ ClickHouse comparisons must handle timezone conversions properly.
+Oracle / ClickHouse checks must handle timezone conversions properly.
 """
 
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
 class TestClickHouseOracleMixedTimezoneOffsets:
-    """Test for mixed timezone offsets in timestamptz columns bug fix - Oracle ↔ ClickHouse"""
+    """Test for mixed timezone offsets in timestamptz columns bug fix - Oracle / ClickHouse"""
 
     @pytest.fixture(autouse=True)
     def setup_mixed_timezone_data(self, oracle_engine, clickhouse_engine, table_helper):
@@ -77,32 +77,36 @@ class TestClickHouseOracleMixedTimezoneOffsets:
 
         yield
 
-    def test_date_only_comparisons(self, oracle_engine, clickhouse_engine):
+    def test_date_only_checks(self, oracle_engine, clickhouse_engine):
         """
-        Test date-only comparisons work correctly.
+        Test date-only checks work correctly.
         """
         table_name = 'test_mixed_timezones_counts_ch_ora'
 
-        # Can use any timezone for date-only comparisons
+        # Can use any timezone for date-only checks
         test_timezones = ['UTC', 'Europe/Athens', 'Asia/Tokyo']
 
         for timezone in test_timezones:
-            comparator = DataQualityComparator(
+            checker = DataQualityChecker(
                 source_engine=clickhouse_engine,
                 target_engine=oracle_engine,
                 timezone=timezone,
             )
 
-            status, report, stats, details = comparator.compare_counts(
+            result = checker.check_counts_group_by_date(
                 source_table=DataReference(table_name, 'test'),
                 target_table=DataReference(table_name, 'test'),
                 date_column='record_date',
                 date_range=('2024-01-01', '2024-01-08'),
-                tolerance_percentage=0.0,
+                tolerance_pct=0.0,
             )
+            status = result.status
+            report = result.report
+            stats = result.stats
+            details = result.details
 
-            assert status == COMPARISON_SUCCESS, f'Failed with timezone {timezone}'
+            assert status == CHECK_SUCCESS, f'Failed with timezone {timezone}'
             assert stats.final_score == 100.0
             print(
-                f'Oracle   ClickHouse date-only comparison passed (timezone={timezone}): {stats.final_score:.2f}%'
+                f'Oracle   ClickHouse date-only check passed (timezone={timezone}): {stats.final_score:.2f}%'
             )

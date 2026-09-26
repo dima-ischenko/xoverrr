@@ -4,11 +4,11 @@ Test Unicode and special characters comparison between Oracle and PostgreSQL.
 
 import pytest
 
-from xoverrr.constants import COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
-class TestUnicodeComparison:
+class TestUnicodeCheck:
     """Tests for Unicode and special characters"""
 
     @pytest.fixture(autouse=True)
@@ -63,19 +63,23 @@ class TestUnicodeComparison:
         """
         Compare strings with Unicode and special characters.
         """
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        result = checker.check_samples(
             source_table=DataReference('test_unicode', 'test'),
             target_table=DataReference('test_unicode', 'test'),
             date_column='created_date',
             date_range=('2024-01-01', '2024-01-05'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
-        assert status == COMPARISON_SUCCESS
-        print(f'Unicode comparison passed: {stats.final_score:.2f}%')
+        assert status == CHECK_SUCCESS
+        print(f'Unicode check passed: {stats.final_score:.2f}%')

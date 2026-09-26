@@ -1,16 +1,16 @@
 """
-Test comparison with custom primary key specification between Oracle and PostgreSQL.
+Test check with custom primary key specification between Oracle and PostgreSQL.
 """
 
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
 class TestOraclePostgresCustomPrimaryKey:
-    """Comparison with custom primary key specification"""
+    """Check with custom primary key specification"""
 
     @pytest.fixture(autouse=True)
     def setup_custom_pk_data(self, oracle_engine, postgres_engine, table_helper):
@@ -62,24 +62,28 @@ class TestOraclePostgresCustomPrimaryKey:
 
     def test_with_custom_primary_key(self, oracle_engine, postgres_engine):
         """
-        Test comparison with custom primary key specification.
+        Test check with custom primary key specification.
         """
         table_name = 'test_ora_pg_custom_pk'
 
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        result = checker.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='created_date',
             date_range=('2024-01-01', '2024-01-05'),
             custom_primary_key=['email'],  # Custom PK by email
-            tolerance_percentage=5.0,
+            tolerance_pct=5.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         # Should detect duplicates
         assert stats.dup_source_rows > 0

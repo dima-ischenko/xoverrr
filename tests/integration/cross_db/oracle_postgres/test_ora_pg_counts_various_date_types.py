@@ -1,12 +1,12 @@
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
 class TestOraclePostgresCountsWithVariousDateTypes:
-    """Cross-database count-based comparison tests with various date/time types"""
+    """Cross-database count-based check tests with various date/time types"""
 
     @pytest.fixture(autouse=True)
     def setup_various_date_type_data(
@@ -112,67 +112,79 @@ class TestOraclePostgresCountsWithVariousDateTypes:
         """Test count comparison using DATE column type"""
         table_name = 'test_various_date_types'
 
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_counts(
+        result = checker.check_counts_group_by_date(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_date',  # DATE type
             date_range=('2024-01-01', '2024-01-04'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         assert stats.final_score == 100.0
-        print(f'DATE column count comparison passed: {stats.final_score:.2f}%')
+        print(f'DATE column count check passed: {stats.final_score:.2f}%')
 
     def test_counts_with_timestamp_column(self, oracle_engine, postgres_engine):
         """Test count comparison using TIMESTAMP column type"""
         table_name = 'test_various_date_types'
 
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_counts(
+        result = checker.check_counts_group_by_date(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_timestamp',  # TIMESTAMP type
             date_range=('2024-01-01', '2024-01-04'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         assert stats.final_score == 100.0
-        print(f'TIMESTAMP column count comparison passed: {stats.final_score:.2f}%')
+        print(f'TIMESTAMP column count check passed: {stats.final_score:.2f}%')
 
     def test_counts_with_datetime_column(self, oracle_engine, postgres_engine):
         """Test count comparison using DATETIME column type (TIMESTAMP in Oracle)"""
         table_name = 'test_various_date_types'
 
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_counts(
+        result = checker.check_counts_group_by_date(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_datetime',  # DATETIME/TIMESTAMP type
             date_range=('2024-01-01', '2024-01-04'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         assert stats.final_score == 100.0
-        print(f'DATETIME column count comparison passed: {stats.final_score:.2f}%')
+        print(f'DATETIME column count check passed: {stats.final_score:.2f}%')
 
     def test_counts_with_timestamptz_column(self, oracle_engine, postgres_engine):
         """
@@ -181,23 +193,27 @@ class TestOraclePostgresCountsWithVariousDateTypes:
         """
         table_name = 'test_various_date_types'
 
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_counts(
+        result = checker.check_counts_group_by_date(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='event_timestamp_tz',  # TIMESTAMP WITH TIME ZONE type
             date_range=('2024-01-01', '2024-01-04'),
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         # This should work as both databases store timezone offset information
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         assert stats.final_score == 100.0
         print(
-            f'TIMESTAMP WITH TIME ZONE column count comparison passed: {stats.final_score:.2f}%'
+            f'TIMESTAMP WITH TIME ZONE column count check passed: {stats.final_score:.2f}%'
         )

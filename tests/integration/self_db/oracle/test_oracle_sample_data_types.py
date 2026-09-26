@@ -1,17 +1,17 @@
 """
-Test Oracle self-comparison with complex data types.
+Test Oracle self-check with complex data types.
 """
 
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import COMPARISON_SKIPPED, COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_SKIPPED, CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
 class TestOracleComplexDataTypes:
     """
-    Tests for Oracle self-comparison with various data types.
+    Tests for Oracle self-check with various data types.
     """
 
     @pytest.fixture(autouse=True)
@@ -74,17 +74,17 @@ class TestOracleComplexDataTypes:
 
         yield
 
-    def test_oracle_complex_types_self_comparison(self, oracle_engine):
+    def test_oracle_complex_types_self_check(self, oracle_engine):
         """
         Compare Oracle table with itself containing complex data types.
         """
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=oracle_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        result = checker.check_samples(
             source_table=DataReference('test_oracle_complex', 'test'),
             target_table=DataReference('test_oracle_complex', 'test'),
             date_column='created_at',
@@ -92,24 +92,28 @@ class TestOracleComplexDataTypes:
             exclude_columns=[
                 'raw_col'
             ],  # Exclude RAW columns as they might not compare well
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         assert stats.final_diff_score == 0.0
-        print(f'Oracle complex types self-comparison passed: {stats.final_score:.2f}%')
+        print(f'Oracle complex types self-check passed: {stats.final_score:.2f}%')
 
     def test_oracle_with_column_exclusions(self, oracle_engine):
         """
-        Test Oracle self-comparison with excluded columns.
+        Test Oracle self-check with excluded columns.
         """
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=oracle_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        result = checker.check_samples(
             source_table=DataReference('test_oracle_complex', 'test'),
             target_table=DataReference('test_oracle_complex', 'test'),
             date_column='created_at',
@@ -125,23 +129,27 @@ class TestOracleComplexDataTypes:
                 'number_col',
                 'date_col',
             ],  # Include specific columns
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         print(f'Oracle with column exclusions passed: {stats.final_score:.2f}%')
 
     def test_oracle_empty_date_range(self, oracle_engine):
         """
-        Test Oracle self-comparison with empty date range.
+        Test Oracle self-check with empty date range.
         """
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=oracle_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        result = checker.check_samples(
             source_table=DataReference('test_oracle_complex', 'test'),
             target_table=DataReference('test_oracle_complex', 'test'),
             date_column='created_at',
@@ -149,9 +157,37 @@ class TestOracleComplexDataTypes:
                 '2025-01-01',
                 '2025-01-31',
             ),  # Future date range, should be empty
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
         # Should be skipped due to empty result
-        assert status == COMPARISON_SKIPPED
+        assert status == CHECK_SKIPPED
         print(f'Oracle empty date range test passed: No data to compare')
+
+    def test_oracle_with_empty_only_after_exclusion(self, oracle_engine):
+
+        checker = DataQualityChecker(
+            source_engine=oracle_engine,
+            target_engine=oracle_engine,
+            timezone='Europe/Athens',
+        )
+
+        result = checker.check_samples(
+            source_table=DataReference('test_oracle_complex', 'test'),
+            target_table=DataReference('test_oracle_complex', 'test'),
+            date_column='created_at',
+            update_column='created_at',
+            date_range=('2024-01-01', '2024-01-03'),
+            tolerance_pct=0.0,
+            exclude_recent_hours=9000000,  # exclude all data in fact
+        )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
+        print(report)
+        assert status == CHECK_SKIPPED

@@ -4,10 +4,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from xoverrr.utils import (ComparisonDiffDetails, ComparisonStats,
+from xoverrr.constants import (FLAG_VALUE_NO, FLAG_VALUE_YES,
+                               XRECENTLY_CHANGED_COLUMN)
+from xoverrr.reporting import generate_sample_report
+from xoverrr.utils import (CheckDetails, CheckStats,
                            clean_recently_changed_data, compare_dataframes,
-                           cross_fill_missing_dates,
-                           generate_comparison_sample_report,
+                           cross_fill_missing_dates, format_report_collection,
                            get_dataframe_size_gb, prepare_dataframe,
                            validate_dataframe_size)
 
@@ -46,8 +48,8 @@ class TestUtils:
 
         assert stats.total_source_rows == 3
         assert stats.total_target_rows == 3
-        assert stats.common_pk_rows == 3
-        assert stats.total_matched_rows == 3
+        assert stats.comparable_rows == 3
+        assert stats.passed_rows == 3
         assert stats.final_diff_score == pytest.approx(0.0, rel=1e-5)
 
     @pytest.mark.parametrize(
@@ -70,7 +72,7 @@ class TestUtils:
         assert stats.final_diff_score == pytest.approx(expected_score, rel=1e-5)
 
     def test_compare_dataframes_different_values(self):
-        """Test comparison with different values"""
+        """Test check with different values"""
         df1 = pd.DataFrame(
             {'id': [1, 2, 3], 'name': ['Alice', 'Bob', 'Charlie'], 'age': [25, 30, 35]}
         )
@@ -85,13 +87,13 @@ class TestUtils:
 
         stats, details = compare_dataframes(df1, df2, ['id'], 3)
 
-        assert stats.common_pk_rows == 3
+        assert stats.comparable_rows == 3
         expected_score = (2 / 3) * 100 * 0.5
         assert stats.final_diff_score == pytest.approx(expected_score, rel=1e-5)
-        assert len(details.discrepancies_per_col_examples) == 3
+        assert len(details.issue_examples) == 3
 
     def test_compare_dataframes_empty(self):
-        """Test comparison with empty dataframes"""
+        """Test check with empty dataframes"""
         df1 = pd.DataFrame({'id': [], 'name': []})
         df2 = pd.DataFrame({'id': [], 'name': []})
 
@@ -100,7 +102,7 @@ class TestUtils:
         assert details is None
 
     def test_compare_dataframes_missing_columns_raises(self):
-        """Test comparison with missing key columns raises error"""
+        """Test check with missing key columns raises error"""
         df1 = pd.DataFrame({'id': [1], 'name': ['Alice']})
         df2 = pd.DataFrame({'name': ['Alice']})  # Missing id column
 
@@ -208,7 +210,7 @@ class TestUtils:
         assert stats.final_diff_score < 0.1
 
     def test_compound_primary_key(self):
-        """Test comparison with compound primary key"""
+        """Test check with compound primary key"""
         df1 = pd.DataFrame(
             {'id1': [1, 1, 2], 'id2': ['a', 'b', 'a'], 'value': [10, 20, 30]}
         )
@@ -219,7 +221,7 @@ class TestUtils:
 
         stats, details = compare_dataframes(df1, df2, ['id1', 'id2'])
 
-        assert stats.common_pk_rows == 2  # (1,a) and (2,a)
+        assert stats.comparable_rows == 2  # (1,a) and (2,a)
         assert stats.only_source_rows == 1  # (1,b)
         assert stats.only_target_rows == 1  # (2,b)
         expected_score = 50.0 * 0.15 + 50.0 * 0.15
@@ -260,7 +262,12 @@ class TestUtils:
             {
                 'id': [1, 2, 3, 4],
                 'value': ['A', 'B', 'C', 'D'],
-                'xrecently_changed': ['y', 'n', 'y', 'n'],
+                XRECENTLY_CHANGED_COLUMN: [
+                    FLAG_VALUE_YES,
+                    FLAG_VALUE_NO,
+                    FLAG_VALUE_YES,
+                    FLAG_VALUE_NO,
+                ],
             }
         )
 
@@ -268,20 +275,24 @@ class TestUtils:
             {
                 'id': [1, 2, 3, 5],
                 'value': ['A', 'B', 'X', 'E'],
-                'xrecently_changed': ['n', 'y', 'n', 'n'],
+                XRECENTLY_CHANGED_COLUMN: [
+                    FLAG_VALUE_NO,
+                    FLAG_VALUE_YES,
+                    FLAG_VALUE_NO,
+                    FLAG_VALUE_NO,
+                ],
             }
         )
 
         df1_clean, df2_clean = clean_recently_changed_data(df1, df2, ['id'])
 
-        # IDs with 'y' in either dataframe should be removed
-        assert 2 not in df1_clean['id'].values  # 'y' in df2
-        assert 3 not in df1_clean['id'].values  # 'y' in df1
-        assert 1 not in df1_clean['id'].values  # 'y' in df1
-        assert 'xrecently_changed' not in df1_clean.columns
+        assert 2 not in df1_clean['id'].values
+        assert 3 not in df1_clean['id'].values
+        assert 1 not in df1_clean['id'].values
+        assert XRECENTLY_CHANGED_COLUMN not in df1_clean.columns
 
     def test_compare_dataframes_different_keys(self):
-        """Test comparison with different primary keys"""
+        """Test check with different primary keys"""
         df1 = pd.DataFrame({'id': [1, 2, 3], 'name': ['Alice', 'Bob', 'Charlie']})
 
         df2 = pd.DataFrame({'id': [1, 2, 4], 'name': ['Alice', 'Bob', 'David']})
@@ -290,14 +301,14 @@ class TestUtils:
 
         assert stats.only_source_rows == 1
         assert stats.only_target_rows == 1
-        assert stats.common_pk_rows == 2
+        assert stats.comparable_rows == 2
         # Expected: 1 source-only row (50%) + 1 target-only row (50%) out of 2 common rows
         # Final score = 50% * 0.15 + 50% * 0.15 = 15.0%
         expected_score = 50.0 * 0.15 + 50.0 * 0.15
         assert stats.final_diff_score == pytest.approx(expected_score, rel=1e-5)
 
     def test_compare_dataframes_missing_columns(self):
-        """Test comparison with missing key columns"""
+        """Test check with missing key columns"""
         df1 = pd.DataFrame({'id': [1], 'name': ['Alice']})
         df2 = pd.DataFrame({'name': ['Alice']})  # Missing id column
 
@@ -318,7 +329,7 @@ class TestUtils:
 
         assert stats.only_source_rows == 3
         assert stats.only_target_rows == 3
-        assert stats.common_pk_rows == 0
+        assert stats.comparable_rows == 0
         # Expected: 100% mismatch
         assert stats.final_diff_score == pytest.approx(100.0, rel=1e-5)
 
@@ -345,7 +356,7 @@ class TestUtils:
         stats, details = compare_dataframes(df1, df2, ['id', 'type'], 3)
 
         # Verify key statistics
-        assert stats.common_pk_rows == 4  # (1,A), (1,B), (2,A), (3,A)
+        assert stats.comparable_rows == 4  # (1,A), (1,B), (2,A), (3,A)
         assert stats.only_source_rows == 1  # (4,B)
         assert stats.only_target_rows == 1  # (5,A)
 
@@ -364,7 +375,7 @@ class TestUtils:
 
         assert stats.only_source_rows == 3
         assert stats.only_target_rows == 3
-        assert stats.common_pk_rows == 0
+        assert stats.comparable_rows == 0
         # Expected: 100% mismatch
         assert stats.final_diff_score == pytest.approx(100.0, rel=1e-5)
 
@@ -377,10 +388,10 @@ class TestUtils:
         stats, details = compare_dataframes(df1, df2, ['id'], 3)
 
         assert stats.final_diff_score == pytest.approx(0.0, rel=1e-5)
-        assert stats.total_matched_rows == 3
+        assert stats.passed_rows == 3
 
     def test_compound_primary_key_with_duplicates(self):
-        """Test comparison with compound primary key and duplicate keys in source data (from unittest)"""
+        """Test check with compound primary key and duplicate keys in source data (from unittest)"""
         df1 = pd.DataFrame(
             {
                 'id1': [1, 1, 2, 3],
@@ -396,7 +407,7 @@ class TestUtils:
         stats, details = compare_dataframes(df1, df2, ['id1', 'id2'])
 
         # With duplicates and value mismatches, score should be > 0
-        # Duplicate in source contributes to source_dup_percentage
+        # Duplicate in source contributes to dup_source_rows_pct
         assert stats.final_diff_score > 0.0
         # Should be significant due to duplicates
         assert stats.final_diff_score > 10.0
@@ -426,10 +437,10 @@ class TestUtils:
         # Verify statistics
         assert stats.total_source_rows == 5
         assert stats.total_target_rows == 5
-        assert stats.common_pk_rows == 3  # (1,A), (2,A), (3,A)
+        assert stats.comparable_rows == 3  # (1,A), (2,A), (3,A)
         assert stats.only_source_rows == 2  # (1,B), (4,A)
         assert stats.only_target_rows == 2  # (4,B), (5,A)
-        assert stats.total_matched_rows == 3  # Only (1,A) has all values matching
+        assert stats.passed_rows == 3  # Only (1,A) has all values matching
 
         # Expected: 2 source-only (66.67%) + 2 target-only (66.67%) out of 3 common rows
         # No value mismatches in common rows
@@ -456,8 +467,8 @@ class TestUtils:
         stats, details = compare_dataframes(df1, df2, ['part1', 'part2'], 3)
 
         assert stats.final_diff_score == pytest.approx(0.0, rel=1e-5)
-        assert stats.total_matched_rows == 4
-        assert stats.common_pk_rows == 4
+        assert stats.passed_rows == 4
+        assert stats.comparable_rows == 4
 
     def test_duplicate_primary_keys_in_target(self):
         """Test handling of duplicate primary keys within target dataframe (from unittest)"""
@@ -476,12 +487,12 @@ class TestUtils:
         assert stats.only_target_rows == 0
         assert stats.dup_source_rows == 0
         assert stats.dup_target_rows == 1
-        assert stats.common_pk_rows == 3
+        assert stats.comparable_rows == 3
 
-        assert stats.dup_source_percentage_rows == 0
-        assert stats.dup_target_percentage_rows == 25
-        assert stats.source_only_percentage_rows == pytest.approx(33.33333, rel=1e-3)
-        assert stats.target_only_percentage_rows == 0
+        assert stats.dup_source_rows_pct == 0
+        assert stats.dup_target_rows_pct == 25
+        assert stats.source_only_rows_pct == pytest.approx(33.33333, rel=1e-3)
+        assert stats.target_only_rows_pct == 0
 
         expected_score = 25.0 * 0.1 + 33.33333 * 0.15
         assert stats.final_diff_score == pytest.approx(expected_score, rel=1e-5)
@@ -505,10 +516,10 @@ class TestUtils:
         )
 
         stats, details = compare_dataframes(df1, df2, ['key1', 'key2'], 3)
-        assert stats.common_pk_rows == 3
-        assert stats.dup_source_percentage_rows == (1 / 4) * 100
-        assert stats.dup_target_percentage_rows == 0
-        assert stats.total_matched_rows == 3
+        assert stats.comparable_rows == 3
+        assert stats.dup_source_rows_pct == (1 / 4) * 100
+        assert stats.dup_target_rows_pct == 0
+        assert stats.passed_rows == 3
         assert stats.only_source_rows == 0
         assert stats.only_target_rows == 1
 
@@ -517,6 +528,14 @@ class TestUtils:
         assert stats.final_diff_score == pytest.approx(
             expected_score, rel=1e-5
         )  # Reduced precision
+
+
+def test_format_report_collection_empty_values():
+    assert format_report_collection(None) == ''
+    assert format_report_collection(()) == ''
+    assert format_report_collection([]) == ''
+    assert format_report_collection({1, 2}) == '1, 2'
+    assert format_report_collection(['id', 'value']) == 'id, value'
 
 
 @pytest.fixture

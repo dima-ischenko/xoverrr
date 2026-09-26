@@ -1,16 +1,16 @@
 """
 Test for bug fix: Mixed timezone offsets in timestamptz columns should be handled correctly.
-All cross-database comparisons with tz-aware columns must use UTC.
+All cross-database checks with tz-aware columns must use UTC.
 """
 
 import pytest
 
-from xoverrr.constants import COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
 class TestPostgresOracleMixedTimezoneOffsets:
-    """Test for mixed timezone offsets in timestamptz columns bug fix - PostgreSQL ↔ Oracle"""
+    """Test for mixed timezone offsets in timestamptz columns bug fix - PostgreSQL / Oracle"""
 
     @pytest.fixture(autouse=True)
     def setup_mixed_timezone_data(self, postgres_engine, oracle_engine, table_helper):
@@ -78,17 +78,17 @@ class TestPostgresOracleMixedTimezoneOffsets:
 
     def test_custom_query_with_utc_for_tz_aware(self, postgres_engine, oracle_engine):
         """
-        Test custom query comparison with tz-aware data must use UTC.
+        Test custom query check with tz-aware data must use UTC.
         """
-        pytest.skip('issue #33')
-        comparator = DataQualityComparator(
+        # pytest.skip('issue #33')
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
-            timezone='UTC',  # MUST be UTC for tz-aware data
+            timezone='Europe/Paris',
         )
 
         source_query = """
-            SELECT id, event_name, created_on, record_date
+            SELECT id, event_name, cast(created_on at time zone 'Europe/Paris' as timestamp) created_on, record_date
             FROM test.test_mixed_timezones_query_ora_pg
             WHERE record_date >= trunc(to_date(:start_date, 'YYYY-MM-DD'), 'dd')
               AND record_date < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1
@@ -101,15 +101,19 @@ class TestPostgresOracleMixedTimezoneOffsets:
               AND record_date < date_trunc('day', cast(:end_date as date)) + interval '1 day'
         """
 
-        status, report, stats, details = comparator.compare_custom_query(
+        result = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-08'},
             target_query=target_query,
             target_params={'start_date': '2024-01-01', 'end_date': '2024-01-08'},
             custom_primary_key=['id'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
 
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         print(f'custom query with UTC for tz-aware passed: {stats.final_score:.2f}%')

@@ -1,4 +1,5 @@
 import logging
+import os
 import time
 
 import pytest
@@ -7,6 +8,19 @@ from tenacity import (retry, retry_if_exception_type, stop_after_attempt,
                       wait_fixed)
 
 logger = logging.getLogger(__name__)
+
+POSTGRES_URL = os.environ.get(
+    'XOVERRR_TEST_POSTGRES_URL',
+    'postgresql+psycopg2://test_user:test_pass@localhost:5433/test_db',
+)
+ORACLE_URL = os.environ.get(
+    'XOVERRR_TEST_ORACLE_URL',
+    'oracle+oracledb://test:test_pass@localhost:1521/?service_name=test_db',
+)
+CLICKHOUSE_URL = os.environ.get(
+    'XOVERRR_TEST_CLICKHOUSE_URL',
+    'clickhouse+native://test_user:test_pass@localhost:9000/test',
+)
 
 
 @retry(
@@ -28,7 +42,7 @@ def wait_for_database(engine, db_name: str):
 def postgres_engine():
     """PostgreSQL SQLAlchemy engine"""
     engine = create_engine(
-        'postgresql+psycopg2://test_user:test_pass@localhost:5433/test_db',
+        POSTGRES_URL,
         pool_pre_ping=True,
         pool_recycle=3600,
         connect_args={'connect_timeout': 10},
@@ -41,7 +55,7 @@ def postgres_engine():
 def oracle_engine():
     """Oracle SQLAlchemy engine"""
     engine = create_engine(
-        'oracle+oracledb://test:test_pass@localhost:1521/?service_name=test_db',
+        ORACLE_URL,
         pool_pre_ping=True,
         pool_recycle=3600,
     )
@@ -52,9 +66,7 @@ def oracle_engine():
 @pytest.fixture(scope='session')
 def clickhouse_engine():
     """ClickHouse SQLAlchemy engine"""
-    engine = create_engine(
-        'clickhouse+native://test_user:test_pass@localhost:9000/test', pool_recycle=3600
-    )
+    engine = create_engine(CLICKHOUSE_URL, pool_recycle=3600)
     wait_for_database(engine, 'ClickHouse')
     return engine
 
@@ -108,6 +120,8 @@ class DBHelper:
         elif dialect in ('postgresql', 'postgres'):
             if object_type == 'view':
                 return f'DROP VIEW IF EXISTS {object_name} CASCADE'
+            elif object_type == 'mview':
+                return f'DROP MATERIALIZED VIEW IF EXISTS {object_name} CASCADE'
             else:
                 return f'DROP TABLE IF EXISTS {object_name} CASCADE'
         else:
@@ -127,6 +141,15 @@ class DBHelper:
         Drop a view from database
         """
         drop_sql = self.get_drop_sql(engine, view_name, 'view')
+
+        with engine.begin() as conn:
+            conn.execute(text(drop_sql))
+
+    def drop_mview(self, engine, mview_name: str) -> None:
+        """
+        Drop a mat view from database
+        """
+        drop_sql = self.get_drop_sql(engine, mview_name, 'mview')
 
         with engine.begin() as conn:
             conn.execute(text(drop_sql))
@@ -163,6 +186,20 @@ class DBHelper:
         # Register for cleanup
         self._cleanup_stack.append((engine, view_name, 'view'))
 
+    def create_mview(self, engine, mview_name: str, mview_sql: str) -> None:
+        """
+        Create a view and register it for automatic cleanup
+        """
+        # Clean up if exists
+        self.drop_mview(engine, mview_name)
+
+        # Create mview
+        with engine.begin() as conn:
+            conn.execute(text(mview_sql))
+
+        # Register for cleanup
+        self._cleanup_stack.append((engine, mview_name, 'mview'))
+
     def cleanup(self) -> None:
         """Cleanup all registered objects in reverse order"""
         for engine, object_name, object_type in reversed(self._cleanup_stack):
@@ -170,6 +207,8 @@ class DBHelper:
                 self.drop_table(engine, object_name)
             elif object_type == 'view':
                 self.drop_view(engine, object_name)
+            elif object_type == 'mview':
+                self.drop_mview(engine, object_name)
         self._cleanup_stack.clear()
 
 

@@ -1,16 +1,16 @@
 """
-Test custom query comparison between Oracle and PostgreSQL.
+Test custom query check between Oracle and PostgreSQL.
 """
 
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
-class TestCustomQueryComparison:
-    """Tests for custom query comparison"""
+class TestCustomQueryCheck:
+    """Tests for custom query check"""
 
     @pytest.fixture(autouse=True)
     def setup_custom_data(self, oracle_engine, postgres_engine, table_helper):
@@ -65,9 +65,9 @@ class TestCustomQueryComparison:
 
         yield
 
-    def test_custom_query_comparison_char_ts(self, oracle_engine, postgres_engine):
+    def test_custom_query_check_char_ts(self, oracle_engine, postgres_engine):
 
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
             timezone='Europe/Athens',
@@ -87,23 +87,25 @@ class TestCustomQueryComparison:
               AND created_at < date_trunc('day', cast(:end_date as date)) + interval '1 days'
         """
 
-        status, report, stats, details = comparator.compare_custom_query(
+        result = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-05'},
             target_query=target_query,
             target_params={'start_date': '2024-01-01', 'end_date': '2024-01-05'},
             custom_primary_key=['id'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
-        assert status == COMPARISON_SUCCESS
-        print(f'Custom query comparison passed: {stats.final_score:.2f}%')
+        assert status == CHECK_SUCCESS
+        print(f'Custom query check passed: {stats.final_score:.2f}%')
 
-    def test_custom_query_comparison_char_uppercase_pk(
-        self, oracle_engine, postgres_engine
-    ):
+    def test_custom_query_check_char_uppercase_pk(self, oracle_engine, postgres_engine):
         pytest.skip('issue #37')
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
             timezone='Europe/Athens',
@@ -123,22 +125,26 @@ class TestCustomQueryComparison:
               AND created_at < date_trunc('day', cast(:end_date as date)) + interval '1 days'
         """
 
-        status, report, stats, details = comparator.compare_custom_query(
+        result = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-05'},
             target_query=target_query,
             target_params={'start_date': '2024-01-01', 'end_date': '2024-01-05'},
             custom_primary_key=['ID'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
-        assert status == COMPARISON_SUCCESS
-        print(f'Custom query comparison passed: {stats.final_score:.2f}%')
+        assert status == CHECK_SUCCESS
+        print(f'Custom query check passed: {stats.final_score:.2f}%')
 
-    def test_custom_query_comparison_numeric(self, oracle_engine, postgres_engine):
+    def test_custom_query_check_numeric(self, oracle_engine, postgres_engine):
         # pytest.skip('issue #29')
 
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
             timezone='Europe/Athens',
@@ -158,21 +164,25 @@ class TestCustomQueryComparison:
               AND created_at < date_trunc('day', cast(:end_date as date)) + interval '1 days'
         """
 
-        status, report, stats, details = comparator.compare_custom_query(
+        result = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-05'},
             target_query=target_query,
             target_params={'start_date': '2024-01-01', 'end_date': '2024-01-05'},
             custom_primary_key=['id'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
-        assert status == COMPARISON_SUCCESS
-        print(f'Custom query comparison passed: {stats.final_score:.2f}%')
+        assert status == CHECK_SUCCESS
+        print(f'Custom query check passed: {stats.final_score:.2f}%')
 
-    def test_custom_query_comparison_bool(self, oracle_engine, postgres_engine):
+    def test_custom_query_check_bool(self, oracle_engine, postgres_engine):
         # pytest.skip('issue #29')
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
             timezone='Europe/Athens',
@@ -192,21 +202,25 @@ class TestCustomQueryComparison:
               AND created_at < date_trunc('day', cast(:end_date as date)) + interval '1 days'
         """
 
-        status, report, stats, details = comparator.compare_custom_query(
+        result = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-04'},
             target_query=target_query,
             target_params={'start_date': '2024-01-01', 'end_date': '2024-01-04'},
             custom_primary_key=['id'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
-        assert status == COMPARISON_SUCCESS
-        print(f'Custom query comparison passed: {stats.final_score:.2f}%')
+        assert status == CHECK_SUCCESS
+        print(f'Custom query check passed: {stats.final_score:.2f}%')
 
-    def test_custom_query_comparison_asterisk(self, oracle_engine, postgres_engine):
+    def test_custom_query_check_asterisk(self, oracle_engine, postgres_engine):
         # pytest.skip('issue #29')
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
             timezone='Europe/Athens',
@@ -226,21 +240,25 @@ class TestCustomQueryComparison:
               AND created_at < date_trunc('day', cast(:end_date as date)) + interval '1 days'
         """
 
-        status, report, stats, details = comparator.compare_custom_query(
+        result = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-04'},
             target_query=target_query,
             target_params={'start_date': '2024-01-01', 'end_date': '2024-01-04'},
             custom_primary_key=['id'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
-        assert status == COMPARISON_SUCCESS
-        print(f'Custom query comparison passed: {stats.final_score:.2f}%')
+        assert status == CHECK_SUCCESS
+        print(f'Custom query check passed: {stats.final_score:.2f}%')
 
-    def test_custom_query_comparison_like_filter(self, oracle_engine, postgres_engine):
+    def test_custom_query_check_like_filter(self, oracle_engine, postgres_engine):
         # pytest.skip('issue #30')
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
             timezone='Europe/Athens',
@@ -262,23 +280,27 @@ class TestCustomQueryComparison:
               and name like '%lice%'
         """
 
-        status, report, stats, details = comparator.compare_custom_query(
+        result = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-04'},
             target_query=target_query,
             target_params={'start_date': '2024-01-01', 'end_date': '2024-01-04'},
             custom_primary_key=['id'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
-        assert status == COMPARISON_SUCCESS
-        print(f'Custom query comparison passed: {stats.final_score:.2f}%')
+        assert status == CHECK_SUCCESS
+        print(f'Custom query check passed: {stats.final_score:.2f}%')
 
-    def test_custom_query_comparison_like_second_filter(
+    def test_custom_query_check_like_second_filter(
         self, oracle_engine, postgres_engine
     ):
         # pytest.skip('issue #30')
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=oracle_engine,
             target_engine=postgres_engine,
             timezone='Europe/Athens',
@@ -302,7 +324,7 @@ class TestCustomQueryComparison:
             group by id
         """
 
-        status, report, stats, details = comparator.compare_custom_query(
+        result = checker.check_custom_queries(
             source_query=source_query,
             source_params={
                 'start_date': '2024-01-01',
@@ -316,8 +338,12 @@ class TestCustomQueryComparison:
                 'name_filter': '%lice%',
             },
             custom_primary_key=['id'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
-        assert status == COMPARISON_SUCCESS
-        print(f'Custom query comparison passed: {stats.final_score:.2f}%')
+        assert status == CHECK_SUCCESS
+        print(f'Custom query check passed: {stats.final_score:.2f}%')

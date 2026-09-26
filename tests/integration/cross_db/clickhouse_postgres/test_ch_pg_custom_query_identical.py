@@ -1,16 +1,16 @@
 """
-Test custom query comparison between PostgreSQL and ClickHouse.
+Test custom query check between PostgreSQL and ClickHouse.
 """
 
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
-class TestCustomQueryComparisonPGClickHouse:
-    """Tests for custom query comparison between PostgreSQL and ClickHouse"""
+class TestCustomQueryCheckPGClickHouse:
+    """Tests for custom query check between PostgreSQL and ClickHouse"""
 
     @pytest.fixture(autouse=True)
     def setup_custom_data(self, postgres_engine, clickhouse_engine, table_helper):
@@ -73,9 +73,9 @@ class TestCustomQueryComparisonPGClickHouse:
 
         yield
 
-    def test_custom_query_comparison_basic(self, postgres_engine, clickhouse_engine):
-        """Test basic comparison with id and name columns"""
-        comparator = DataQualityComparator(
+    def test_custom_query_check_basic(self, postgres_engine, clickhouse_engine):
+        """Test basic check with id and name columns"""
+        checker = DataQualityChecker(
             source_engine=postgres_engine,
             target_engine=clickhouse_engine,
             timezone='Europe/Athens',
@@ -95,22 +95,26 @@ class TestCustomQueryComparisonPGClickHouse:
               AND created_at < toDate(:end_date) + INTERVAL 1 day
         """
 
-        status, report, stats, details = comparator.compare_custom_query(
+        result = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-06'},
             target_query=target_query,
             target_params={'start_date': '2024-01-01', 'end_date': '2024-01-06'},
             custom_primary_key=['id'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
-        assert status == COMPARISON_SUCCESS
-        assert stats.total_matched_rows == 6
-        print(f'Custom query comparison passed: {stats.final_score:.2f}%')
+        assert status == CHECK_SUCCESS
+        assert stats.passed_rows == 6
+        print(f'Custom query check passed: {stats.final_score:.2f}%')
 
-    def test_custom_query_comparison_numeric(self, postgres_engine, clickhouse_engine):
-        """Test comparison with numeric/amount column"""
-        comparator = DataQualityComparator(
+    def test_custom_query_check_numeric(self, postgres_engine, clickhouse_engine):
+        """Test check with numeric/amount column"""
+        checker = DataQualityChecker(
             source_engine=postgres_engine,
             target_engine=clickhouse_engine,
             timezone='Europe/Athens',
@@ -130,21 +134,25 @@ class TestCustomQueryComparisonPGClickHouse:
               AND created_at < toDate(:end_date) + INTERVAL 1 day
         """
 
-        status, report, stats, details = comparator.compare_custom_query(
+        result = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-06'},
             target_query=target_query,
             target_params={'start_date': '2024-01-01', 'end_date': '2024-01-06'},
             custom_primary_key=['id'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
-        assert status == COMPARISON_SUCCESS
-        print(f'Custom query comparison passed: {stats.final_score:.2f}%')
+        assert status == CHECK_SUCCESS
+        print(f'Custom query check passed: {stats.final_score:.2f}%')
 
-    def test_custom_query_comparison_boolean(self, postgres_engine, clickhouse_engine):
-        """Test comparison with boolean/is_active column"""
-        comparator = DataQualityComparator(
+    def test_custom_query_check_boolean(self, postgres_engine, clickhouse_engine):
+        """Test check with boolean/is_active column"""
+        checker = DataQualityChecker(
             source_engine=postgres_engine,
             target_engine=clickhouse_engine,
             timezone='Europe/Athens',
@@ -164,21 +172,25 @@ class TestCustomQueryComparisonPGClickHouse:
               AND created_at < toDate(:end_date) + INTERVAL 1 day
         """
 
-        status, report, stats, details = comparator.compare_custom_query(
+        result = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-06'},
             target_query=target_query,
             target_params={'start_date': '2024-01-01', 'end_date': '2024-01-06'},
             custom_primary_key=['id'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
-        assert status == COMPARISON_SUCCESS
-        print(f'Custom query comparison passed: {stats.final_score:.2f}%')
+        assert status == CHECK_SUCCESS
+        print(f'Custom query check passed: {stats.final_score:.2f}%')
 
-    def test_custom_query_comparison_datetime(self, postgres_engine, clickhouse_engine):
-        """Test comparison with datetime/updated_at column"""
-        comparator = DataQualityComparator(
+    def test_custom_query_check_datetime(self, postgres_engine, clickhouse_engine):
+        """Test check with datetime/updated_at column"""
+        checker = DataQualityChecker(
             source_engine=postgres_engine,
             target_engine=clickhouse_engine,
             timezone='Europe/Athens',
@@ -200,21 +212,25 @@ class TestCustomQueryComparisonPGClickHouse:
               AND created_at < toDate(:end_date) + INTERVAL 1 day
         """
 
-        status, report, stats, details = comparator.compare_custom_query(
+        result = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-06'},
             target_query=target_query,
             target_params={'start_date': '2024-01-01', 'end_date': '2024-01-06'},
             custom_primary_key=['id'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
-        assert status == COMPARISON_SUCCESS
-        print(f'Custom query comparison passed: {stats.final_score:.2f}%')
+        assert status == CHECK_SUCCESS
+        print(f'Custom query check passed: {stats.final_score:.2f}%')
 
-    def test_custom_query_comparison_asterisk(self, postgres_engine, clickhouse_engine):
-        """Test comparison with SELECT *"""
-        comparator = DataQualityComparator(
+    def test_custom_query_check_asterisk(self, postgres_engine, clickhouse_engine):
+        """Test check with SELECT *"""
+        checker = DataQualityChecker(
             source_engine=postgres_engine,
             target_engine=clickhouse_engine,
             timezone='Europe/Athens',
@@ -234,24 +250,26 @@ class TestCustomQueryComparisonPGClickHouse:
               AND created_at < toDate(:end_date) + INTERVAL 1 day
         """
 
-        status, report, stats, details = comparator.compare_custom_query(
+        result = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-06'},
             target_query=target_query,
             target_params={'start_date': '2024-01-01', 'end_date': '2024-01-06'},
             custom_primary_key=['id'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
-        assert status == COMPARISON_SUCCESS
-        assert stats.total_matched_rows == 6
-        print(f'Custom query comparison passed: {stats.final_score:.2f}%')
+        assert status == CHECK_SUCCESS
+        assert stats.passed_rows == 6
+        print(f'Custom query check passed: {stats.final_score:.2f}%')
 
-    def test_custom_query_comparison_with_filter(
-        self, postgres_engine, clickhouse_engine
-    ):
-        """Test comparison with LIKE filter"""
-        comparator = DataQualityComparator(
+    def test_custom_query_check_with_filter(self, postgres_engine, clickhouse_engine):
+        """Test check with LIKE filter"""
+        checker = DataQualityChecker(
             source_engine=postgres_engine,
             target_engine=clickhouse_engine,
             timezone='Europe/Athens',
@@ -273,7 +291,7 @@ class TestCustomQueryComparisonPGClickHouse:
               AND name like :name_filter
         """
 
-        status, report, stats, details = comparator.compare_custom_query(
+        result = checker.check_custom_queries(
             source_query=source_query,
             source_params={
                 'start_date': '2024-01-01',
@@ -287,18 +305,20 @@ class TestCustomQueryComparisonPGClickHouse:
                 'name_filter': '%lice%',
             },
             custom_primary_key=['id'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
-        assert status == COMPARISON_SUCCESS
-        assert stats.total_matched_rows == 1  # Only Alice matches
-        print(f'Custom query comparison passed: {stats.final_score:.2f}%')
+        assert status == CHECK_SUCCESS
+        assert stats.passed_rows == 1  # Only Alice matches
+        print(f'Custom query check passed: {stats.final_score:.2f}%')
 
-    def test_custom_query_comparison_date_range(
-        self, postgres_engine, clickhouse_engine
-    ):
-        """Test comparison with specific date range"""
-        comparator = DataQualityComparator(
+    def test_custom_query_check_date_range(self, postgres_engine, clickhouse_engine):
+        """Test check with specific date range"""
+        checker = DataQualityChecker(
             source_engine=postgres_engine,
             target_engine=clickhouse_engine,
             timezone='Europe/Athens',
@@ -318,22 +338,26 @@ class TestCustomQueryComparisonPGClickHouse:
               AND created_at < toDate(:end_date) + INTERVAL 1 day
         """
 
-        status, report, stats, details = comparator.compare_custom_query(
+        result = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-02', 'end_date': '2024-01-04'},
             target_query=target_query,
             target_params={'start_date': '2024-01-02', 'end_date': '2024-01-04'},
             custom_primary_key=['id'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
-        assert status == COMPARISON_SUCCESS
-        assert stats.total_matched_rows == 4  # IDs 2,3,4,5 (Jan 2-4)
-        print(f'Custom query comparison passed: {stats.final_score:.2f}%')
+        assert status == CHECK_SUCCESS
+        assert stats.passed_rows == 4  # IDs 2,3,4,5 (Jan 2-4)
+        print(f'Custom query check passed: {stats.final_score:.2f}%')
 
-    def test_custom_query_comparison_group_by(self, postgres_engine, clickhouse_engine):
-        """Test comparison with GROUP BY aggregation"""
-        comparator = DataQualityComparator(
+    def test_custom_query_check_group_by(self, postgres_engine, clickhouse_engine):
+        """Test check with GROUP BY aggregation"""
+        checker = DataQualityChecker(
             source_engine=postgres_engine,
             target_engine=clickhouse_engine,
             timezone='Europe/Athens',
@@ -363,14 +387,18 @@ class TestCustomQueryComparisonPGClickHouse:
             ORDER BY dt
         """
 
-        status, report, stats, details = comparator.compare_custom_query(
+        result = checker.check_custom_queries(
             source_query=source_query,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-06'},
             target_query=target_query,
             target_params={'start_date': '2024-01-01', 'end_date': '2024-01-06'},
             custom_primary_key=['dt'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
-        assert status == COMPARISON_SUCCESS
-        print(f'Custom query comparison passed: {stats.final_score:.2f}%')
+        assert status == CHECK_SUCCESS
+        print(f'Custom query check passed: {stats.final_score:.2f}%')

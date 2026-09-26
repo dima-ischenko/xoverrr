@@ -5,8 +5,8 @@ Self-comparison test for ClickHouse table vs view.
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
 class TestClickHouseTableVsView:
@@ -65,20 +65,24 @@ class TestClickHouseTableVsView:
         table_name = 'test_self_ch_table_view_main'
         view_name = 'v_test_self_ch_table_view'
 
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=clickhouse_engine,
             target_engine=clickhouse_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        result = checker.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(view_name, 'test'),
             date_column='created_at',
             date_range=('2024-01-01', '2024-01-04'),
             include_columns=['id', 'name', 'price', 'created_at'],
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
 
-        assert status == COMPARISON_SUCCESS
-        print(f'ClickHouse table vs view comparison passed: {stats.final_score:.2f}%')
+        assert status == CHECK_SUCCESS
+        print(f'ClickHouse table vs view check passed: {stats.final_score:.2f}%')

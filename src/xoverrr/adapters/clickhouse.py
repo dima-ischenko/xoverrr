@@ -4,7 +4,8 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 import pandas as pd
 from sqlalchemy import text
 
-from ..constants import DATE_FORMAT, DATETIME_FORMAT
+from ..constants import (DATE_FORMAT, DATETIME_FORMAT, FLAG_VALUE_YES,
+                         XRECENTLY_CHANGED_COLUMN)
 from ..exceptions import QueryExecutionError
 from ..logger import app_logger
 from ..models import DataReference, ObjectType
@@ -12,7 +13,32 @@ from .base import BaseDatabaseAdapter, Engine
 
 
 class ClickHouseAdapter(BaseDatabaseAdapter):
-    """ClickHouse adapter with parameterized queries"""
+    """ClickHouse adapter with parameterised queries."""
+
+    PERSIST_TYPE_MAP = {
+        'short_string': 'Nullable(String)',
+        'string': 'Nullable(String)',
+        'name': 'Nullable(String)',
+        'table_ref': 'Nullable(String)',
+        'tz_name': 'Nullable(String)',
+        'datetime': 'Nullable(DateTime)',
+        'db_now': 'DateTime DEFAULT now()',
+        'text': 'Nullable(String)',
+        'float': 'Nullable(Float64)',
+        'int': 'Nullable(Int64)',
+    }
+    PERSIST_NOT_NULL_TYPE_MAP = {
+        'short_string': 'String',
+        'string': 'String',
+        'name': 'String',
+        'table_ref': 'String',
+        'tz_name': 'String',
+        'datetime': 'DateTime',
+        'db_now': 'DateTime DEFAULT now()',
+        'text': 'String',
+        'float': 'Float64',
+        'int': 'Int64',
+    }
 
     def _execute_query(
         self, query: Union[str, Tuple[str, Dict]], engine: Engine, timezone: str
@@ -31,12 +57,12 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
                     query = f'{query} {tz_set}'
                 app_logger.info(f'query\n {query}')
                 app_logger.info(f'{params=}')
-                df = pd.read_sql(text(query), engine, params=params)
+                df = pd.read_sql(text(query), engine, params=params, coerce_float=False)
             else:
                 if tz_set:
                     query = f'{query} {tz_set}'
                 app_logger.info(f'query\n {query}')
-                df = pd.read_sql(text(query), engine)
+                df = pd.read_sql(text(query), engine, coerce_float=False)
 
             execution_time = time.time() - start_time
             app_logger.info(f'Query executed in {execution_time:.2f}s')
@@ -51,7 +77,7 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
             raise QueryExecutionError(f'Query failed: {str(e)}')
 
     def get_object_type(self, data_ref: DataReference, engine: Engine) -> ObjectType:
-        """Determine if object is table or view in ClickHouse"""
+        """Determine whether the object is a table or a view in ClickHouse."""
         query = """
             SELECT
                 engine as table_engine,
@@ -68,7 +94,7 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
                 type_str = result.iloc[0]['object_type']
                 engine_str = result.iloc[0]['table_engine']
 
-                # ClickHouse имеет разные типы таблиц
+                # ClickHouse has several table engines.
                 if engine_str == 'View':
                     return ObjectType.VIEW
                 elif engine_str in ['MaterializedView', 'MaterializeView']:
@@ -166,6 +192,8 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
         date_column: str,
         start_date: Optional[str],
         end_date: Optional[str],
+        columns_meta: Optional[pd.DataFrame],
+        timezone: Optional[str],
     ) -> Tuple[str, Dict]:
         query = f"""
             SELECT
@@ -186,6 +214,26 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
         query += ' GROUP BY dt ORDER BY dt DESC'
         return query, params
 
+    def _total_count_date_filters(
+        self,
+        date_column: Optional[str],
+        start_date: Optional[str],
+        end_date: Optional[str],
+        columns_meta: Optional[pd.DataFrame],
+        timezone: Optional[str],
+    ) -> Tuple[str, Dict]:
+        if not date_column:
+            return '', {}
+        extra_sql = ''
+        params = {}
+        if start_date:
+            extra_sql += f' AND {date_column} >= toDate(:start_date)\n'
+            params['start_date'] = start_date
+        if end_date:
+            extra_sql += f' AND {date_column} < toDate(:end_date) + INTERVAL 1 day\n'
+            params['end_date'] = end_date
+        return extra_sql, params
+
     def build_data_query(
         self,
         data_ref: DataReference,
@@ -195,6 +243,8 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
         start_date: Optional[str],
         end_date: Optional[str],
         exclude_recent_hours: Optional[int] = None,
+        columns_meta: pd.DataFrame = None,
+        timezone: str = None,
     ) -> Tuple[str, Dict]:
         params = {}
         # Add recent data exclusion flag
@@ -225,11 +275,14 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
     def _build_exclusion_condition(
         self, update_column: str, exclude_recent_hours: int
     ) -> Tuple[str, Dict]:
-        """ClickHouse-specific implementation for recent data exclusion"""
+        """ClickHouse-specific predicate for recent-row exclusion."""
         if update_column and exclude_recent_hours:
             exclude_recent_hours = exclude_recent_hours
 
-            condition = f"""case when {update_column} > (now() - INTERVAL :exclude_recent_hours HOUR) then 'y' end as xrecently_changed"""
+            condition = (
+                f'case when {update_column} > (now() - INTERVAL :exclude_recent_hours HOUR) '
+                f"then '{FLAG_VALUE_YES}' end as {XRECENTLY_CHANGED_COLUMN}"
+            )
             params = {'exclude_recent_hours': exclude_recent_hours}
             return condition, params
 
@@ -248,7 +301,50 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
                 .dt.strftime(DATE_FORMAT)
                 .str.replace(r'\s00:00:00$', '', regex=True)
             ),
-            r'uint64|uint8|float|decimal|int32': lambda x: x.astype(str).str.replace(
-                r'\.0+$', '', regex=True
+            # Lowercase for scientific-notation comparison.
+            r'uint64|uint8|float|decimal|int32': lambda x: (
+                x.astype(str).str.lower().replace(r'\.0+$', '', regex=True)
             ),
         }
+
+    def ensure_persistence_table(
+        self,
+        engine: Engine,
+        table_ref: DataReference,
+        column_types: Dict[str, str],
+        primary_key: Optional[str] = None,
+    ) -> None:
+        columns_sql = ',\n                    '.join(
+            self._format_persist_column(name, col_type, primary_key)
+            for name, col_type in column_types.items()
+        )
+        order_by = primary_key or 'tuple()'
+        create_table_sql = f"""
+            CREATE TABLE IF NOT EXISTS {table_ref.full_name} (
+                    {columns_sql}
+            )
+            ENGINE = MergeTree()
+            ORDER BY ({order_by})
+        """
+        with engine.begin() as conn:
+            conn.execute(text(create_table_sql))
+
+    def _format_persist_column(
+        self, name: str, col_type: str, primary_key: Optional[str]
+    ) -> str:
+        if name == primary_key:
+            sql_type = self.PERSIST_NOT_NULL_TYPE_MAP[col_type]
+        else:
+            sql_type = self.PERSIST_TYPE_MAP[col_type]
+        return f'{name} {sql_type}'
+
+    def insert_persistence_record(
+        self,
+        engine: Engine,
+        table_ref: DataReference,
+        record: Dict,
+        column_types: Optional[Dict[str, str]] = None,
+    ) -> None:
+        insert_sql = self.build_persistence_insert_sql(table_ref, record)
+        with engine.begin() as conn:
+            conn.execute(text(insert_sql), record)

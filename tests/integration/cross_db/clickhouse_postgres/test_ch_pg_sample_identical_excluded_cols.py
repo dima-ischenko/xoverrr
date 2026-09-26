@@ -1,16 +1,16 @@
 """
-Test sample comparison with column exclusion between ClickHouse and PostgreSQL.
+Test sample check with column exclusion between ClickHouse and PostgreSQL.
 """
 
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import COMPARISON_SUCCESS
-from xoverrr.core import DataQualityComparator, DataReference
+from xoverrr.constants import CHECK_SUCCESS
+from xoverrr.core import DataQualityChecker, DataReference
 
 
 class TestClickHousePostgresColumnExclusion:
-    """Cross-database sample comparison with column exclusion"""
+    """Cross-database sample check with column exclusion"""
 
     @pytest.fixture(autouse=True)
     def setup_column_exclusion_data(
@@ -66,26 +66,30 @@ class TestClickHousePostgresColumnExclusion:
 
     def test_sample_with_column_exclusion(self, clickhouse_engine, postgres_engine):
         """
-        Test sample comparison with excluded columns.
+        Test sample check with excluded columns.
         """
         table_name = 'test_ch_pg_col_exclusion'
 
-        comparator = DataQualityComparator(
+        checker = DataQualityChecker(
             source_engine=clickhouse_engine,
             target_engine=postgres_engine,
             timezone='Europe/Athens',
         )
 
-        status, report, stats, details = comparator.compare_sample(
+        result = checker.check_samples(
             source_table=DataReference(table_name, 'test'),
             target_table=DataReference(table_name, 'test'),
             date_column='created_at',
             date_range=('2024-01-01', '2024-01-03'),
             exclude_columns=['internal_id'],  # Exclude internal column
-            tolerance_percentage=0.0,
+            tolerance_pct=0.0,
         )
+        status = result.status
+        report = result.report
+        stats = result.stats
+        details = result.details
         print(report)
-        assert status == COMPARISON_SUCCESS
+        assert status == CHECK_SUCCESS
         assert stats.final_diff_score == 0.0
         print(
             f'ClickHouse   PostgreSQL with column exclusion passed: {stats.final_score:.2f}%'

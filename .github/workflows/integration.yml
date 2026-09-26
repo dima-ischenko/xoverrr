@@ -1,0 +1,46 @@
+name: Integration tests
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      XOVERRR_TEST_ORACLE_URL: oracle+oracledb://test:test_pass@localhost:1521/?service_name=FREEPDB1
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install package with test extras
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[test]"
+
+      - name: Start test databases
+        run: make up-dbs-ci
+
+      - name: Run integration tests
+        run: make test-integration
+
+      - name: Database logs
+        if: failure()
+        run: docker compose -f tests/integration/docker/docker-compose.ci.yml logs
+
+      - name: Stop test databases
+        if: always()
+        run: make down-dbs-ci
