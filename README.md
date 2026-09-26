@@ -1,6 +1,6 @@
 # xoverrr (pronounced “crossover”)
 
-Compare data between two databases, or between two tables in the same database, and obtain a pass or fail result together with examples of the discrepancies.
+Compare data between two databases, or between two tables in the same database, and obtain a pass or fail result together with examples of the discrepancies and the detailed report.
 
 Supported databases: **Oracle**, **PostgreSQL** (including Greenplum), and **ClickHouse**.
 
