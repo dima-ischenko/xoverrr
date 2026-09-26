@@ -34,7 +34,7 @@ Python 3.9 or later is required. The SQLAlchemy driver for the database in use m
 
 ## Quick start
 
-**Sample check** (Greenplum/PostgreSQL → Oracle). Only the required arguments are supplied; all others take their default values:
+**Sample check** (Greenplum/PostgreSQL -> Oracle). Only the required arguments are supplied; all others take their default values:
 
 ```python
 from sqlalchemy import create_engine
@@ -238,14 +238,14 @@ result = checker.check_samples(
 | `target_table` | Yes | — | Target table or view. |
 | `check_name` | No | `None` | Label attached to the result. |
 | `date_column` | No | `None` | Column used for `date_range` and chunking. Required if either of those is set. |
-| `update_column` | No | `None` | Timestamp used with `exclude_recent_hours`. Keys marked `xrecently_changed = 'y'` are excluded from both sides. Ignored if no hour window is active. |
 | `date_range` | No | `None` | `(start, end)` as `YYYY-MM-DD`. Either bound may be omitted unless chunking is used. |
 | `chunk_size_days` | No | `None` | Divides the range into windows of *N* days. Requires both bounds and `date_column`. Must be greater than 0. |
+| `update_column` | No | `None` | Timestamp used with `exclude_recent_hours`. Keys marked `xrecently_changed = 'y'` are excluded from both sides. Ignored if no hour window is active. |
+| `exclude_recent_hours` | No | constructor default (`24`) | Hours used with `update_column`. `None` or `0` falls back to the constructor. To disable the window, set the constructor default to `None` and omit this argument. |
 | `exclude_columns` | No | `None` (`[]`) | Columns to omit. Primary-key columns named here are nevertheless retained. |
 | `include_columns` | No | `None` (`[]`) | If set, only these columns and the primary key are compared. |
 | `custom_primary_key` | No | `None` | Join key. If omitted, it is taken from metadata. |
 | `tolerance_pct` | No | `0.0` | The check fails when `final_diff_score` exceeds this value (0–100). |
-| `exclude_recent_hours` | No | constructor default (`24`) | Hours used with `update_column`. `None` or `0` falls back to the constructor. To disable the window, set the constructor default to `None` and omit this argument. |
 | `max_examples` | No | `3` | Maximum number of mismatch examples to retain per column. |
 | `persist_result` | No | `None` | Results table; omit this argument to skip writing. |
 | `check_tags` | No | `None` | Additional labels. |
@@ -348,8 +348,8 @@ result = checker.check_custom_queries_agg(
 **Score.** Binary. There is no `tolerance_pct`.
 
 ```
-all aggregates match  →  success,  final_score = 100,  final_diff_score = 0
-any difference        →  failed,   final_score = 0,    final_diff_score = 100
+all aggregates match  ->  success,  final_score = 100,  final_diff_score = 0
+any difference        ->  failed,   final_score = 0,    final_diff_score = 100
 ```
 
 `SUM` and `MAX` ignore nulls. Two empty or all-null sides count as a match. `count(*)` of an empty side is 0.
@@ -482,41 +482,44 @@ timezone: Europe/Athens
 ----------------------------------------
 
 SUMMARY:
-  Source rows: 105
-  Target rows: 105
-  Duplicated source rows: 0
+  Source rows: 107
+  Target rows: 106
+  Duplicated source rows: 1
   Duplicated target rows: 0
-  Only source rows: 0
-  Only target rows: 0
+  Only source rows: 1
+  Only target rows: 1
   Comparable rows: 105
-  Passed rows: 103
+  Passed rows: 102
 ----------------------------------------
-  Source only rows %: 0.00000
-  Target only rows %: 0.00000
-  Duplicated source rows %: 0.00000
+  Source only rows %: 0.95238
+  Target only rows %: 0.95238
+  Duplicated source rows %: 0.93458
   Duplicated target rows %: 0.00000
-  Issue rows %: 1.90476
-  Final discrepancies score: 0.95238
-  Final data quality score: 99.04762
-  Source-only key examples:
-  Target-only key examples:
-  Duplicated source key examples:
+  Issue rows %: 2.85714
+  Final discrepancies score: 1.80774
+  Final data quality score: 98.19226
+  Source-only key examples: 205
+  Target-only key examples: 310
+  Duplicated source key examples: 104
   Duplicated target key examples:
   Skipped source columns: audit_log, temp_field
   Skipped target columns:
 
 ISSUE BREAKDOWN:
-  Max issue %: 1.90476
+  Max issue %: 2.85714
   Issue counts by column:
 
- column_name  issue_count
-     salary                2
+  column_name  issue_count
+       salary            3
+department_id            1
 
   Issue examples:
 
- primary_key column_name source_value target_value
-         101      salary        50000        51000
-         102      salary        60000        60500
+ primary_key   column_name  source_value  target_value
+         101        salary         50000         51000
+         102        salary         60000         60500
+         103        salary         72000         70000
+         101 department_id            10            20
 
 ================================================================================
 ```
@@ -541,7 +544,7 @@ A full sample of approximately one million rows by ten columns (about 330 MB on 
 |------|-------------|
 | A push to a branch | Unit tests on Python 3.9 and 3.12 |
 | A commit message containing `[integration]` | Unit tests together with the Docker integration tests |
-| **Actions → CI / Integration tests → Run workflow** | A manual run (once the workflow is on `main`) |
+| **Actions -> CI / Integration tests -> Run workflow** | A manual run (once the workflow is on `main`) |
 | A tag `vX.Y.Z` on `main` | All tests, followed by publication to PyPI |
 
 The tag must match `pyproject.toml` and `src/xoverrr/version.py`. Release notes and the PyPI configuration are in `COTRIBUTE.md`. The local commands are `make test-unit`, `make up-dbs`, and `make build`.
