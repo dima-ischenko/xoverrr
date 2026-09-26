@@ -74,6 +74,19 @@ class TestOracleSelfFetchPerformance:
         """
         params = None
 
+        # #Need to compare with last stable verison 
+        # from xoverrr import DataQualityComparator #??? how to identify stable version
+        # comparator_stable = DataQualityComparator(
+        #     source_engine=oracle_engine,
+        #     target_engine=oracle_engine,
+        #     timezone='Europe/Athens',
+        # )
+        # start_time = time.time()
+        # df_stable = comparator_stable._execute_query(
+        #     (query, params), comparator.source_engine, comparator.timezone
+        # )
+        # execution_time_stable = time.time() - start_time
+
         start_time = time.time()
         df = comparator._execute_query(
             (query, params), comparator.source_engine, comparator.timezone
@@ -81,4 +94,4 @@ class TestOracleSelfFetchPerformance:
         execution_time = time.time() - start_time
 
         assert len(df) == self.num_rows_generate * self.num_rows_generate
-        assert execution_time < 15
+        assert execution_time <= 15 #execution_time_stable * 1.15
