@@ -141,6 +141,24 @@ class TestPostgresChunkedCheck:
         ]
         assert int(chunked_mismatch['name']) == int(non_chunked_mismatch['name']) == 2
 
+    def test_sample_without_date_column_compares_full_tables(self, postgres_engine):
+        checker = DataQualityChecker(
+            source_engine=postgres_engine,
+            target_engine=postgres_engine,
+            timezone='UTC',
+        )
+
+        result = checker.check_samples(
+            source_table=DataReference('test_chunked_source', 'test'),
+            target_table=DataReference('test_chunked_target', 'test'),
+            date_column=None,
+            tolerance_pct=0.0,
+        )
+
+        assert result.status == CHECK_FAILED
+        assert result.stats.total_source_rows == 4
+        assert result.stats.total_target_rows == 4
+
     def test_chunked_total_counts_matches_non_chunked(self, postgres_engine):
         checker = DataQualityChecker(
             source_engine=postgres_engine,

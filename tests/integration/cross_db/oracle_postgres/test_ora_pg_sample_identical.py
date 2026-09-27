@@ -5,7 +5,7 @@ Test HR data check between Oracle and PostgreSQL.
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import CHECK_SUCCESS
+from xoverrr.constants import CHECK_SKIPPED, CHECK_SUCCESS
 from xoverrr.core import DataQualityChecker, DataReference
 
 
@@ -97,6 +97,25 @@ class TestOraclePostgresHRData:
         assert status == CHECK_SUCCESS
         assert stats.final_diff_score == 0.0
         print(f'Oracle   PostgreSQL HR data check passed: {stats.final_score:.2f}%')
+
+    def test_hr_data_check_without_date_column(self, oracle_engine, postgres_engine):
+        checker = DataQualityChecker(
+            source_engine=oracle_engine,
+            target_engine=postgres_engine,
+            timezone='Europe/Athens',
+        )
+
+        result = checker.check_samples(
+            source_table=DataReference('test_ora_pg_hr', 'test'),
+            target_table=DataReference('test_ora_pg_hr', 'test'),
+            date_column=None,
+            update_column=None,
+            tolerance_pct=0.0,
+        )
+
+        assert result.status == CHECK_SUCCESS
+        assert result.stats.total_source_rows == 2
+        assert result.stats.total_target_rows == 2
 
     def test_hr_data_check_uppercase(self, oracle_engine, postgres_engine):
         # pytest.skip("issue #31")

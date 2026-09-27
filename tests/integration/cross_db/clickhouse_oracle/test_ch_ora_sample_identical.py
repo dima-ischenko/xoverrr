@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy import text
 
-from xoverrr.constants import CHECK_SUCCESS
+from xoverrr.constants import CHECK_SKIPPED, CHECK_SUCCESS
 from xoverrr.core import DataQualityChecker, DataReference
 
 
@@ -96,3 +96,25 @@ class TestClickHouseOracleIdenticalData:
         print(
             f'ClickHouse   Oracle identical data check passed: {stats.final_score:.2f}%'
         )
+
+    def test_identical_data_sample_check_without_date_column(
+        self, clickhouse_engine, oracle_engine
+    ):
+        table_name = 'test_ch_ora_identical'
+        checker = DataQualityChecker(
+            source_engine=clickhouse_engine,
+            target_engine=oracle_engine,
+            timezone='Europe/Athens',
+        )
+
+        result = checker.check_samples(
+            source_table=DataReference(table_name, 'test'),
+            target_table=DataReference(table_name, 'test'),
+            date_column=None,
+            update_column=None,
+            tolerance_pct=0.0,
+        )
+
+        assert result.status == CHECK_SUCCESS
+        assert result.stats.total_source_rows == 4
+        assert result.stats.total_target_rows == 4

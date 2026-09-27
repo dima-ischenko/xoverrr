@@ -322,12 +322,14 @@ class DataQualityChecker:
         tolerance_pct: float = 0.0,
         exclude_recent_hours: Optional[int] = None,
         max_examples: Optional[int] = ct.DEFAULT_MAX_EXAMPLES,
+        hash_pct: Optional[int] = None,
         persist_result: Optional[DataReference] = None,
         check_tags: Optional[Dict] = None,
         report_output_format: str = ct.REPORT_OUTPUT_FORMAT_TEXT,
     ) -> CheckResult:
         """
         Compare sample rows and column values between two tables or views.
+        If `date_column` is omitted, the full tables are compared without a date filter.
 
         Parameters:
             source_table: `DataReference`
@@ -386,6 +388,7 @@ class DataQualityChecker:
                 tolerance_pct,
                 exclude_hours,
                 max_examples,
+                hash_pct,
                 run_id=run_id,
                 run_started_at=run_started_at,
             )
@@ -675,8 +678,8 @@ class DataQualityChecker:
         self,
         source_table: DataReference,
         target_table: DataReference,
-        date_column: str,
-        update_column: str,
+        date_column: Optional[str],
+        update_column: Optional[str],
         start_date: Optional[str],
         end_date: Optional[str],
         chunk_size_days: Optional[int],
@@ -686,6 +689,7 @@ class DataQualityChecker:
         tolerance_pct: float,
         exclude_recent_hours: Optional[int],
         max_examples: Optional[int],
+        hash_pct: Optional[int],
         run_id: str,
         run_started_at: str,
     ) -> Tuple[str, str, Optional[CheckStats], Optional[CheckDetails]]:
@@ -824,6 +828,7 @@ class DataQualityChecker:
                 exclude_recent_hours=exclude_recent_hours,
                 tolerance_pct=tolerance_pct,
                 max_examples=max_examples,
+                hash_pct=hash_pct,
                 run_id=run_id,
                 run_started_at=run_started_at,
             )
@@ -1618,12 +1623,14 @@ class DataQualityChecker:
         data_ref: DataReference,
         columns_meta: pd.DataFrame,
         common_columns: List[str],
-        date_column: str,
-        update_column: str,
+        date_column: Optional[str],
+        update_column: Optional[str],
         start_date: Optional[str],
         end_date: Optional[str],
         exclude_recent_hours: Optional[int],
         query_side: str,
+        hash_pct: Optional[int] = None,
+        key_columns: Optional[List[str]] = None,
     ) -> Tuple[pd.DataFrame, str, Dict]:
         """Fetch table data and apply type conversion."""
         db_type = DBMSType.from_engine(engine)
@@ -1640,6 +1647,8 @@ class DataQualityChecker:
             exclude_recent_hours,
             columns_meta,
             self.timezone,
+            key_column=key_columns,
+            hash_pct=hash_pct,
         )
 
         df = self._execute_query(
@@ -1742,6 +1751,7 @@ class DataQualityChecker:
         exclude_recent_hours: Optional[int],
         tolerance_pct: float,
         max_examples: Optional[int],
+        hash_pct: Optional[int],
         run_id: str,
         run_started_at: str,
     ) -> Tuple[str, str, Optional[CheckStats], Optional[CheckDetails]]:
@@ -1785,6 +1795,8 @@ class DataQualityChecker:
                 chunk_end,
                 exclude_recent_hours,
                 query_side='source',
+                hash_pct=hash_pct,
+                key_columns=key_columns,
             )
             target_data, target_query, target_params = self._get_table_data(
                 self.target_engine,
@@ -1797,6 +1809,8 @@ class DataQualityChecker:
                 chunk_end,
                 exclude_recent_hours,
                 query_side='target',
+                hash_pct=hash_pct,
+                key_columns=key_columns,
             )
 
             total_source_rows_raw += len(source_data)

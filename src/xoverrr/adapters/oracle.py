@@ -455,7 +455,6 @@ class OracleAdapter(BaseDatabaseAdapter):
         FROM {data_ref.full_name}
         WHERE 1=1\n"""
 
-        hash_condition = None
         date_expr = None
         if date_column:
             date_expr = self._build_cast_tz_column_expression(
