@@ -6,7 +6,7 @@ import pandas as pd
 from sqlalchemy import text
 
 from ..constants import (DATETIME_FORMAT, FLAG_VALUE_YES,
-                         XRECENTLY_CHANGED_COLUMN)
+                         XRECENTLY_CHANGED_COLUMN, TO_CHAR_CAST_DATETIME)
 from ..exceptions import MetadataError, QueryExecutionError
 from ..logger import app_logger
 from ..models import DataReference, ObjectType
@@ -300,6 +300,8 @@ class PostgresAdapter(BaseDatabaseAdapter):
         exclude_recent_hours: Optional[int] = None,
         columns_meta: pd.DataFrame = None,
         timezone: str = None,
+        key_column: List[str] =None,
+        hash_pct: int = None
     ) -> Tuple[str, Dict]:
 
         params = {}
@@ -308,9 +310,23 @@ class PostgresAdapter(BaseDatabaseAdapter):
             update_column, exclude_recent_hours
         )
 
+        hash_condition = None
+        ts_mask = (
+                    columns_meta['data_type']
+                    .str.lower()
+                    .str.contains(r'timestamp.*', regex=True, na=False)
+                )
+
+        ts_columns = columns_meta[ts_mask]['column_name'].tolist()
+
         if exclusion_condition:
             columns.append(exclusion_condition)
             params.update(exclusion_params)
+
+        if hash_pct:
+            ts_columns = self._build_cast_timestamp_column_expression(ts_columns)
+            hash_keys = [ts_columns.get(i) if ts_columns.get(i) else i for i in key_column ]
+            hash_condition = self._build_hash_filter(hash_keys, hash_pct)
 
         query = f"""
         SELECT {', '.join(columns)}
@@ -323,8 +339,15 @@ class PostgresAdapter(BaseDatabaseAdapter):
         if end_date and date_column:
             query += f"            AND {date_column} < date_trunc('day', cast(:end_date as date))  + interval '1 days'\n"
             params['end_date'] = end_date
-
+        if hash_condition:
+            query += f"             AND {hash_condition}\n"
         return query, params
+
+    def _build_cast_timestamp_column_expression(
+        self,
+        ts_columns: List[str]
+    ):
+        return {i:f'to_char({i}::timestamp, {TO_CHAR_CAST_DATETIME})' for i in ts_columns}
 
     def _build_exclusion_condition(
         self, update_column: str, exclude_recent_hours: int
@@ -418,3 +441,7 @@ class PostgresAdapter(BaseDatabaseAdapter):
         insert_sql = self.build_persistence_insert_sql(table_ref, record)
         with engine.begin() as conn:
             conn.execute(text(insert_sql), record)
+
+    def _build_hash_filter(self, fields, percent):
+        fields_to_char = [f'cast({i} as text)' for i in fields]
+        return f"""(('x' || substring(md5(({'||'.join(fields_to_char)})),1,8))::bit(32)::bigint) % 100 < {percent}"""

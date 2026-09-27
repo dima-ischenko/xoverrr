@@ -145,6 +145,8 @@ class BaseDatabaseAdapter(ABC):
         exclude_recent_hours: Optional[int] = None,
         columns_meta: pd.DataFrame = None,
         timezone: str = None,
+        key_column: List[str] = None,
+        hash_pct: int = None,
     ) -> Tuple[str, Dict]:
         """Build a data query for the DBMS, with optional recent-row exclusion."""
         # Handle reserved words
@@ -163,6 +165,8 @@ class BaseDatabaseAdapter(ABC):
             exclude_recent_hours,
             columns_meta,
             timezone,
+            key_column,
+            hash_pct
         )
         return result
 
@@ -177,6 +181,8 @@ class BaseDatabaseAdapter(ABC):
         end_date: Optional[str],
         exclude_recent_hours: Optional[int] = None,
         columns_meta: pd.DataFrame = None,
+        key_column: List[str] =None,
+        hash_pct: int = None
     ) -> Tuple[str, Dict]:
         pass
 
