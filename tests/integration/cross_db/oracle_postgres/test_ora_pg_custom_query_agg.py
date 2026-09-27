@@ -18,14 +18,15 @@ class TestOraPgCustomQueryAgg:
                 CREATE TABLE {table_name} (
                     id          INTEGER PRIMARY KEY,
                     amount      number,
+                    qty         number,
                     created_at  DATE NOT NULL
                 )
             """,
             insert_sql=f"""
-                INSERT INTO {table_name} (id, amount, created_at) VALUES
-                (1, 10, date'2024-01-01'),
-                (2, 20, date'2024-01-02'),
-                (3, 30, date'2024-01-03')
+                INSERT INTO {table_name} (id, amount, qty, created_at) VALUES
+                (1, 10, 1, date'2024-01-01'),
+                (2, 20, 2, date'2024-01-02'),
+                (3, 30, 3, date'2024-01-03')
             """,
         )
         table_helper.create_table(
@@ -35,14 +36,15 @@ class TestOraPgCustomQueryAgg:
                 CREATE TABLE {table_name} (
                     id          INTEGER PRIMARY KEY,
                     amount      numeric,
+                    qty         INTEGER,
                     created_at  DATE NOT NULL
                 )
             """,
             insert_sql=f"""
-                INSERT INTO {table_name} (id, amount, created_at) VALUES
-                (1, 10, '2024-01-01'),
-                (2, 20, '2024-01-02'),
-                (3, 30, '2024-01-03')
+                INSERT INTO {table_name} (id, amount, qty, created_at) VALUES
+                (1, 10, 1, '2024-01-01'),
+                (2, 20, 2, '2024-01-02'),
+                (3, 30, 3, '2024-01-03')
             """,
         )
         yield
@@ -75,6 +77,62 @@ class TestOraPgCustomQueryAgg:
 
         assert result.status == CHECK_SUCCESS
         assert result.stats.final_diff_score == 0
+
+    def test_multiple_max_and_sum_match(self, oracle_engine, postgres_engine):
+        checker = self._checker(oracle_engine, postgres_engine)
+        result = checker.check_custom_queries_agg(
+            source_query="""
+                SELECT amount, qty, created_at
+                FROM test.test_ora_pg_custom_query_agg
+                WHERE id < 3
+            """,
+            target_query="""
+                SELECT amount, qty, created_at
+                FROM test.test_ora_pg_custom_query_agg
+                WHERE id < 3
+            """,
+            max_columns=['created_at', 'qty'],
+            sum_columns=['amount', 'qty'],
+            include_count=True,
+        )
+
+        assert result.status == CHECK_SUCCESS
+        assert result.stats.final_diff_score == 0
+        assert result.details.issue_examples.empty
+
+    def test_multiple_max_mismatch(self, oracle_engine, postgres_engine):
+        checker = self._checker(oracle_engine, postgres_engine)
+        result = checker.check_custom_queries_agg(
+            source_query="""
+                SELECT qty, created_at
+                FROM test.test_ora_pg_custom_query_agg
+            """,
+            target_query="""
+                SELECT qty, created_at
+                FROM test.test_ora_pg_custom_query_agg
+                WHERE id < 3
+            """,
+            max_columns=['created_at', 'qty'],
+        )
+
+        self._assert_failed(result, expected_columns={'max_created_at', 'max_qty'})
+
+    def test_multiple_sum_mismatch(self, oracle_engine, postgres_engine):
+        checker = self._checker(oracle_engine, postgres_engine)
+        result = checker.check_custom_queries_agg(
+            source_query="""
+                SELECT amount, qty
+                FROM test.test_ora_pg_custom_query_agg
+            """,
+            target_query="""
+                SELECT amount, qty
+                FROM test.test_ora_pg_custom_query_agg
+                WHERE id < 3
+            """,
+            sum_columns=['amount', 'qty'],
+        )
+
+        self._assert_failed(result, expected_columns={'sum_amount', 'sum_qty'})
 
     def test_sum_and_count_mismatch(self, oracle_engine, postgres_engine):
         checker = self._checker(oracle_engine, postgres_engine)
