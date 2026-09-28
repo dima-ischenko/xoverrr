@@ -459,6 +459,7 @@ run_id: a3f2c8b91d4e5678
 version: *.*.*
 source db type: postgresql
 target db type: oracle
+primary key: employee_id
 SAMPLES CHECK REPORT:
 hr.employees
 VS

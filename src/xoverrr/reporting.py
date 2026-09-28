@@ -41,6 +41,9 @@ def append_report_run_header(
     library_version: Optional[str] = None,
     source_db_type: Optional[str] = None,
     target_db_type: Optional[str] = None,
+    primary_key: Optional[List[str]] = None,
+    hash_pct: Optional[int] = None,
+    hash_columns: Optional[List[str]] = None,
 ) -> None:
     lines.append('=' * 80)
     lines.append(run_started_at)
@@ -51,6 +54,14 @@ def append_report_run_header(
         lines.append(f'source db type: {source_db_type}')
     if target_db_type is not None:
         lines.append(f'target db type: {target_db_type}')
+    pk_text = format_report_collection(primary_key)
+    if pk_text:
+        lines.append(f'primary key: {pk_text}')
+    hash_cols_text = format_report_collection(hash_columns)
+    if hash_cols_text:
+        lines.append(f'hash columns: {hash_cols_text}')
+    if hash_pct is not None:
+        lines.append(f'hash_pct: {hash_pct}')
 
 
 if TYPE_CHECKING:
@@ -258,6 +269,8 @@ def generate_sample_report(
     library_version: Optional[str] = None,
     source_db_type: Optional[str] = None,
     target_db_type: Optional[str] = None,
+    primary_key: Optional[List[str]] = None,
+    hash_pct: Optional[int] = None,
 ) -> str:
     """
     Generate a human-readable text report for a sample check.
@@ -285,6 +298,8 @@ def generate_sample_report(
         library_version=library_version,
         source_db_type=source_db_type,
         target_db_type=target_db_type,
+        primary_key=primary_key,
+        hash_pct=hash_pct,
     )
     if source_table and target_table:
         lines.append('SAMPLES CHECK REPORT:')
@@ -623,6 +638,8 @@ def generate_custom_query_agg_report(
     library_version: Optional[str] = None,
     source_db_type: Optional[str] = None,
     target_db_type: Optional[str] = None,
+    hash_columns: Optional[List[str]] = None,
+    hash_pct: Optional[int] = None,
 ) -> str:
     """Generate a text report for a custom-query aggregate comparison."""
     lines = []
@@ -633,6 +650,8 @@ def generate_custom_query_agg_report(
         library_version=library_version,
         source_db_type=source_db_type,
         target_db_type=target_db_type,
+        hash_columns=hash_columns,
+        hash_pct=hash_pct,
     )
     lines.append('CUSTOM QUERIES AGG CHECK REPORT:')
     lines.append('=' * 80)

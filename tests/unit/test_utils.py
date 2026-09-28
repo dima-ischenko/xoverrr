@@ -6,7 +6,7 @@ import pytest
 
 from xoverrr.constants import (FLAG_VALUE_NO, FLAG_VALUE_YES,
                                XRECENTLY_CHANGED_COLUMN)
-from xoverrr.reporting import generate_sample_report
+from xoverrr.reporting import append_report_run_header
 from xoverrr.utils import (CheckDetails, CheckStats,
                            clean_recently_changed_data, compare_dataframes,
                            cross_fill_missing_dates, format_report_collection,
@@ -536,6 +536,34 @@ def test_format_report_collection_empty_values():
     assert format_report_collection([]) == ''
     assert format_report_collection({1, 2}) == '1, 2'
     assert format_report_collection(['id', 'value']) == 'id, value'
+
+
+def test_append_report_run_header_includes_primary_key_and_hash_pct():
+    lines = []
+    append_report_run_header(
+        lines,
+        'abc123',
+        '2026-01-01 00:00:00',
+        primary_key=['user_id', 'session_id'],
+        hash_pct=5,
+    )
+    assert 'primary key: user_id, session_id' in lines
+    assert 'hash_pct: 5' in lines
+    assert all(not line.startswith('hash columns:') for line in lines)
+
+
+def test_append_report_run_header_includes_hash_columns_for_agg():
+    lines = []
+    append_report_run_header(
+        lines,
+        'abc123',
+        '2026-01-01 00:00:00',
+        hash_columns=['id', 'code'],
+        hash_pct=2,
+    )
+    assert 'hash columns: id, code' in lines
+    assert 'hash_pct: 2' in lines
+    assert all(not line.startswith('primary key:') for line in lines)
 
 
 @pytest.fixture

@@ -4,74 +4,27 @@ import pandas as pd
 from sqlalchemy.engine import Engine
 
 from . import constants as ct
-from .accumulate import PairCheckAccumulator, SniffCheckAccumulator
 from .adapters.base import BaseDatabaseAdapter
 from .adapters.clickhouse import ClickHouseAdapter
 from .adapters.oracle import OracleAdapter
 from .adapters.postgres import PostgresAdapter
-from .chunking import (iter_date_chunks, resolve_custom_query_chunks,
-                       resolve_source_query_chunks, unpack_date_range,
-                       validate_date_window_args)
-from .compare import (clean_recently_changed_data, compare_dataframes,
-                      cross_fill_missing_dates,
-                      evaluate_check_sniff_query_data, prepare_dataframe,
-                      validate_dataframe_size)
-from .exceptions import MetadataError
+from .checks.counts_group_by_date import run_counts_group_by_date
+from .checks.custom_queries import run_custom_queries
+from .checks.custom_queries_agg import run_custom_queries_agg
+from .checks.samples import run_samples
+from .checks.sniff import run_sniff_query
+from .checks.total_counts import run_total_counts
+from .chunking import unpack_date_range, validate_date_window_args
+from .compare import compare_dataframes, validate_dataframe_size
 from .logger import app_logger
-from .models import DataReference, DBMSType, ObjectType
+from .models import DataReference, DBMSType
 from .persistence import (CheckResultPersister, CheckRunTimings, build_run_id,
                           normalize_persist_result)
 from .reporting import (CheckResult, build_check_result, format_check_result,
-                        generate_check_sniff_query_report,
-                        generate_count_report,
-                        generate_custom_query_agg_report,
-                        generate_sample_report, generate_total_count_report,
                         validate_report_output_format)
-from .stats import (CheckDetails, CheckStats, build_sniff_issue_stats,
-                    build_total_count_stats, count_volume_scores,
-                    normalize_column_names, normalize_hash_pct,
-                    status_for_diff_score)
+from .stats import (CheckDetails, CheckStats, normalize_column_names,
+                    normalize_hash_pct)
 from .version import __version__
-
-
-def _aggregate_result_metadata(
-    inner_metadata: pd.DataFrame,
-    max_columns: List[str],
-    sum_columns: List[str],
-    include_count: bool,
-) -> pd.DataFrame:
-    """Reuse inner-query types for ``max_*`` / ``sum_*`` / ``cnt`` columns."""
-    type_map = {
-        str(row.column_name).lower(): row.data_type
-        for row in inner_metadata.itertuples(index=False)
-        if getattr(row, 'column_name', None) is not None
-    }
-    rows = []
-    for column in max_columns:
-        name = column.lower()
-        rows.append(
-            {
-                'column_name': f'max_{name}',
-                'data_type': type_map.get(name, 'text'),
-            }
-        )
-    for column in sum_columns:
-        name = column.lower()
-        rows.append(
-            {
-                'column_name': f'sum_{name}',
-                'data_type': type_map.get(name, 'numeric'),
-            }
-        )
-    if include_count:
-        rows.append({'column_name': 'cnt', 'data_type': 'integer'})
-    return pd.DataFrame(rows)
-
-
-def _first_count_value(df: Optional[pd.DataFrame]) -> int:
-    if df is None or df.empty:
-        return 0
-    return int(df.iloc[0, 0])
 
 
 class DataQualityChecker:
@@ -118,20 +71,12 @@ class DataQualityChecker:
             ),
         }
         app_logger.info('start')
-        app_logger.info(f'Version: v{self._report_context["library_version"]}')
-        app_logger.info(f'Source DB: {self._report_context["source_db_type"]}')
-        target_db_label = self._report_context['target_db_type'] or 'not configured'
-        app_logger.info(f'Target DB: {target_db_label}')
-        app_logger.info(
-            f'Max DataFrame size: {self.max_dataframe_size_gb} GB per query'
-        )
 
     @staticmethod
     def _normalize_max_dataframe_size_gb(max_dataframe_size_gb: float) -> float:
-        size_gb = float(max_dataframe_size_gb)
-        if size_gb <= 0:
+        if max_dataframe_size_gb is None or max_dataframe_size_gb <= 0:
             raise ValueError('max_dataframe_size_gb must be greater than 0')
-        return size_gb
+        return float(max_dataframe_size_gb)
 
     def reset_stats(self):
         self._reset_stats()
@@ -182,34 +127,29 @@ class DataQualityChecker:
             ``CheckResult`` including ``run_id``, ``status``, ``report``,
             ``stats``, and ``details``.
         """
-
         self._validate_inputs(source_table, target_table)
         self._require_target_engine()
-        self._validate_date_window_args(date_column, date_range, chunk_size_days)
+        validate_date_window_args(date_column, date_range, chunk_size_days)
         start_date, end_date = unpack_date_range(date_range)
 
-        def _run():
-            return self._check_counts_group_by_date(
-                source_table,
-                target_table,
-                date_column,
-                start_date,
-                end_date,
-                chunk_size_days,
-                tolerance_pct,
-                max_examples,
-                run_id=self._active_run_id,
-                run_started_at=self._active_run_started_at,
-            )
-
         return self._run_check(
+            impl=run_counts_group_by_date,
+            impl_kwargs=dict(
+                source_table=source_table,
+                target_table=target_table,
+                date_column=date_column,
+                start_date=start_date,
+                end_date=end_date,
+                chunk_size_days=chunk_size_days,
+                tolerance_pct=tolerance_pct,
+                max_examples=max_examples,
+            ),
             check_type=ct.CHECK_TYPE_COUNTS_GROUP_BY_DATE,
             check_name=check_name,
             persist_result=persist_result,
             check_tags=check_tags,
             report_output_format=report_output_format,
             fail_message='Counts check failed',
-            run=_run,
             stats_table=source_table,
             source_table=source_table.full_name,
             target_table=target_table.full_name,
@@ -242,30 +182,26 @@ class DataQualityChecker:
         """
         self._validate_inputs(source_table, target_table)
         self._require_target_engine()
-        self._validate_date_window_args(date_column, date_range, chunk_size_days)
+        validate_date_window_args(date_column, date_range, chunk_size_days)
         start_date, end_date = unpack_date_range(date_range)
 
-        def _run():
-            return self._check_total_counts(
-                source_table,
-                target_table,
-                date_column,
-                start_date,
-                end_date,
-                chunk_size_days,
-                tolerance_pct,
-                run_id=self._active_run_id,
-                run_started_at=self._active_run_started_at,
-            )
-
         return self._run_check(
+            impl=run_total_counts,
+            impl_kwargs=dict(
+                source_table=source_table,
+                target_table=target_table,
+                date_column=date_column,
+                start_date=start_date,
+                end_date=end_date,
+                chunk_size_days=chunk_size_days,
+                tolerance_pct=tolerance_pct,
+            ),
             check_type=ct.CHECK_TYPE_TOTAL_COUNTS,
             check_name=check_name,
             persist_result=persist_result,
             check_tags=check_tags,
             report_output_format=report_output_format,
             fail_message='Total counts check failed',
-            run=_run,
             stats_table=source_table,
             source_table=source_table.full_name,
             target_table=target_table.full_name,
@@ -316,7 +252,7 @@ class DataQualityChecker:
         """
         self._validate_inputs(source_table, target_table)
         self._require_target_engine()
-        self._validate_date_window_args(date_column, date_range, chunk_size_days)
+        validate_date_window_args(date_column, date_range, chunk_size_days)
 
         exclude_hours = exclude_recent_hours or self.default_exclude_recent_hours
         hash_pct = normalize_hash_pct(hash_pct)
@@ -329,501 +265,34 @@ class DataQualityChecker:
         )
         include_cols = normalize_column_names(include_columns or [])
 
-        def _run():
-            return self._check_samples(
-                source_table,
-                target_table,
-                date_column,
-                update_column,
-                start_date,
-                end_date,
-                chunk_size_days,
-                exclude_cols,
-                include_cols,
-                custom_keys,
-                tolerance_pct,
-                exclude_hours,
-                max_examples,
-                hash_pct,
-                run_id=self._active_run_id,
-                run_started_at=self._active_run_started_at,
-            )
-
         return self._run_check(
+            impl=run_samples,
+            impl_kwargs=dict(
+                source_table=source_table,
+                target_table=target_table,
+                date_column=date_column,
+                update_column=update_column,
+                start_date=start_date,
+                end_date=end_date,
+                chunk_size_days=chunk_size_days,
+                exclude_columns=exclude_cols,
+                include_columns=include_cols,
+                custom_key_columns=custom_keys,
+                tolerance_pct=tolerance_pct,
+                exclude_recent_hours=exclude_hours,
+                max_examples=max_examples,
+                hash_pct=hash_pct,
+            ),
             check_type=ct.CHECK_TYPE_SAMPLES,
             check_name=check_name,
             persist_result=persist_result,
             check_tags=check_tags,
             report_output_format=report_output_format,
             fail_message='Samples check failed',
-            run=_run,
             stats_table=source_table,
             source_table=source_table.full_name,
             target_table=target_table.full_name,
         )
-
-    def _start_check_run(
-        self, check_type: str, check_name: Optional[str]
-    ) -> Tuple[str, str]:
-        run_started_at = pd.Timestamp.now().strftime(ct.DATETIME_FORMAT)
-        run_id = build_run_id()
-        app_logger.info(
-            f'Check run started: run_id={run_id} '
-            f'check_name={check_name} check_type={check_type}'
-        )
-        self._active_run_id = run_id
-        self._active_run_started_at = run_started_at
-        self._active_check_name = check_name
-        self._run_timings = CheckRunTimings(run_started_at=run_started_at)
-        return run_id, run_started_at
-
-    def _run_check(
-        self,
-        *,
-        check_type: str,
-        check_name: Optional[str],
-        persist_result: Optional[DataReference],
-        check_tags: Optional[Dict],
-        report_output_format: str,
-        fail_message: str,
-        run: Callable,
-        stats_table=None,
-        identity: Optional[Dict] = None,
-        **identity_fields,
-    ) -> CheckResult:
-        persist_result = normalize_persist_result(persist_result)
-        validate_report_output_format(report_output_format)
-        self._start_check_run(check_type, check_name)
-        try:
-            self.check_stats['checked'] += 1
-            outcome = run()
-            if len(outcome) == 3:
-                status, report, stats = outcome
-                details = None
-            else:
-                status, report, stats, details = outcome
-            fields = dict(identity_fields)
-            if identity is not None:
-                fields.update(identity)
-            result = self._finalize_check(
-                status=status,
-                report=report,
-                stats=stats,
-                details=details,
-                check_type=check_type,
-                persist_result=persist_result,
-                report_output_format=report_output_format,
-                check_tags=check_tags,
-                **fields,
-            )
-            self._update_stats(result.status, stats_table)
-            return result
-        except Exception:
-            app_logger.exception(fail_message)
-            fields = dict(identity_fields)
-            if identity is not None:
-                fields.update(identity)
-            result = self._finalize_check(
-                status=ct.CHECK_FAILED,
-                report=None,
-                stats=None,
-                details=None,
-                check_type=check_type,
-                persist_result=persist_result,
-                report_output_format=report_output_format,
-                check_tags=check_tags,
-                **fields,
-            )
-            self._update_stats(result.status, stats_table)
-            return result
-
-    def _check_counts_group_by_date(
-        self,
-        source_table: DataReference,
-        target_table: DataReference,
-        date_column: str,
-        start_date: Optional[str],
-        end_date: Optional[str],
-        chunk_size_days: Optional[int],
-        tolerance_pct: float,
-        max_examples: int,
-        run_id: str,
-        run_started_at: str,
-    ) -> Tuple[str, str, Optional[CheckStats], Optional[CheckDetails]]:
-
-        try:
-            source_adapter = self._get_adapter(self.source_db_type)
-            target_adapter = self._get_adapter(self.target_db_type)
-
-            source_columns_meta = self._get_metadata_cols(
-                source_table, self.source_engine
-            )
-            app_logger.info('source_columns meta:\n')
-            app_logger.info(source_columns_meta.to_string(index=False))
-
-            target_columns_meta = self._get_metadata_cols(
-                target_table, self.target_engine
-            )
-            app_logger.info('target_columns meta:\n')
-            app_logger.info(target_columns_meta.to_string(index=False))
-
-            source_chunks = []
-            target_chunks = []
-            source_query, source_params = None, None
-            target_query, target_params = None, None
-
-            date_chunks = self._iter_date_chunks(
-                date_column, start_date, end_date, chunk_size_days
-            )
-
-            for chunk_start, chunk_end in date_chunks:
-                source_query, source_params = source_adapter.build_count_query_common(
-                    source_table,
-                    date_column,
-                    chunk_start,
-                    chunk_end,
-                    source_columns_meta,
-                    self.timezone,
-                )
-                chunk_source = self._execute_query(
-                    (source_query, source_params),
-                    self.source_engine,
-                    self.timezone,
-                    query_side='source',
-                )
-                source_chunks.append(chunk_source)
-
-                target_query, target_params = target_adapter.build_count_query_common(
-                    target_table,
-                    date_column,
-                    chunk_start,
-                    chunk_end,
-                    target_columns_meta,
-                    self.timezone,
-                )
-                chunk_target = self._execute_query(
-                    (target_query, target_params),
-                    self.target_engine,
-                    self.timezone,
-                    query_side='target',
-                )
-                target_chunks.append(chunk_target)
-
-            source_counts = pd.concat(source_chunks, ignore_index=True)
-            target_counts = pd.concat(target_chunks, ignore_index=True)
-            source_counts = source_counts.groupby('dt', as_index=False)['cnt'].sum()
-            target_counts = target_counts.groupby('dt', as_index=False)['cnt'].sum()
-
-            source_counts_filled, target_counts_filled = cross_fill_missing_dates(
-                source_counts, target_counts
-            )
-
-            merged = source_counts_filled.merge(target_counts_filled, on='dt')
-            total_count_source = source_counts_filled['cnt'].sum()
-            total_count_taget = target_counts_filled['cnt'].sum()
-
-            if (total_count_source, total_count_taget) == (0, 0):
-                app_logger.warning('nothing to compare to you')
-                status = ct.CHECK_SKIPPED
-                return status, None, None, None
-
-            else:
-                result_diff_in_counters = abs(merged['cnt_x'] - merged['cnt_y']).sum()
-                result_equal_in_counters = merged[['cnt_x', 'cnt_y']].min(axis=1).sum()
-
-                stats, details = self._check_dataframes_timed(
-                    source_df=source_counts_filled,
-                    target_df=target_counts_filled,
-                    key_columns=['dt'],
-                    max_examples=max_examples,
-                )
-                stats.final_diff_score, stats.final_score = count_volume_scores(
-                    result_diff_in_counters, result_equal_in_counters
-                )
-
-                status = status_for_diff_score(stats.final_diff_score, tolerance_pct)
-
-                report = generate_count_report(
-                    source_table.full_name,
-                    target_table.full_name,
-                    stats,
-                    details,
-                    total_count_source,
-                    total_count_taget,
-                    result_diff_in_counters,
-                    result_equal_in_counters,
-                    self.timezone,
-                    run_id,
-                    run_started_at,
-                    source_query,
-                    source_params,
-                    target_query,
-                    target_params,
-                    **self._report_context,
-                )
-
-                return status, report, stats, details
-
-        except Exception as e:
-            app_logger.error(f'Counts check failed: {str(e)}')
-            raise
-
-    def _check_total_counts(
-        self,
-        source_table: DataReference,
-        target_table: DataReference,
-        date_column: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
-        chunk_size_days: Optional[int],
-        tolerance_pct: float,
-        run_id: str,
-        run_started_at: str,
-    ) -> Tuple[str, Optional[str], Optional[CheckStats]]:
-        try:
-            source_adapter = self._get_adapter(self.source_db_type)
-            target_adapter = self._get_adapter(self.target_db_type)
-
-            source_columns_meta = None
-            target_columns_meta = None
-            if date_column:
-                source_columns_meta = self._get_metadata_cols(
-                    source_table, self.source_engine
-                )
-                target_columns_meta = self._get_metadata_cols(
-                    target_table, self.target_engine
-                )
-
-            date_chunks = self._iter_date_chunks(
-                date_column, start_date, end_date, chunk_size_days
-            )
-
-            source_count = 0
-            target_count = 0
-            source_query, source_params = None, None
-            target_query, target_params = None, None
-
-            for chunk_start, chunk_end in date_chunks:
-                source_query, source_params = source_adapter.build_total_count_query(
-                    source_table,
-                    date_column,
-                    chunk_start,
-                    chunk_end,
-                    source_columns_meta,
-                    self.timezone,
-                )
-                source_df = self._execute_query(
-                    (source_query, source_params),
-                    self.source_engine,
-                    self.timezone,
-                    query_side='source',
-                )
-                source_count += _first_count_value(source_df)
-
-                target_query, target_params = target_adapter.build_total_count_query(
-                    target_table,
-                    date_column,
-                    chunk_start,
-                    chunk_end,
-                    target_columns_meta,
-                    self.timezone,
-                )
-                target_df = self._execute_query(
-                    (target_query, target_params),
-                    self.target_engine,
-                    self.timezone,
-                    query_side='target',
-                )
-                target_count += _first_count_value(target_df)
-
-            if (source_count, target_count) == (0, 0):
-                app_logger.warning('nothing to compare to you')
-                return ct.CHECK_SKIPPED, None, None
-
-            stats = build_total_count_stats(source_count, target_count)
-            status = status_for_diff_score(stats.final_diff_score, tolerance_pct)
-            report = generate_total_count_report(
-                source_table.full_name,
-                target_table.full_name,
-                stats,
-                self.timezone,
-                run_id,
-                run_started_at,
-                source_query,
-                source_params,
-                target_query,
-                target_params,
-                date_chunks=date_chunks,
-                **self._report_context,
-            )
-            return status, report, stats
-
-        except Exception as e:
-            app_logger.error(f'Total counts check failed: {str(e)}')
-            raise
-
-    def _check_samples(
-        self,
-        source_table: DataReference,
-        target_table: DataReference,
-        date_column: str,
-        update_column: str,
-        start_date: Optional[str],
-        end_date: Optional[str],
-        chunk_size_days: Optional[int],
-        exclude_columns: List[str],
-        include_columns: List[str],
-        custom_key_columns: Optional[List[str]],
-        tolerance_pct: float,
-        exclude_recent_hours: Optional[int],
-        max_examples: Optional[int],
-        hash_pct: Optional[int],
-        run_id: str,
-        run_started_at: str,
-    ) -> Tuple[str, str, Optional[CheckStats], Optional[CheckDetails]]:
-
-        try:
-            source_object_type = self._get_object_type(source_table, self.source_engine)
-            target_object_type = self._get_object_type(target_table, self.target_engine)
-            app_logger.info(
-                f'object type source: {source_object_type} vs target {target_object_type}'
-            )
-
-            source_columns_meta = self._get_metadata_cols(
-                source_table, self.source_engine
-            )
-            app_logger.info('source_columns meta:\n')
-            app_logger.info(source_columns_meta.to_string(index=False))
-
-            target_columns_meta = self._get_metadata_cols(
-                target_table, self.target_engine
-            )
-            app_logger.info('target_columns meta:\n')
-            app_logger.info(target_columns_meta.to_string(index=False))
-
-            intersect = list(set(include_columns) & set(exclude_columns))
-            if intersect:
-                app_logger.warning(
-                    f'Intersection columns between Include and exclude: {",".join(intersect)}'
-                )
-
-            key_columns = None
-
-            if custom_key_columns:
-                key_columns = custom_key_columns
-                source_cols = source_columns_meta['column_name'].tolist()
-                target_cols = target_columns_meta['column_name'].tolist()
-
-                missing_in_source = [
-                    col for col in custom_key_columns if col not in source_cols
-                ]
-                missing_in_target = [
-                    col for col in custom_key_columns if col not in target_cols
-                ]
-
-                if missing_in_source:
-                    raise MetadataError(
-                        f'Custom key columns missing in source: {missing_in_source}'
-                    )
-                if missing_in_target:
-                    raise MetadataError(
-                        f'Custom key columns missing in target: {missing_in_target}'
-                    )
-            else:
-                source_pk = (
-                    self._get_metadata_pk(source_table, self.source_engine)
-                    if source_object_type == ObjectType.TABLE
-                    else pd.DataFrame({'pk_column_name': []})
-                )
-                target_pk = (
-                    self._get_metadata_pk(target_table, self.target_engine)
-                    if target_object_type == ObjectType.TABLE
-                    else pd.DataFrame({'pk_column_name': []})
-                )
-
-                if (
-                    source_pk['pk_column_name'].tolist()
-                    != target_pk['pk_column_name'].tolist()
-                ):
-                    app_logger.warning(
-                        f'Primary keys differ: source={source_pk["pk_column_name"].tolist()}, target={target_pk["pk_column_name"].tolist()}'
-                    )
-                key_columns = (
-                    source_pk['pk_column_name'].tolist()
-                    or target_pk['pk_column_name'].tolist()
-                )
-                if not key_columns:
-                    raise MetadataError(
-                        f'Primary key not found in the source neither in the target and not provided'
-                    )
-
-            if include_columns:
-                if not set(include_columns) & set(key_columns):
-                    app_logger.warning(
-                        f'The primary key was not included in the column list.\
-                                       The key column was included in the resulting query automatically. PK:{key_columns}'
-                    )
-
-                include_columns = list(set(include_columns + key_columns))
-
-                source_columns_meta = source_columns_meta[
-                    source_columns_meta['column_name'].isin(include_columns)
-                ]
-                target_columns_meta = target_columns_meta[
-                    target_columns_meta['column_name'].isin(include_columns)
-                ]
-
-            if exclude_columns:
-                if set(exclude_columns) & set(key_columns):
-                    app_logger.warning(
-                        f'The primary key has been excluded from the column list.\
-                                       However, the key column must be present in the resulting query.s PK:{key_columns}'
-                    )
-
-                exclude_columns = list(set(exclude_columns) - set(key_columns))
-
-                source_columns_meta = source_columns_meta[
-                    ~source_columns_meta['column_name'].isin(exclude_columns)
-                ]
-                target_columns_meta = target_columns_meta[
-                    ~target_columns_meta['column_name'].isin(exclude_columns)
-                ]
-
-            common_cols_df, source_only_cols, target_only_cols = (
-                self._analyze_columns_meta(source_columns_meta, target_columns_meta)
-            )
-            common_cols = common_cols_df['column_name'].tolist()
-
-            if not common_cols:
-                raise MetadataError(
-                    f'No one column to compare, need to check tables or reduce the exclude_columns list: {",".join(exclude_columns)}'
-                )
-
-            return self._check_samples_iterative(
-                source_table=source_table,
-                target_table=target_table,
-                source_columns_meta=source_columns_meta,
-                target_columns_meta=target_columns_meta,
-                common_cols=common_cols,
-                key_columns=key_columns,
-                source_only_cols=source_only_cols,
-                target_only_cols=target_only_cols,
-                date_column=date_column,
-                update_column=update_column,
-                start_date=start_date,
-                end_date=end_date,
-                chunk_size_days=chunk_size_days,
-                exclude_recent_hours=exclude_recent_hours,
-                tolerance_pct=tolerance_pct,
-                max_examples=max_examples,
-                hash_pct=hash_pct,
-                run_id=run_id,
-                run_started_at=run_started_at,
-            )
-
-        except Exception as e:
-            app_logger.error(f'Samples check failed: {str(e)}')
-            raise
 
     def check_sniff_query(
         self,
@@ -847,74 +316,23 @@ class DataQualityChecker:
             ``CheckResult`` including ``run_id``, ``status``, ``report``,
             ``stats``, and ``details``.
         """
-        source_engine = self.source_engine
-        timezone = self.timezone
         source_params = source_params or {}
 
-        def _run():
-            app_logger.info('Getting metadata for sniff query')
-            source_metadata = self._get_metadata_cols_for_custom_query(
-                (source_query, source_params), source_engine
-            )
-            source_adapter = self._get_adapter(self.source_db_type)
-            source_chunks = self._resolve_source_query_chunks(
-                source_params, chunk_size_days
-            )
-
-            if len(source_chunks) == 1:
-                stats, details = self._execute_source_query_chunk(
-                    source_query=source_query,
-                    source_params=source_chunks[0],
-                    source_engine=source_engine,
-                    source_adapter=source_adapter,
-                    source_metadata=source_metadata,
-                    max_examples=max_examples,
-                    timezone=timezone,
-                )
-            else:
-                stats, details = self._check_sniff_query_iterative(
-                    source_query=source_query,
-                    source_chunks=source_chunks,
-                    source_engine=source_engine,
-                    source_adapter=source_adapter,
-                    source_metadata=source_metadata,
-                    max_examples=max_examples,
-                    timezone=timezone,
-                )
-
-            date_chunks = [
-                (chunk.get('start_date'), chunk.get('end_date'))
-                for chunk in source_chunks
-                if chunk.get('start_date') is not None
-                and chunk.get('end_date') is not None
-            ] or None
-
-            if not stats:
-                return ct.CHECK_SKIPPED, None, None, None
-
-            status = status_for_diff_score(stats.final_diff_score, tolerance_pct)
-            draft_report = generate_check_sniff_query_report(
-                stats,
-                details,
-                self.timezone,
-                self._active_run_id,
-                self._active_run_started_at,
-                source_query,
-                source_params,
-                date_chunks=date_chunks,
-                library_version=self._report_context['library_version'],
-                source_db_type=self._report_context['source_db_type'],
-            )
-            return status, draft_report, stats, details
-
         return self._run_check(
+            impl=run_sniff_query,
+            impl_kwargs=dict(
+                source_query=source_query,
+                source_params=source_params,
+                chunk_size_days=chunk_size_days,
+                tolerance_pct=tolerance_pct,
+                max_examples=max_examples,
+            ),
             check_type=ct.CHECK_TYPE_SNIFF_QUERY,
             check_name=check_name,
             persist_result=persist_result,
             check_tags=check_tags,
             report_output_format=report_output_format,
             fail_message='Sniff query failed',
-            run=_run,
             source_query=source_query,
             source_params=source_params,
         )
@@ -946,9 +364,6 @@ class DataQualityChecker:
             ``stats``, and ``details``.
         """
         self._require_target_engine()
-        source_engine = self.source_engine
-        target_engine = self.target_engine
-        timezone = self.timezone
         source_params = source_params or {}
         target_params = target_params or {}
         exclude_cols = normalize_column_names(exclude_columns or [])
@@ -963,153 +378,29 @@ class DataQualityChecker:
             'target_params': target_params,
         }
 
-        def _run():
-            app_logger.info('Getting metadata for source query')
-            source_metadata = self._get_metadata_cols_for_custom_query(
-                (source_query, source_params), source_engine
-            )
-
-            app_logger.info('Getting metadata for target query')
-            target_metadata = self._get_metadata_cols_for_custom_query(
-                (target_query, target_params), target_engine
-            )
-
-            source_adapter = self._get_adapter(self.source_db_type)
-            target_adapter = self._get_adapter(self.target_db_type)
-            wrapped_source_query = source_query
-            wrapped_target_query = target_query
-            if hash_pct:
-                wrapped_source_query = source_adapter.wrap_query_with_hash_sample(
-                    source_query,
-                    custom_keys,
-                    hash_pct,
-                    source_metadata,
-                    timezone,
-                )
-                wrapped_target_query = target_adapter.wrap_query_with_hash_sample(
-                    target_query,
-                    custom_keys,
-                    hash_pct,
-                    target_metadata,
-                    timezone,
-                )
-                identity['source_query'] = wrapped_source_query
-                identity['target_query'] = wrapped_target_query
-            date_chunks = self._resolve_custom_query_chunks(
-                source_params, target_params, chunk_size_days
-            )
-
-            if len(date_chunks) == 1:
-                stats, details = self._execute_custom_query_chunk(
-                    source_query=wrapped_source_query,
-                    source_params=date_chunks[0][0],
-                    target_query=wrapped_target_query,
-                    target_params=date_chunks[0][1],
-                    source_engine=source_engine,
-                    target_engine=target_engine,
-                    source_adapter=source_adapter,
-                    target_adapter=target_adapter,
-                    source_metadata=source_metadata,
-                    target_metadata=target_metadata,
-                    custom_primary_key=custom_keys,
-                    exclude_columns=exclude_cols,
-                    max_examples=max_examples,
-                    timezone=timezone,
-                )
-            else:
-                stats, details = self._check_custom_queries_iterative(
-                    source_query=wrapped_source_query,
-                    target_query=wrapped_target_query,
-                    chunk_ranges=date_chunks,
-                    source_engine=source_engine,
-                    target_engine=target_engine,
-                    source_adapter=source_adapter,
-                    target_adapter=target_adapter,
-                    source_metadata=source_metadata,
-                    target_metadata=target_metadata,
-                    custom_primary_key=custom_keys,
-                    exclude_columns=exclude_cols,
-                    max_examples=max_examples,
-                    timezone=timezone,
-                )
-
-            if not stats:
-                return ct.CHECK_SKIPPED, None, None, None
-
-            status = status_for_diff_score(stats.final_diff_score, tolerance_pct)
-            draft_report = generate_sample_report(
-                None,
-                None,
-                stats,
-                details,
-                self.timezone,
-                self._active_run_id,
-                self._active_run_started_at,
-                wrapped_source_query,
-                source_params,
-                wrapped_target_query,
-                target_params,
-                date_chunks=date_chunks,
-                **self._report_context,
-            )
-            return status, draft_report, stats, details
-
         return self._run_check(
+            impl=run_custom_queries,
+            impl_kwargs=dict(
+                source_query=source_query,
+                target_query=target_query,
+                source_params=source_params,
+                target_params=target_params,
+                custom_keys=custom_keys,
+                exclude_cols=exclude_cols,
+                chunk_size_days=chunk_size_days,
+                tolerance_pct=tolerance_pct,
+                max_examples=max_examples,
+                hash_pct=hash_pct,
+                identity=identity,
+            ),
             check_type=ct.CHECK_TYPE_CUSTOM_QUERIES,
             check_name=check_name,
             persist_result=persist_result,
             check_tags=check_tags,
             report_output_format=report_output_format,
             fail_message='Custom queries check failed',
-            run=_run,
             identity=identity,
         )
-
-    def _execute_custom_query_agg(
-        self,
-        query: str,
-        params: Dict,
-        engine: Engine,
-        adapter,
-        max_columns: List[str],
-        sum_columns: List[str],
-        include_count: bool,
-        query_side: str,
-        hash_columns: Optional[List[str]] = None,
-        hash_pct: Optional[int] = None,
-    ) -> pd.DataFrame:
-        metadata = self._get_metadata_cols_for_custom_query((query, params), engine)
-        if hash_pct:
-            available = {str(name).lower() for name in metadata.get('column_name', [])}
-            missing = [
-                column for column in hash_columns or [] if column not in available
-            ]
-            if missing:
-                raise ValueError(
-                    f'hash_columns not present in {query_side} query: {missing}'
-                )
-            query = adapter.wrap_query_with_hash_sample(
-                query, hash_columns, hash_pct, metadata, self.timezone
-            )
-        sql = adapter.build_custom_query_aggregate_sql(
-            query,
-            max_columns=max_columns,
-            sum_columns=sum_columns,
-            include_count=include_count,
-        )
-        app_logger.info(f'{query_side} aggregate query:\n{sql}')
-        frame = self._execute_query(
-            (sql, params), engine, self.timezone, query_side=query_side
-        )
-        frame = adapter.convert_types(
-            frame,
-            _aggregate_result_metadata(
-                metadata, max_columns, sum_columns, include_count
-            ),
-            self.timezone,
-        )
-        frame.columns = [str(column).lower() for column in frame.columns]
-        return prepare_dataframe(frame)
 
     def check_custom_queries_agg(
         self,
@@ -1152,76 +443,106 @@ class DataQualityChecker:
         if hash_pct and not hash_columns:
             raise ValueError('hash_columns is required when hash_pct is set')
 
-        def _run():
-            source_adapter = self._get_adapter(self.source_db_type)
-            target_adapter = self._get_adapter(self.target_db_type)
-            source_data = self._execute_custom_query_agg(
-                source_query,
-                source_params,
-                self.source_engine,
-                source_adapter,
-                max_columns or [],
-                sum_columns or [],
-                include_count,
-                'source',
-                hash_columns=hash_columns,
-                hash_pct=hash_pct,
-            )
-            target_data = self._execute_custom_query_agg(
-                target_query,
-                target_params,
-                self.target_engine,
-                target_adapter,
-                max_columns or [],
-                sum_columns or [],
-                include_count,
-                'target',
-                hash_columns=hash_columns,
-                hash_pct=hash_pct,
-            )
-            source_data[ct.XAGG_ROW_COLUMN] = '1'
-            target_data[ct.XAGG_ROW_COLUMN] = '1'
-            stats, details = self._check_dataframes_timed(
-                source_data,
-                target_data,
-                [ct.XAGG_ROW_COLUMN],
-                ct.DEFAULT_MAX_EXAMPLES,
-            )
-
-            if not stats:
-                return ct.CHECK_SKIPPED, None, None, None
-
-            matched = stats.final_diff_score <= 0
-            stats.final_diff_score = 0.0 if matched else 100.0
-            stats.final_score = 100.0 - stats.final_diff_score
-            status = ct.CHECK_SUCCESS if matched else ct.CHECK_FAILED
-            draft_report = generate_custom_query_agg_report(
-                stats,
-                details,
-                self.timezone,
-                self._active_run_id,
-                self._active_run_started_at,
-                source_query,
-                source_params,
-                target_query,
-                target_params,
-                **self._report_context,
-            )
-            return status, draft_report, stats, details
-
         return self._run_check(
+            impl=run_custom_queries_agg,
+            impl_kwargs=dict(
+                source_query=source_query,
+                target_query=target_query,
+                source_params=source_params,
+                target_params=target_params,
+                max_columns=max_columns or [],
+                sum_columns=sum_columns or [],
+                include_count=include_count,
+                hash_columns=hash_columns,
+                hash_pct=hash_pct,
+            ),
             check_type=ct.CHECK_TYPE_CUSTOM_QUERIES_AGG,
             check_name=check_name,
             persist_result=persist_result,
             check_tags=check_tags,
             report_output_format=report_output_format,
             fail_message='Custom query aggregate check failed',
-            run=_run,
             source_query=source_query,
             source_params=source_params,
             target_query=target_query,
             target_params=target_params,
         )
+
+    def _start_check_run(
+        self, check_type: str, check_name: Optional[str]
+    ) -> Tuple[str, str]:
+        run_started_at = pd.Timestamp.now().strftime(ct.DATETIME_FORMAT)
+        run_id = build_run_id()
+        app_logger.info(
+            f'Check run started: run_id={run_id} '
+            f'check_name={check_name} check_type={check_type}'
+        )
+        self._active_run_id = run_id
+        self._active_run_started_at = run_started_at
+        self._active_check_name = check_name
+        self._run_timings = CheckRunTimings(run_started_at=run_started_at)
+        return run_id, run_started_at
+
+    def _run_check(
+        self,
+        *,
+        impl: Callable,
+        impl_kwargs: Optional[Dict] = None,
+        check_type: str,
+        check_name: Optional[str],
+        persist_result: Optional[DataReference],
+        check_tags: Optional[Dict],
+        report_output_format: str,
+        fail_message: str,
+        stats_table=None,
+        identity: Optional[Dict] = None,
+        **identity_fields,
+    ) -> CheckResult:
+        persist_result = normalize_persist_result(persist_result)
+        validate_report_output_format(report_output_format)
+        self._start_check_run(check_type, check_name)
+        try:
+            self.check_stats['checked'] += 1
+            outcome = impl(self, **(impl_kwargs or {}))
+            if len(outcome) == 3:
+                status, report, stats = outcome
+                details = None
+            else:
+                status, report, stats, details = outcome
+            fields = dict(identity_fields)
+            if identity is not None:
+                fields.update(identity)
+            result = self._finalize_check(
+                status=status,
+                report=report,
+                stats=stats,
+                details=details,
+                check_type=check_type,
+                persist_result=persist_result,
+                report_output_format=report_output_format,
+                check_tags=check_tags,
+                **fields,
+            )
+            self._update_stats(result.status, stats_table)
+            return result
+        except Exception:
+            app_logger.exception(fail_message)
+            fields = dict(identity_fields)
+            if identity is not None:
+                fields.update(identity)
+            result = self._finalize_check(
+                status=ct.CHECK_FAILED,
+                report=None,
+                stats=None,
+                details=None,
+                check_type=check_type,
+                persist_result=persist_result,
+                report_output_format=report_output_format,
+                check_tags=check_tags,
+                **fields,
+            )
+            self._update_stats(result.status, stats_table)
+            return result
 
     def _finalize_check(
         self,
@@ -1270,396 +591,51 @@ class DataQualityChecker:
         app_logger.info(
             f'Check run finished: run_id={self._active_run_id} status={status}'
         )
-        # Persist already captured the original report; expose the formatted
-        # public report on the returned CheckResult.
         result.report = format_check_result(result, report_output_format)
         return result
 
-    def _resolve_custom_query_chunks(
+    def _side_engine(self, query_side: str) -> Engine:
+        if query_side == 'source':
+            return self.source_engine
+        if query_side == 'target':
+            return self._require_target_engine()
+        raise ValueError(f'Unknown query side: {query_side}')
+
+    def _adapter(self, query_side: str) -> BaseDatabaseAdapter:
+        db_type = self.source_db_type if query_side == 'source' else self.target_db_type
+        return self._get_adapter(db_type)
+
+    def _run_sql(
         self,
-        source_params: Dict,
-        target_params: Dict,
-        chunk_size_days: Optional[int],
-    ) -> List[Tuple[Dict, Dict]]:
-        return resolve_custom_query_chunks(
-            source_params, target_params, chunk_size_days
-        )
-
-    def _resolve_source_query_chunks(
-        self,
-        source_params: Dict,
-        chunk_size_days: Optional[int],
-    ) -> List[Dict]:
-        return resolve_source_query_chunks(source_params, chunk_size_days)
-
-    def _execute_source_query_chunk(
-        self,
-        source_query: str,
-        source_params: Dict,
-        source_engine: Engine,
-        source_adapter,
-        source_metadata: pd.DataFrame,
-        max_examples: Optional[int],
-        timezone: str,
-    ) -> Tuple[Optional[CheckStats], Optional[CheckDetails]]:
-        source_data = self._execute_query(
-            (source_query, source_params), source_engine, timezone, query_side='source'
-        )
-        source_data = source_adapter.convert_types(
-            source_data, source_metadata, timezone
-        )
-        if source_data.empty:
-            return build_sniff_issue_stats(0, 0, 0), CheckDetails(
-                issue_breakdown=pd.DataFrame(),
-                issue_examples=pd.DataFrame(),
-                dup_source_keys_examples=tuple(),
-                dup_target_keys_examples=tuple(),
-                source_only_keys_examples=tuple(),
-                target_only_keys_examples=tuple(),
-                issue_row_examples=pd.DataFrame(),
-                evaluated_columns=[],
-            )
-
-        self._run_timings.mark_dataset_check_start()
-        try:
-            return evaluate_check_sniff_query_data(
-                source_data,
-                max_examples=max_examples or ct.DEFAULT_MAX_EXAMPLES,
-            )
-        finally:
-            self._run_timings.mark_dataset_check_end()
-
-    def _check_sniff_query_iterative(
-        self,
-        source_query: str,
-        source_chunks: List[Dict],
-        source_engine: Engine,
-        source_adapter,
-        source_metadata: pd.DataFrame,
-        max_examples: Optional[int],
-        timezone: str,
-    ) -> Tuple[Optional[CheckStats], Optional[CheckDetails]]:
-        examples_limit = max_examples or ct.DEFAULT_MAX_EXAMPLES
-        acc = SniffCheckAccumulator(examples_limit)
-
-        for source_chunk_params in source_chunks:
-            chunk_stats, chunk_details = self._execute_source_query_chunk(
-                source_query=source_query,
-                source_params=source_chunk_params,
-                source_engine=source_engine,
-                source_adapter=source_adapter,
-                source_metadata=source_metadata,
-                max_examples=examples_limit,
-                timezone=timezone,
-            )
-            acc.add(chunk_stats, chunk_details)
-
-        return acc.build()
-
-    def _execute_custom_query_chunk(
-        self,
-        source_query: str,
-        source_params: Dict,
-        target_query: str,
-        target_params: Dict,
-        source_engine: Engine,
-        target_engine: Engine,
-        source_adapter,
-        target_adapter,
-        source_metadata: pd.DataFrame,
-        target_metadata: pd.DataFrame,
-        custom_primary_key: List[str],
-        exclude_columns: Optional[List[str]],
-        max_examples: Optional[int],
-        timezone: str,
-    ) -> Tuple[Optional[CheckStats], Optional[CheckDetails]]:
-        source_data = self._execute_query(
-            (source_query, source_params), source_engine, timezone, query_side='source'
-        )
-        target_data = self._execute_query(
-            (target_query, target_params), target_engine, timezone, query_side='target'
-        )
-
-        source_data = source_adapter.convert_types(
-            source_data, source_metadata, timezone
-        )
-        target_data = target_adapter.convert_types(
-            target_data, target_metadata, timezone
-        )
-        source_data_prepared = prepare_dataframe(source_data)
-        target_data_prepared = prepare_dataframe(target_data)
-
-        exclude_cols = exclude_columns or []
-        common_cols = [
-            col
-            for col in source_data_prepared.columns
-            if col in target_data_prepared.columns and col not in exclude_cols
-        ]
-        source_data_filtered = source_data_prepared[common_cols]
-        target_data_filtered = target_data_prepared[common_cols]
-        if ct.XRECENTLY_CHANGED_COLUMN in common_cols:
-            source_data_filtered, target_data_filtered = clean_recently_changed_data(
-                source_data_filtered, target_data_filtered, custom_primary_key
-            )
-        return self._check_dataframes_timed(
-            source_data_filtered,
-            target_data_filtered,
-            custom_primary_key,
-            max_examples,
-        )
-
-    def _check_custom_queries_iterative(
-        self,
-        source_query: str,
-        target_query: str,
-        chunk_ranges: List[Tuple[Dict, Dict]],
-        source_engine: Engine,
-        target_engine: Engine,
-        source_adapter,
-        target_adapter,
-        source_metadata: pd.DataFrame,
-        target_metadata: pd.DataFrame,
-        custom_primary_key: List[str],
-        exclude_columns: Optional[List[str]],
-        max_examples: Optional[int],
-        timezone: str,
-    ) -> Tuple[Optional[CheckStats], Optional[CheckDetails]]:
-        examples_limit = max_examples or ct.DEFAULT_MAX_EXAMPLES
-        acc = PairCheckAccumulator(examples_limit)
-
-        for source_chunk_params, target_chunk_params in chunk_ranges:
-            chunk_stats, chunk_details = self._execute_custom_query_chunk(
-                source_query=source_query,
-                source_params=source_chunk_params,
-                target_query=target_query,
-                target_params=target_chunk_params,
-                source_engine=source_engine,
-                target_engine=target_engine,
-                source_adapter=source_adapter,
-                target_adapter=target_adapter,
-                source_metadata=source_metadata,
-                target_metadata=target_metadata,
-                custom_primary_key=custom_primary_key,
-                exclude_columns=exclude_columns,
-                max_examples=examples_limit,
-                timezone=timezone,
-            )
-            acc.add(chunk_stats, chunk_details)
-
-        return acc.build()
-
-    def _get_metadata_cols_for_custom_query(
-        self, query, engine: Engine
-    ) -> pd.DataFrame:
-        """Return column metadata for a custom query."""
-        adapter = self._get_adapter(DBMSType.from_engine(engine))
-
-        columns_meta = adapter.get_metadata_for_custom_query(query, engine)
-
-        if columns_meta.empty:
-            raise ValueError(f'Failed to get metadata for custom query: {query}')
-
-        return columns_meta
-
-    def _get_metadata_cols(
-        self, data_ref: DataReference, engine: Engine
-    ) -> pd.DataFrame:
-        """Return column metadata for a table or view."""
-        adapter = self._get_adapter(DBMSType.from_engine(engine))
-
-        query, params = adapter.build_metadata_columns_query(data_ref)
-        columns_meta = self._execute_query((query, params), engine)
-
-        if columns_meta.empty:
-            raise ValueError(f'Failed to get metadata for: {data_ref.full_name}')
-
-        return columns_meta
-
-    def _get_metadata_pk(self, data_ref: DataReference, engine: Engine) -> pd.DataFrame:
-        """Return primary-key metadata for a table or view."""
-        adapter = self._get_adapter(DBMSType.from_engine(engine))
-
-        query, params = adapter.build_primary_key_query(data_ref)
-        primary_key = self._execute_query((query, params), engine)
-
-        return primary_key
-
-    def _get_object_type(self, data_ref: DataReference, engine: Engine) -> pd.DataFrame:
-
-        adapter = self._get_adapter(DBMSType.from_engine(engine))
-        object_type = adapter.get_object_type(data_ref, engine)
-        return object_type
-
-    def _get_table_data(
-        self,
-        engine,
-        data_ref: DataReference,
-        columns_meta: pd.DataFrame,
-        common_columns: List[str],
-        date_column: str,
-        update_column: str,
-        start_date: Optional[str],
-        end_date: Optional[str],
-        exclude_recent_hours: Optional[int],
         query_side: str,
-        key_columns: Optional[List[str]] = None,
-        hash_pct: Optional[int] = None,
-    ) -> Tuple[pd.DataFrame, str, Dict]:
-        """Fetch table data and apply type conversion."""
-        db_type = DBMSType.from_engine(engine)
-        adapter = self._get_adapter(db_type)
-        app_logger.info(db_type)
-
-        query, params = adapter.build_data_query_common(
-            data_ref,
-            common_columns,
-            date_column,
-            update_column,
-            start_date,
-            end_date,
-            exclude_recent_hours,
-            columns_meta,
+        query: str,
+        params: Optional[Dict] = None,
+    ) -> pd.DataFrame:
+        """Execute already-built SQL on the source or target engine."""
+        return self._execute_query(
+            (query, params or {}),
+            self._side_engine(query_side),
             self.timezone,
-            key_columns,
-            hash_pct,
+            query_side=query_side,
         )
 
-        df = self._execute_query(
-            (query, params), engine, self.timezone, query_side=query_side
-        )
-
-        # Apply type conversions
-        df = adapter.convert_types(df, columns_meta, self.timezone)
-
-        return df, query, params
-
-    def _get_adapter(self, db_type: DBMSType) -> BaseDatabaseAdapter:
-        """Return the adapter for the given DBMS."""
-        try:
-            return self.adapters[db_type]
-        except KeyError:
-            raise ValueError(f'No adapter available for {db_type}')
-
-    def _validate_date_window_args(
+    def _run_converted(
         self,
-        date_column: Optional[str],
-        date_range: Optional[Tuple[Optional[str], Optional[str]]],
-        chunk_size_days: Optional[int],
-    ) -> None:
-        validate_date_window_args(date_column, date_range, chunk_size_days)
+        query_side: str,
+        query: str,
+        params: Dict,
+        adapter,
+        metadata: pd.DataFrame,
+        timezone: Optional[str] = None,
+    ) -> pd.DataFrame:
+        """Execute SQL and apply adapter type conversion."""
+        tz = timezone or self.timezone
+        frame = self._run_sql(query_side, query, params)
+        return adapter.convert_types(frame, metadata, tz)
 
-    def _iter_date_chunks(
-        self,
-        date_column: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
-        chunk_size_days: Optional[int],
-    ) -> List[Tuple[Optional[str], Optional[str]]]:
-        return iter_date_chunks(date_column, start_date, end_date, chunk_size_days)
-
-    def _check_samples_iterative(
-        self,
-        source_table: DataReference,
-        target_table: DataReference,
-        source_columns_meta: pd.DataFrame,
-        target_columns_meta: pd.DataFrame,
-        common_cols: List[str],
-        key_columns: List[str],
-        source_only_cols: List[str],
-        target_only_cols: List[str],
-        date_column: Optional[str],
-        update_column: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
-        chunk_size_days: Optional[int],
-        exclude_recent_hours: Optional[int],
-        tolerance_pct: float,
-        max_examples: Optional[int],
-        hash_pct: Optional[int],
-        run_id: str,
-        run_started_at: str,
-    ) -> Tuple[str, str, Optional[CheckStats], Optional[CheckDetails]]:
-        examples_limit = max_examples or ct.DEFAULT_MAX_EXAMPLES
-        acc = PairCheckAccumulator(examples_limit)
-        source_query, source_params = None, None
-        target_query, target_params = None, None
-
-        date_chunks = self._iter_date_chunks(
-            date_column, start_date, end_date, chunk_size_days
-        )
-        for chunk_start, chunk_end in date_chunks:
-            source_data, source_query, source_params = self._get_table_data(
-                self.source_engine,
-                source_table,
-                source_columns_meta,
-                common_cols,
-                date_column,
-                update_column,
-                chunk_start,
-                chunk_end,
-                exclude_recent_hours,
-                query_side='source',
-                key_columns=key_columns,
-                hash_pct=hash_pct,
-            )
-            target_data, target_query, target_params = self._get_table_data(
-                self.target_engine,
-                target_table,
-                target_columns_meta,
-                common_cols,
-                date_column,
-                update_column,
-                chunk_start,
-                chunk_end,
-                exclude_recent_hours,
-                query_side='target',
-                key_columns=key_columns,
-                hash_pct=hash_pct,
-            )
-
-            if source_data.empty and target_data.empty:
-                continue
-
-            source_data = prepare_dataframe(source_data)
-            target_data = prepare_dataframe(target_data)
-            if update_column and exclude_recent_hours:
-                source_data, target_data = clean_recently_changed_data(
-                    source_data, target_data, key_columns
-                )
-
-            if source_data.empty and target_data.empty:
-                continue
-
-            chunk_stats, chunk_details = self._check_dataframes_timed(
-                source_data, target_data, key_columns, examples_limit
-            )
-            acc.add(chunk_stats, chunk_details)
-
-        stats, details = acc.build(
-            evaluated_columns=common_cols,
-            skipped_source_columns=source_only_cols,
-            skipped_target_columns=target_only_cols,
-        )
-        if not stats:
-            return ct.CHECK_SKIPPED, None, None, None
-
-        report = generate_sample_report(
-            source_table.full_name,
-            target_table.full_name,
-            stats,
-            details,
-            self.timezone,
-            run_id,
-            run_started_at,
-            source_query,
-            source_params,
-            target_query,
-            target_params,
-            date_chunks=date_chunks,
-            **self._report_context,
-        )
-        status = status_for_diff_score(stats.final_diff_score, tolerance_pct)
-        return status, report, stats, details
+    def _log_columns_meta(self, label: str, columns_meta: pd.DataFrame) -> None:
+        app_logger.info(f'{label}:\n')
+        app_logger.info(columns_meta.to_string(index=False))
 
     def _check_dataframes_timed(
         self,
@@ -1694,31 +670,41 @@ class DataQualityChecker:
             if query_side:
                 self._run_timings.mark_query_end(query_side)
 
-    def _analyze_columns_meta(
-        self, source_columns_meta: pd.DataFrame, target_columns_meta: pd.DataFrame
-    ) -> tuple[pd.DataFrame, list, list]:
-        """Find common columns and the columns unique to each side."""
+    def _get_metadata_cols_for_custom_query(
+        self, query, engine: Engine
+    ) -> pd.DataFrame:
+        adapter = self._get_adapter(DBMSType.from_engine(engine))
+        columns_meta = adapter.get_metadata_for_custom_query(query, engine)
+        if columns_meta.empty:
+            raise ValueError(f'Failed to get metadata for custom query: {query}')
+        return columns_meta
 
-        source_columns = source_columns_meta['column_name'].tolist()
-        target_columns = target_columns_meta['column_name'].tolist()
+    def _get_metadata_cols(
+        self, data_ref: DataReference, engine: Engine
+    ) -> pd.DataFrame:
+        adapter = self._get_adapter(DBMSType.from_engine(engine))
+        query, params = adapter.build_metadata_columns_query(data_ref)
+        columns_meta = self._execute_query((query, params), engine)
+        if columns_meta.empty:
+            raise ValueError(f'Failed to get metadata for: {data_ref.full_name}')
+        return columns_meta
 
-        common_columns = pd.merge(
-            source_columns_meta,
-            target_columns_meta,
-            on='column_name',
-            suffixes=('_source', '_target'),
-        )
+    def _get_metadata_pk(self, data_ref: DataReference, engine: Engine) -> pd.DataFrame:
+        adapter = self._get_adapter(DBMSType.from_engine(engine))
+        query, params = adapter.build_primary_key_query(data_ref)
+        return self._execute_query((query, params), engine)
 
-        source_set = set(source_columns)
-        target_set = set(target_columns)
+    def _get_object_type(self, data_ref: DataReference, engine: Engine):
+        adapter = self._get_adapter(DBMSType.from_engine(engine))
+        return adapter.get_object_type(data_ref, engine)
 
-        source_unique = list(source_set - target_set)
-        target_unique = list(target_set - source_set)
-
-        return common_columns, source_unique, target_unique
+    def _get_adapter(self, db_type: DBMSType) -> BaseDatabaseAdapter:
+        try:
+            return self.adapters[db_type]
+        except KeyError:
+            raise ValueError(f'No adapter available for {db_type}')
 
     def _validate_inputs(self, source: DataReference, target: DataReference):
-        """Validate that source and target are DataReference instances."""
         if not isinstance(source, DataReference):
             raise TypeError('source must be a DataReference')
         if not isinstance(target, DataReference):
