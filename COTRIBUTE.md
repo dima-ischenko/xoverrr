@@ -68,7 +68,7 @@ After merge to `main`: **Actions** -> left sidebar **CI** or **Integration tests
 Publish only from `main`, with a version tag that matches both `pyproject.toml` and `src/xoverrr/version.py`.
 
 1. Merge the work into `main`.
-2. Set the same version in `pyproject.toml` and `src/xoverrr/version.py` (for example `1.4.6`).
+2. Set the same version in `pyproject.toml` and `src/xoverrr/version.py`.
 3. Create and push an annotated tag:
 
 ```bash
