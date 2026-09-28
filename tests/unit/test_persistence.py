@@ -13,7 +13,7 @@ from xoverrr.persistence import (CheckResultPersister, CheckRunTimings,
                                  validate_run_id)
 from xoverrr.reporting import (build_check_result, format_check_result,
                                validate_report_output_format)
-from xoverrr.utils import CheckDetails, CheckStats
+from xoverrr.stats import CheckDetails, CheckStats
 
 RUN_STARTED_AT = '2026-01-01 00:00:00'
 RUN_FINISHED_AT = '2026-01-01 00:00:05'

@@ -1,4 +1,4 @@
-"""DataFrame comparison, preparation, and sniff-query evaluation."""
+"""DataFrame comparison and preparation."""
 
 from collections import defaultdict
 from typing import List, Tuple
@@ -7,73 +7,9 @@ import numpy as np
 import pandas as pd
 
 from .constants import (DEFAULT_MAX_EXAMPLES, FLAG_VALUE_YES, NULL_REPLACEMENT,
-                        XRECENTLY_CHANGED_COLUMN, XSNIFF_PASSED_COLUMN,
-                        XSNIFF_PASSED_VALUE_NO)
+                        XRECENTLY_CHANGED_COLUMN)
 from .logger import app_logger
-from .stats import (CheckDetails, CheckStats, build_check_stats,
-                    build_sniff_issue_stats, normalize_column_names)
-
-
-def resolve_check_sniff_query_passed_column(columns: List[str]) -> str:
-    """
-    Resolve the sniff-query pass/fail flag column.
-
-    Row-level and scalar checks both use ``xsniff_passed``
-    (``y`` = passed, ``n`` = failed).
-    """
-    normalized_columns = normalize_column_names(columns)
-    if XSNIFF_PASSED_COLUMN not in normalized_columns:
-        raise ValueError(
-            f"Sniff query requires '{XSNIFF_PASSED_COLUMN}' column; "
-            f'got columns: {", ".join(normalized_columns)}'
-        )
-    return XSNIFF_PASSED_COLUMN
-
-
-def evaluate_check_sniff_query_data(
-    df: pd.DataFrame,
-    max_examples: int = DEFAULT_MAX_EXAMPLES,
-) -> Tuple[CheckStats, CheckDetails]:
-    """
-    Classify rows from a check_sniff_query using ``xsniff_passed``.
-
-    ``y`` means passed, ``n`` means failed.
-    """
-    prepared_df = prepare_dataframe(df)
-    passed_column = resolve_check_sniff_query_passed_column(
-        prepared_df.columns.tolist()
-    )
-
-    is_failed = prepared_df[passed_column] == XSNIFF_PASSED_VALUE_NO
-    issue_rows = int(is_failed.sum())
-    total_rows = len(prepared_df)
-    passed_rows = total_rows - issue_rows
-    stats = build_sniff_issue_stats(total_rows, passed_rows, issue_rows)
-
-    evaluated_columns = [
-        column for column in prepared_df.columns if column != passed_column
-    ]
-    # Keep all columns (including xsniff_passed) so scalar and row-level
-    # failures both have printable issue row examples.
-    issue_row_examples = prepared_df.loc[is_failed].head(max_examples)
-    issue_breakdown = (
-        prepared_df[passed_column]
-        .value_counts(dropna=False)
-        .rename_axis('status_value')
-        .reset_index(name='count')
-    )
-
-    details = CheckDetails(
-        issue_breakdown=issue_breakdown,
-        issue_examples=pd.DataFrame(),
-        dup_source_keys_examples=tuple(),
-        dup_target_keys_examples=tuple(),
-        source_only_keys_examples=tuple(),
-        target_only_keys_examples=tuple(),
-        issue_row_examples=issue_row_examples,
-        evaluated_columns=evaluated_columns,
-    )
-    return stats, details
+from .stats import CheckDetails, CheckStats, build_check_stats
 
 
 def compare_dataframes_meta(

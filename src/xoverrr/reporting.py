@@ -16,7 +16,7 @@ import pandas as pd
 
 from .constants import (DATETIME_FORMAT, REPORT_OUTPUT_FORMAT_JSON,
                         REPORT_OUTPUT_FORMAT_TEXT, REPORT_OUTPUT_FORMATS)
-from .stats import CheckDetails, CheckStats, sniff_issue_row_count
+from .stats import CheckDetails, CheckStats
 
 
 def format_report_collection(value) -> str:
@@ -441,7 +441,7 @@ def generate_check_sniff_query_report(
     lines.append('\nSUMMARY:')
     lines.append(f'  Checked rows: {stats.total_source_rows}')
     lines.append(f'  Passed rows: {stats.passed_rows}')
-    lines.append(f'  Issue rows: {sniff_issue_row_count(stats)}')
+    lines.append(f'  Issue rows: {max(0, stats.total_source_rows - stats.passed_rows)}')
     lines.append('-' * 40)
     lines.append(f'  Issue rows %: {stats.issue_rows_pct:.5f}')
     lines.append(f'  Final discrepancies score: {stats.final_diff_score:.5f}')

@@ -2,12 +2,11 @@ import pandas as pd
 import pytest
 
 from xoverrr.adapters.postgres import PostgresAdapter
+from xoverrr.compare import prepare_dataframe
 from xoverrr.constants import CHECK_FAILED, CHECK_SUCCESS
 from xoverrr.core import DataQualityChecker
 from xoverrr.models import DBMSType
 from xoverrr.persistence import CheckResultPersister
-from xoverrr.utils import prepare_dataframe
-
 
 INNER = (
     'SELECT id, amount, created_at FROM source_table WHERE created_at >= :start_date'

@@ -6,7 +6,7 @@ from xoverrr.adapters.oracle import OracleAdapter
 from xoverrr.adapters.postgres import PostgresAdapter
 from xoverrr.core import DataQualityChecker
 from xoverrr.models import DataReference
-from xoverrr.utils import normalize_hash_pct
+from xoverrr.stats import normalize_hash_pct
 
 
 def _meta(*pairs):
@@ -39,7 +39,7 @@ def test_postgres_hash_filter_covers_types_and_composite_keys():
     assert "to_char(created_at::date, 'YYYYMMDD')" in sql
     assert "to_char(updated_at::timestamp, 'YYYYMMDDHH24MISS')" in sql
     assert "case when is_active then '1'" in sql
-    assert "cast(id as text)" in sql
+    assert 'cast(id as text)' in sql
     assert " || '|' || " in sql
     assert sql.endswith('< 25')
 
@@ -96,7 +96,9 @@ def test_wrap_query_with_hash_sample():
         _meta(('id', 'integer'), ('amount', 'numeric')),
     )
 
-    assert wrapped.startswith('SELECT * FROM (SELECT id, amount FROM orders) x_hash WHERE ')
+    assert wrapped.startswith(
+        'SELECT * FROM (SELECT id, amount FROM orders) x_hash WHERE '
+    )
     assert 'md5' in wrapped
 
 

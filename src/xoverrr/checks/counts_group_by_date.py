@@ -12,8 +12,8 @@ from ..compare import cross_fill_missing_dates
 from ..logger import app_logger
 from ..models import DataReference
 from ..reporting import generate_count_report
-from ..stats import (CheckDetails, CheckStats, count_volume_scores,
-                     status_for_diff_score)
+from ..stats import CheckDetails, CheckStats, status_for_diff_score
+from .total_counts import count_volume_scores
 
 if TYPE_CHECKING:
     from ..core import DataQualityChecker
