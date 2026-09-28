@@ -351,7 +351,7 @@ class PostgresAdapter(BaseDatabaseAdapter):
 
     def hash_mod_predicate(self, concat_sql: str, percent: int) -> str:
         return (
-            f"(('x' || substring(md5(({concat_sql})), 1, 8))::bit(32)::bigint)"
+            f"(('x' || substring(md5({concat_sql}), 1, 8))::bit(32)::bigint)"
             f' % 100 < {percent}'
         )
 

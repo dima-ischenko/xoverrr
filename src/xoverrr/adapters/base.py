@@ -103,17 +103,22 @@ class BaseDatabaseAdapter(ABC):
         sum_columns: Optional[List[str]] = None,
         include_count: bool = False,
         table: Optional[str] = None,
+        where: Optional[str] = None,
     ) -> str:
         """Build MAX / SUM / COUNT(*) SQL for a table or an inner query."""
         projection = self.aggregate_projection(
             max_columns, sum_columns, include_count
         )
         if table:
-            return f'SELECT {projection} FROM {table}'
-        inner = self._strip_query(query)
-        if not inner:
-            raise ValueError('query is empty')
-        return f'SELECT {projection} FROM ({inner}) x_subq'
+            sql = f'SELECT {projection} FROM {table}'
+        else:
+            inner = self._strip_query(query)
+            if not inner:
+                raise ValueError('query is empty')
+            sql = f'SELECT {projection} FROM ({inner}) x_subq'
+        if where:
+            sql += f' WHERE {where}'
+        return sql
 
     @staticmethod
     def _strip_query(query: str) -> str:
@@ -161,7 +166,7 @@ class BaseDatabaseAdapter(ABC):
             )
             parts.append(f"coalesce({expr}, '')")
         concat = f" || '{HASH_KEY_SEPARATOR}' || ".join(parts)
-        return self.hash_mod_predicate(concat, percent)
+        return self.hash_mod_predicate(f'lower({concat})', percent)
 
     @staticmethod
     def _column_type_map(columns_meta: Optional[pd.DataFrame]) -> Dict[str, str]:

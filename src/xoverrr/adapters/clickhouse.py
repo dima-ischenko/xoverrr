@@ -291,11 +291,11 @@ class ClickHouseAdapter(BaseDatabaseAdapter):
             return f"formatDateTime({column}, '{HASH_DATE_FORMAT_CH}')"
         if data_type in {'bool', 'boolean'}:
             return f"if({column}, '1', '0')"
-        return f'toString({column})'
+        return f'tostring({column})'
 
     def hash_mod_predicate(self, concat_sql: str, percent: int) -> str:
         return (
-            'reinterpretAsUInt32(reverse(substring(MD5(toString('
+            'reinterpretasuint32(reverse(substring(md5(tostring('
             f'{concat_sql})), 1, 4))) % 100 < {percent}'
         )
 

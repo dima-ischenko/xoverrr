@@ -170,6 +170,50 @@ def test_check_aggregates_table_vs_query_returns_built_sql(monkeypatch):
     assert 'SELECT * FROM' not in result.report
 
 
+def test_check_aggregates_hash_filter_skips_extra_subquery(monkeypatch):
+    checker = _checker()
+    metadata = pd.DataFrame(
+        {'column_name': ['id', 'amount'], 'data_type': ['integer', 'numeric']}
+    )
+    executed = []
+
+    monkeypatch.setattr(
+        checker,
+        '_get_metadata_cols_for_custom_query',
+        lambda query, engine: metadata,
+    )
+    monkeypatch.setattr(checker, '_get_adapter', lambda db_type: _Adapter())
+
+    def _execute(query, engine, timezone=None, query_side=None):
+        sql = query[0] if isinstance(query, tuple) else query
+        executed.append(sql)
+        return prepare_dataframe(pd.DataFrame({'sum_amount': ['10']}))
+
+    monkeypatch.setattr(checker, '_execute_query', _execute)
+
+    result = checker.check_aggregates(
+        source=DataReference('orders', 'sales'),
+        target='SELECT id, amount FROM archive.orders',
+        sum_columns=['amount'],
+        hash_columns=['id'],
+        hash_pct=20,
+    )
+
+    assert result.status == CHECK_SUCCESS
+    assert executed[0].startswith(
+        'SELECT sum(amount) as sum_amount FROM sales.orders WHERE '
+    )
+    assert 'x_subq' not in executed[0]
+    assert 'x_hash' not in executed[0]
+    assert executed[1].startswith(
+        'SELECT sum(amount) as sum_amount '
+        'FROM (SELECT id, amount FROM archive.orders) x_subq WHERE '
+    )
+    assert 'x_hash' not in executed[1]
+    assert executed[0] in result.report
+    assert executed[1] in result.report
+
+
 def test_check_aggregates_uses_compare_dataframes(monkeypatch):
     checker = _checker()
     metadata = pd.DataFrame({'column_name': ['amount'], 'data_type': ['numeric']})

@@ -172,8 +172,7 @@ def _execute_aggregate(
 ) -> Tuple[pd.DataFrame, str, Dict]:
     engine = checker._side_engine(query_side)
     metadata = checker._get_metadata_cols_for_custom_query((query, params), engine)
-    inner = query
-    from_table = table
+    where = None
     if hash_pct:
         available = {str(name).lower() for name in metadata.get('column_name', [])}
         missing = [column for column in hash_columns or [] if column not in available]
@@ -181,16 +180,16 @@ def _execute_aggregate(
             raise ValueError(
                 f'hash_columns not present in {query_side} query: {missing}'
             )
-        inner = adapter.wrap_query_with_hash_sample(
-            query, hash_columns, hash_pct, metadata, checker.timezone
+        where = adapter.build_hash_filter(
+            hash_columns, hash_pct, metadata, checker.timezone
         )
-        from_table = None
     sql = adapter.build_aggregate_sql(
-        inner,
+        query,
         max_columns=max_columns,
         sum_columns=sum_columns,
         include_count=include_count,
-        table=from_table,
+        table=table,
+        where=where,
     )
     app_logger.info(f'{query_side} aggregate query:\n{sql}')
     frame = checker._run_converted(
