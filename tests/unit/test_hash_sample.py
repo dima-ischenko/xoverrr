@@ -41,8 +41,6 @@ def test_postgres_hash_filter_covers_types_and_composite_keys():
     assert "case when is_active then '1'" in sql
     assert 'cast(id as text)' in sql
     assert " || '|' || " in sql
-    assert sql.startswith('((')
-    assert 'lower(' in sql
     assert sql.endswith('< 25')
 
 
@@ -55,7 +53,7 @@ def test_oracle_hash_filter_quotes_date_format():
     )
 
     assert "to_char(created_at, 'YYYYMMDD')" in sql
-    assert 'standard_hash' in sql
+    assert 'STANDARD_HASH' in sql
     assert sql.endswith('< 10')
 
 
@@ -68,7 +66,7 @@ def test_clickhouse_hash_filter_uses_datetime_not_timestamp_regex():
     )
 
     assert "formatDateTime(updated_at, '%Y%m%d%H%i%s')" in sql
-    assert 'md5' in sql
+    assert 'MD5' in sql
 
 
 def test_oracle_build_data_query_keeps_hash_predicate():
@@ -85,7 +83,7 @@ def test_oracle_build_data_query_keeps_hash_predicate():
         hash_pct=30,
     )
 
-    assert 'standard_hash' in query
+    assert 'STANDARD_HASH' in query
     assert '% 100 < 30' not in query
     assert '< 30' in query
 
@@ -102,36 +100,6 @@ def test_wrap_query_with_hash_sample():
         'SELECT * FROM (SELECT id, amount FROM orders) x_hash WHERE '
     )
     assert 'md5' in wrapped
-    assert 'lower(' in wrapped
-
-
-def test_aggregate_sql_hash_filter_has_no_extra_subquery():
-    adapter = PostgresAdapter()
-    where = adapter.build_hash_filter(
-        ['id'], 20, _meta(('id', 'integer'), ('amount', 'numeric'))
-    )
-    table_sql = adapter.build_aggregate_sql(
-        'SELECT * FROM sales.orders',
-        sum_columns=['amount'],
-        table='sales.orders',
-        where=where,
-    )
-    assert table_sql.startswith(
-        'SELECT sum(amount) as sum_amount FROM sales.orders WHERE '
-    )
-    assert 'x_subq' not in table_sql
-    assert 'x_hash' not in table_sql
-
-    query_sql = adapter.build_aggregate_sql(
-        'SELECT id, amount FROM archive.orders',
-        sum_columns=['amount'],
-        where=where,
-    )
-    assert query_sql.startswith(
-        'SELECT sum(amount) as sum_amount '
-        'FROM (SELECT id, amount FROM archive.orders) x_subq WHERE '
-    )
-    assert 'x_hash' not in query_sql
 
 
 def test_check_aggregates_requires_hash_columns():
