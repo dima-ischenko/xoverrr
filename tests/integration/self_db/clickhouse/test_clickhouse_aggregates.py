@@ -1,4 +1,4 @@
-"""ClickHouse custom-query aggregate checks."""
+"""ClickHouse aggregate checks."""
 
 import pytest
 
@@ -6,11 +6,11 @@ from xoverrr.constants import CHECK_FAILED, CHECK_SUCCESS
 from xoverrr.core import DataQualityChecker
 
 
-class TestClickHouseCustomQueryAgg:
+class TestClickHouseAggregates:
     @pytest.fixture(autouse=True)
     def setup_agg_data(self, clickhouse_engine, table_helper):
-        source_table = 'test_ch_custom_query_agg_src'
-        target_table = 'test_ch_custom_query_agg_trg'
+        source_table = 'test_ch_aggregates_src'
+        target_table = 'test_ch_aggregates_trg'
 
         table_helper.create_table(
             engine=clickhouse_engine,
@@ -60,24 +60,24 @@ class TestClickHouseCustomQueryAgg:
         )
         source_query = """
             SELECT id, amount, created_at
-            FROM test_ch_custom_query_agg_src
+            FROM test_ch_aggregates_src
             WHERE created_at >= toDate(:start_date)
               AND created_at < toDate(:end_date)
               AND id < 3
         """
         target_query = """
             SELECT id, amount, created_at
-            FROM test_ch_custom_query_agg_trg
+            FROM test_ch_aggregates_trg
             WHERE created_at >= toDate(:start_date)
               AND created_at < toDate(:end_date)
               AND id < 3
         """
         params = {'start_date': '2024-01-01', 'end_date': '2024-01-04'}
 
-        result = checker.check_custom_queries_agg(
-            source_query=source_query,
+        result = checker.check_aggregates(
+            source=source_query,
             source_params=params,
-            target_query=target_query,
+            target=target_query,
             target_params=params,
             max_columns=['created_at'],
             sum_columns=['amount'],
@@ -97,9 +97,9 @@ class TestClickHouseCustomQueryAgg:
             FROM {table}
             WHERE id < 3
         """
-        result = checker.check_custom_queries_agg(
-            source_query=query.format(table='test_ch_custom_query_agg_src'),
-            target_query=query.format(table='test_ch_custom_query_agg_trg'),
+        result = checker.check_aggregates(
+            source=query.format(table='test_ch_aggregates_src'),
+            target=query.format(table='test_ch_aggregates_trg'),
             max_columns=['created_at', 'qty'],
             sum_columns=['amount', 'qty'],
             include_count=True,
@@ -113,14 +113,14 @@ class TestClickHouseCustomQueryAgg:
         checker = DataQualityChecker(
             clickhouse_engine, clickhouse_engine, timezone='UTC'
         )
-        result = checker.check_custom_queries_agg(
-            source_query="""
+        result = checker.check_aggregates(
+            source="""
                 SELECT qty, created_at
-                FROM test_ch_custom_query_agg_src
+                FROM test_ch_aggregates_src
             """,
-            target_query="""
+            target="""
                 SELECT qty, created_at
-                FROM test_ch_custom_query_agg_trg
+                FROM test_ch_aggregates_trg
                 WHERE id < 3
             """,
             max_columns=['created_at', 'qty'],
@@ -132,9 +132,9 @@ class TestClickHouseCustomQueryAgg:
         checker = DataQualityChecker(
             clickhouse_engine, clickhouse_engine, timezone='UTC'
         )
-        result = checker.check_custom_queries_agg(
-            source_query='SELECT amount, qty FROM test_ch_custom_query_agg_src',
-            target_query='SELECT amount, qty FROM test_ch_custom_query_agg_trg',
+        result = checker.check_aggregates(
+            source='SELECT amount, qty FROM test_ch_aggregates_src',
+            target='SELECT amount, qty FROM test_ch_aggregates_trg',
             sum_columns=['amount', 'qty'],
         )
 
@@ -144,9 +144,9 @@ class TestClickHouseCustomQueryAgg:
         checker = DataQualityChecker(
             clickhouse_engine, clickhouse_engine, timezone='UTC'
         )
-        result = checker.check_custom_queries_agg(
-            source_query='SELECT amount FROM test_ch_custom_query_agg_src',
-            target_query='SELECT amount FROM test_ch_custom_query_agg_trg',
+        result = checker.check_aggregates(
+            source='SELECT amount FROM test_ch_aggregates_src',
+            target='SELECT amount FROM test_ch_aggregates_trg',
             sum_columns=['amount'],
             include_count=True,
         )
@@ -157,11 +157,11 @@ class TestClickHouseCustomQueryAgg:
         checker = DataQualityChecker(
             clickhouse_engine, clickhouse_engine, timezone='UTC'
         )
-        result = checker.check_custom_queries_agg(
-            source_query='SELECT created_at FROM test_ch_custom_query_agg_src',
-            target_query="""
+        result = checker.check_aggregates(
+            source='SELECT created_at FROM test_ch_aggregates_src',
+            target="""
                 SELECT created_at
-                FROM test_ch_custom_query_agg_trg
+                FROM test_ch_aggregates_trg
                 WHERE created_at < toDate('2024-01-03')
             """,
             max_columns=['created_at'],
@@ -173,9 +173,9 @@ class TestClickHouseCustomQueryAgg:
         checker = DataQualityChecker(
             clickhouse_engine, clickhouse_engine, timezone='UTC'
         )
-        result = checker.check_custom_queries_agg(
-            source_query='SELECT id FROM test_ch_custom_query_agg_src',
-            target_query='SELECT id FROM test_ch_custom_query_agg_trg WHERE id < 3',
+        result = checker.check_aggregates(
+            source='SELECT id FROM test_ch_aggregates_src',
+            target='SELECT id FROM test_ch_aggregates_trg WHERE id < 3',
             include_count=True,
         )
 
@@ -185,14 +185,14 @@ class TestClickHouseCustomQueryAgg:
         checker = DataQualityChecker(
             clickhouse_engine, clickhouse_engine, timezone='UTC'
         )
-        result = checker.check_custom_queries_agg(
-            source_query="""
+        result = checker.check_aggregates(
+            source="""
                 SELECT amount, created_at
-                FROM test_ch_custom_query_agg_src
+                FROM test_ch_aggregates_src
             """,
-            target_query="""
+            target="""
                 SELECT amount, created_at
-                FROM test_ch_custom_query_agg_trg
+                FROM test_ch_aggregates_trg
                 WHERE id < 3
             """,
             max_columns=['created_at'],

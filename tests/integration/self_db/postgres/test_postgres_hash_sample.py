@@ -154,21 +154,21 @@ class TestPostgresHashSample:
         assert mismatch.status == CHECK_FAILED
         assert 'amount' in set(mismatch.details.issue_examples['column_name'])
 
-    def test_custom_queries_agg_match_and_mismatch(self, postgres_engine):
+    def test_aggregates_match_and_mismatch(self, postgres_engine):
         checker = self._checker(postgres_engine)
         query = 'SELECT id, amount, created_at FROM test.test_pg_hash_sample_src'
-        match = checker.check_custom_queries_agg(
-            source_query=query,
-            target_query=query.replace('_src', '_trg'),
+        match = checker.check_aggregates(
+            source=query,
+            target=query.replace('_src', '_trg'),
             max_columns=['created_at'],
             sum_columns=['amount'],
             include_count=True,
             hash_columns=['id'],
             hash_pct=HASH_PCT,
         )
-        mismatch = checker.check_custom_queries_agg(
-            source_query=query,
-            target_query="""
+        mismatch = checker.check_aggregates(
+            source=query,
+            target="""
                 SELECT id, amount + 5 AS amount, created_at
                 FROM test.test_pg_hash_sample_trg
             """,

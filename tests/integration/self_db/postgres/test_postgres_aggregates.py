@@ -1,16 +1,17 @@
-"""PostgreSQL custom-query aggregate checks."""
+"""PostgreSQL aggregate checks."""
 
 import pytest
 
 from xoverrr.constants import CHECK_FAILED, CHECK_SUCCESS
 from xoverrr.core import DataQualityChecker
+from xoverrr.models import DataReference
 
 
-class TestPostgresCustomQueryAgg:
+class TestPostgresAggregates:
     @pytest.fixture(autouse=True)
     def setup_agg_data(self, postgres_engine, table_helper):
-        source_table = 'test_pg_custom_query_agg_src'
-        target_table = 'test_pg_custom_query_agg_trg'
+        source_table = 'test_pg_aggregates_src'
+        target_table = 'test_pg_aggregates_trg'
 
         table_helper.create_table(
             engine=postgres_engine,
@@ -56,24 +57,24 @@ class TestPostgresCustomQueryAgg:
         checker = DataQualityChecker(postgres_engine, postgres_engine, timezone='UTC')
         source_query = """
             SELECT id, amount, created_at
-            FROM test.test_pg_custom_query_agg_src
+            FROM test.test_pg_aggregates_src
             WHERE created_at >= cast(:start_date as date)
               AND created_at < cast(:end_date as date)
               AND id < 3
         """
         target_query = """
             SELECT id, amount, created_at
-            FROM test.test_pg_custom_query_agg_trg
+            FROM test.test_pg_aggregates_trg
             WHERE created_at >= cast(:start_date as date)
               AND created_at < cast(:end_date as date)
               AND id < 3
         """
         params = {'start_date': '2024-01-01', 'end_date': '2024-01-04'}
 
-        result = checker.check_custom_queries_agg(
-            source_query=source_query,
+        result = checker.check_aggregates(
+            source=source_query,
             source_params=params,
-            target_query=target_query,
+            target=target_query,
             target_params=params,
             max_columns=['created_at'],
             sum_columns=['amount'],
@@ -91,9 +92,9 @@ class TestPostgresCustomQueryAgg:
             FROM {table}
             WHERE id < 3
         """
-        result = checker.check_custom_queries_agg(
-            source_query=query.format(table='test.test_pg_custom_query_agg_src'),
-            target_query=query.format(table='test.test_pg_custom_query_agg_trg'),
+        result = checker.check_aggregates(
+            source=query.format(table='test.test_pg_aggregates_src'),
+            target=query.format(table='test.test_pg_aggregates_trg'),
             max_columns=['created_at', 'updated_at', 'qty'],
             sum_columns=['amount', 'qty'],
             include_count=True,
@@ -105,14 +106,14 @@ class TestPostgresCustomQueryAgg:
 
     def test_multiple_max_mismatch(self, postgres_engine):
         checker = DataQualityChecker(postgres_engine, postgres_engine, timezone='UTC')
-        result = checker.check_custom_queries_agg(
-            source_query="""
+        result = checker.check_aggregates(
+            source="""
                 SELECT qty, created_at, updated_at
-                FROM test.test_pg_custom_query_agg_src
+                FROM test.test_pg_aggregates_src
             """,
-            target_query="""
+            target="""
                 SELECT qty, created_at, updated_at
-                FROM test.test_pg_custom_query_agg_trg
+                FROM test.test_pg_aggregates_trg
                 WHERE id < 3
             """,
             max_columns=['created_at', 'updated_at', 'qty'],
@@ -124,9 +125,9 @@ class TestPostgresCustomQueryAgg:
 
     def test_multiple_sum_mismatch(self, postgres_engine):
         checker = DataQualityChecker(postgres_engine, postgres_engine, timezone='UTC')
-        result = checker.check_custom_queries_agg(
-            source_query='SELECT amount, qty FROM test.test_pg_custom_query_agg_src',
-            target_query='SELECT amount, qty FROM test.test_pg_custom_query_agg_trg',
+        result = checker.check_aggregates(
+            source='SELECT amount, qty FROM test.test_pg_aggregates_src',
+            target='SELECT amount, qty FROM test.test_pg_aggregates_trg',
             sum_columns=['amount', 'qty'],
         )
 
@@ -134,9 +135,9 @@ class TestPostgresCustomQueryAgg:
 
     def test_sum_mismatch(self, postgres_engine):
         checker = DataQualityChecker(postgres_engine, postgres_engine, timezone='UTC')
-        result = checker.check_custom_queries_agg(
-            source_query='SELECT amount FROM test.test_pg_custom_query_agg_src',
-            target_query='SELECT amount FROM test.test_pg_custom_query_agg_trg',
+        result = checker.check_aggregates(
+            source='SELECT amount FROM test.test_pg_aggregates_src',
+            target='SELECT amount FROM test.test_pg_aggregates_trg',
             sum_columns=['amount'],
             include_count=True,
         )
@@ -145,11 +146,11 @@ class TestPostgresCustomQueryAgg:
 
     def test_max_mismatch(self, postgres_engine):
         checker = DataQualityChecker(postgres_engine, postgres_engine, timezone='UTC')
-        result = checker.check_custom_queries_agg(
-            source_query='SELECT created_at FROM test.test_pg_custom_query_agg_src',
-            target_query="""
+        result = checker.check_aggregates(
+            source='SELECT created_at FROM test.test_pg_aggregates_src',
+            target="""
                 SELECT created_at
-                FROM test.test_pg_custom_query_agg_trg
+                FROM test.test_pg_aggregates_trg
                 WHERE created_at < DATE '2024-01-03'
             """,
             max_columns=['created_at'],
@@ -159,9 +160,9 @@ class TestPostgresCustomQueryAgg:
 
     def test_count_only_mismatch(self, postgres_engine):
         checker = DataQualityChecker(postgres_engine, postgres_engine, timezone='UTC')
-        result = checker.check_custom_queries_agg(
-            source_query='SELECT id FROM test.test_pg_custom_query_agg_src',
-            target_query='SELECT id FROM test.test_pg_custom_query_agg_trg WHERE id < 3',
+        result = checker.check_aggregates(
+            source='SELECT id FROM test.test_pg_aggregates_src',
+            target='SELECT id FROM test.test_pg_aggregates_trg WHERE id < 3',
             include_count=True,
         )
 
@@ -169,14 +170,14 @@ class TestPostgresCustomQueryAgg:
 
     def test_max_and_sum_mismatch(self, postgres_engine):
         checker = DataQualityChecker(postgres_engine, postgres_engine, timezone='UTC')
-        result = checker.check_custom_queries_agg(
-            source_query="""
+        result = checker.check_aggregates(
+            source="""
                 SELECT amount, created_at
-                FROM test.test_pg_custom_query_agg_src
+                FROM test.test_pg_aggregates_src
             """,
-            target_query="""
+            target="""
                 SELECT amount, created_at
-                FROM test.test_pg_custom_query_agg_trg
+                FROM test.test_pg_aggregates_trg
                 WHERE id < 3
             """,
             max_columns=['created_at'],
@@ -184,6 +185,38 @@ class TestPostgresCustomQueryAgg:
         )
 
         self._assert_failed(result, expected_columns={'max_created_at', 'sum_amount'})
+
+    def test_aggregates_table_vs_table_mismatch(self, postgres_engine):
+        checker = DataQualityChecker(postgres_engine, postgres_engine, timezone='UTC')
+        result = checker.check_aggregates(
+            source=DataReference('test_pg_aggregates_src', schema='test'),
+            target=DataReference('test_pg_aggregates_trg', schema='test'),
+            sum_columns=['amount'],
+            include_count=True,
+        )
+        self._assert_failed(result, expected_columns={'sum_amount'})
+        assert result.source_table == 'test.test_pg_aggregates_src'
+        assert result.target_table == 'test.test_pg_aggregates_trg'
+
+    def test_aggregates_query_vs_table_mismatch(self, postgres_engine):
+        checker = DataQualityChecker(postgres_engine, postgres_engine, timezone='UTC')
+        result = checker.check_aggregates(
+            source='SELECT amount FROM test.test_pg_aggregates_src WHERE id < 3',
+            target=DataReference('test_pg_aggregates_trg', schema='test'),
+            sum_columns=['amount'],
+        )
+        self._assert_failed(result, expected_columns={'sum_amount'})
+        assert result.source_table is None
+        assert result.target_table == 'test.test_pg_aggregates_trg'
+
+    def test_aggregates_table_vs_query_mismatch(self, postgres_engine):
+        checker = DataQualityChecker(postgres_engine, postgres_engine, timezone='UTC')
+        result = checker.check_aggregates(
+            source=DataReference('test_pg_aggregates_src', schema='test'),
+            target='SELECT amount FROM test.test_pg_aggregates_trg WHERE id < 3',
+            sum_columns=['amount'],
+        )
+        self._assert_failed(result, expected_columns={'sum_amount'})
 
     @staticmethod
     def _assert_failed(result, expected_columns):

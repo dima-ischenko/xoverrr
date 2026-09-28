@@ -78,14 +78,14 @@ class BaseDatabaseAdapter(ABC):
         )
         return query + extra_sql, params
 
-    def build_custom_query_aggregate_sql(
+    def build_aggregate_sql(
         self,
         query: str,
         max_columns: Optional[List[str]] = None,
         sum_columns: Optional[List[str]] = None,
         include_count: bool = False,
     ) -> str:
-        """Wrap a custom query so the database computes MAX / SUM / COUNT(*)."""
+        """Wrap a relation so the database computes MAX / SUM / COUNT(*)."""
         select_parts = []
         for column in self._normalize_aggregate_columns(max_columns):
             select_parts.append(f'max({column}) as max_{column}')

@@ -1,4 +1,4 @@
-"""Custom-query aggregate check between Oracle and PostgreSQL."""
+"""Aggregate check between Oracle and PostgreSQL."""
 
 import pytest
 
@@ -6,10 +6,10 @@ from xoverrr.constants import CHECK_FAILED, CHECK_SUCCESS
 from xoverrr.core import DataQualityChecker
 
 
-class TestOraPgCustomQueryAgg:
+class TestOraPgAggregates:
     @pytest.fixture(autouse=True)
     def setup_agg_data(self, oracle_engine, postgres_engine, table_helper):
-        table_name = 'test_ora_pg_custom_query_agg'
+        table_name = 'test_ora_pg_aggregates'
 
         table_helper.create_table(
             engine=oracle_engine,
@@ -55,17 +55,17 @@ class TestOraPgCustomQueryAgg:
             target_engine=postgres_engine,
             timezone='UTC',
         )
-        result = checker.check_custom_queries_agg(
-            source_query="""
+        result = checker.check_aggregates(
+            source="""
                 SELECT amount, created_at
-                FROM test.test_ora_pg_custom_query_agg
+                FROM test.test_ora_pg_aggregates
                 WHERE created_at >= trunc(to_date(:start_date, 'YYYY-MM-DD'), 'dd')
                   AND created_at < trunc(to_date(:end_date, 'YYYY-MM-DD'), 'dd') + 1
             """,
             source_params={'start_date': '2024-01-01', 'end_date': '2024-01-03'},
-            target_query="""
+            target="""
                 SELECT amount, created_at
-                FROM test.test_ora_pg_custom_query_agg
+                FROM test.test_ora_pg_aggregates
                 WHERE created_at >= date_trunc('day', cast(:start_date as date))
                   AND created_at < date_trunc('day', cast(:end_date as date)) + interval '1 day'
             """,
@@ -80,15 +80,15 @@ class TestOraPgCustomQueryAgg:
 
     def test_multiple_max_and_sum_match(self, oracle_engine, postgres_engine):
         checker = self._checker(oracle_engine, postgres_engine)
-        result = checker.check_custom_queries_agg(
-            source_query="""
+        result = checker.check_aggregates(
+            source="""
                 SELECT amount, qty, created_at
-                FROM test.test_ora_pg_custom_query_agg
+                FROM test.test_ora_pg_aggregates
                 WHERE id < 3
             """,
-            target_query="""
+            target="""
                 SELECT amount, qty, created_at
-                FROM test.test_ora_pg_custom_query_agg
+                FROM test.test_ora_pg_aggregates
                 WHERE id < 3
             """,
             max_columns=['created_at', 'qty'],
@@ -102,14 +102,14 @@ class TestOraPgCustomQueryAgg:
 
     def test_multiple_max_mismatch(self, oracle_engine, postgres_engine):
         checker = self._checker(oracle_engine, postgres_engine)
-        result = checker.check_custom_queries_agg(
-            source_query="""
+        result = checker.check_aggregates(
+            source="""
                 SELECT qty, created_at
-                FROM test.test_ora_pg_custom_query_agg
+                FROM test.test_ora_pg_aggregates
             """,
-            target_query="""
+            target="""
                 SELECT qty, created_at
-                FROM test.test_ora_pg_custom_query_agg
+                FROM test.test_ora_pg_aggregates
                 WHERE id < 3
             """,
             max_columns=['created_at', 'qty'],
@@ -119,14 +119,14 @@ class TestOraPgCustomQueryAgg:
 
     def test_multiple_sum_mismatch(self, oracle_engine, postgres_engine):
         checker = self._checker(oracle_engine, postgres_engine)
-        result = checker.check_custom_queries_agg(
-            source_query="""
+        result = checker.check_aggregates(
+            source="""
                 SELECT amount, qty
-                FROM test.test_ora_pg_custom_query_agg
+                FROM test.test_ora_pg_aggregates
             """,
-            target_query="""
+            target="""
                 SELECT amount, qty
-                FROM test.test_ora_pg_custom_query_agg
+                FROM test.test_ora_pg_aggregates
                 WHERE id < 3
             """,
             sum_columns=['amount', 'qty'],
@@ -136,14 +136,14 @@ class TestOraPgCustomQueryAgg:
 
     def test_sum_and_count_mismatch(self, oracle_engine, postgres_engine):
         checker = self._checker(oracle_engine, postgres_engine)
-        result = checker.check_custom_queries_agg(
-            source_query="""
+        result = checker.check_aggregates(
+            source="""
                 SELECT amount
-                FROM test.test_ora_pg_custom_query_agg
+                FROM test.test_ora_pg_aggregates
             """,
-            target_query="""
+            target="""
                 SELECT amount
-                FROM test.test_ora_pg_custom_query_agg
+                FROM test.test_ora_pg_aggregates
                 WHERE id < 3
             """,
             sum_columns=['amount'],
@@ -154,14 +154,14 @@ class TestOraPgCustomQueryAgg:
 
     def test_max_mismatch(self, oracle_engine, postgres_engine):
         checker = self._checker(oracle_engine, postgres_engine)
-        result = checker.check_custom_queries_agg(
-            source_query="""
+        result = checker.check_aggregates(
+            source="""
                 SELECT created_at
-                FROM test.test_ora_pg_custom_query_agg
+                FROM test.test_ora_pg_aggregates
             """,
-            target_query="""
+            target="""
                 SELECT created_at
-                FROM test.test_ora_pg_custom_query_agg
+                FROM test.test_ora_pg_aggregates
                 WHERE created_at < DATE '2024-01-03'
             """,
             max_columns=['created_at'],
@@ -171,14 +171,14 @@ class TestOraPgCustomQueryAgg:
 
     def test_count_only_mismatch(self, oracle_engine, postgres_engine):
         checker = self._checker(oracle_engine, postgres_engine)
-        result = checker.check_custom_queries_agg(
-            source_query="""
+        result = checker.check_aggregates(
+            source="""
                 SELECT id
-                FROM test.test_ora_pg_custom_query_agg
+                FROM test.test_ora_pg_aggregates
             """,
-            target_query="""
+            target="""
                 SELECT id
-                FROM test.test_ora_pg_custom_query_agg
+                FROM test.test_ora_pg_aggregates
                 WHERE id < 3
             """,
             include_count=True,
@@ -188,14 +188,14 @@ class TestOraPgCustomQueryAgg:
 
     def test_max_and_sum_mismatch(self, oracle_engine, postgres_engine):
         checker = self._checker(oracle_engine, postgres_engine)
-        result = checker.check_custom_queries_agg(
-            source_query="""
+        result = checker.check_aggregates(
+            source="""
                 SELECT amount, created_at
-                FROM test.test_ora_pg_custom_query_agg
+                FROM test.test_ora_pg_aggregates
             """,
-            target_query="""
+            target="""
                 SELECT amount, created_at
-                FROM test.test_ora_pg_custom_query_agg
+                FROM test.test_ora_pg_aggregates
                 WHERE id < 3
             """,
             max_columns=['created_at'],

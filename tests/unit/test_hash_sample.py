@@ -102,15 +102,15 @@ def test_wrap_query_with_hash_sample():
     assert 'md5' in wrapped
 
 
-def test_check_custom_queries_agg_requires_hash_columns():
+def test_check_aggregates_requires_hash_columns():
     checker = DataQualityChecker.__new__(DataQualityChecker)
     checker.source_engine = object()
     checker.target_engine = object()
 
     with pytest.raises(ValueError, match='hash_columns'):
-        checker.check_custom_queries_agg(
-            source_query='select 1 as amount',
-            target_query='select 1 as amount',
+        checker.check_aggregates(
+            source='select 1 as amount',
+            target='select 1 as amount',
             sum_columns=['amount'],
             hash_pct=20,
         )

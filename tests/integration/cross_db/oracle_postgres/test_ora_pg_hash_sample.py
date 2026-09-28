@@ -127,15 +127,13 @@ class TestOraPgHashSample:
         assert 'amount' in set(result.details.issue_examples['column_name'])
         self._assert_sampled(result)
 
-    def test_custom_queries_agg_match_and_mismatch(
-        self, oracle_engine, postgres_engine
-    ):
+    def test_aggregates_match_and_mismatch(self, oracle_engine, postgres_engine):
         checker = self._checker(oracle_engine, postgres_engine)
-        match = checker.check_custom_queries_agg(
-            source_query="""
+        match = checker.check_aggregates(
+            source="""
                 SELECT id, amount, created_at FROM test.test_ora_pg_hash_sample
             """,
-            target_query="""
+            target="""
                 SELECT id, amount, created_at FROM test.test_ora_pg_hash_sample
             """,
             max_columns=['created_at'],
@@ -144,11 +142,11 @@ class TestOraPgHashSample:
             hash_columns=['id'],
             hash_pct=HASH_PCT,
         )
-        mismatch = checker.check_custom_queries_agg(
-            source_query="""
+        mismatch = checker.check_aggregates(
+            source="""
                 SELECT id, code, amount FROM test.test_ora_pg_hash_sample
             """,
-            target_query="""
+            target="""
                 SELECT id, code, amount + 5 AS amount
                 FROM test.test_ora_pg_hash_sample
             """,

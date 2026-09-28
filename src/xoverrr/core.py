@@ -8,9 +8,9 @@ from .adapters.base import BaseDatabaseAdapter
 from .adapters.clickhouse import ClickHouseAdapter
 from .adapters.oracle import OracleAdapter
 from .adapters.postgres import PostgresAdapter
+from .checks.aggregates import resolve_aggregate_relation, run_aggregates
 from .checks.counts_group_by_date import run_counts_group_by_date
 from .checks.custom_queries import run_custom_queries
-from .checks.custom_queries_agg import run_custom_queries_agg
 from .checks.samples import run_samples
 from .checks.sniff import run_sniff_query
 from .checks.total_counts import run_total_counts
@@ -402,10 +402,10 @@ class DataQualityChecker:
             identity=identity,
         )
 
-    def check_custom_queries_agg(
+    def check_aggregates(
         self,
-        source_query: str,
-        target_query: str,
+        source: Union[DataReference, str],
+        target: Union[DataReference, str],
         source_params: Optional[Dict] = None,
         target_params: Optional[Dict] = None,
         max_columns: Optional[List[str]] = None,
@@ -419,13 +419,17 @@ class DataQualityChecker:
         hash_pct: Optional[int] = None,
     ) -> CheckResult:
         """
-        Compare MAX, SUM, and optional COUNT(*) of two custom queries.
+        Compare MAX, SUM, and optional COUNT(*) of two tables and/or queries.
 
-        The adapter wraps each query as
+        ``source`` and ``target`` may each be a :class:`DataReference` or a
+        SQL string. A table is wrapped as ``SELECT * FROM schema.table``.
+        Bind parameters are allowed only on a SQL side.
+
+        The adapter wraps each inner relation as
         ``SELECT max(col) AS max_col, sum(col) AS sum_col, count(*) AS cnt
         FROM (<query>) x_subq``.
 
-        Date filters belong in the queries, via ``source_params`` and
+        Date filters belong in SQL, via ``source_params`` and
         ``target_params``. The check succeeds only when every aggregate
         matches (``final_score`` 100); otherwise it fails (``final_score`` 0).
 
@@ -434,8 +438,12 @@ class DataQualityChecker:
             ``stats``, and ``details``.
         """
         self._require_target_engine()
-        source_params = source_params or {}
-        target_params = target_params or {}
+        source_query, source_params, source_table = resolve_aggregate_relation(
+            source, source_params, 'source'
+        )
+        target_query, target_params, target_table = resolve_aggregate_relation(
+            target, target_params, 'target'
+        )
         if not max_columns and not sum_columns and not include_count:
             raise ValueError('max_columns, sum_columns, or include_count is required')
         hash_pct = normalize_hash_pct(hash_pct)
@@ -443,8 +451,19 @@ class DataQualityChecker:
         if hash_pct and not hash_columns:
             raise ValueError('hash_columns is required when hash_pct is set')
 
+        identity = {
+            'source_query': source_query,
+            'source_params': source_params,
+            'target_query': target_query,
+            'target_params': target_params,
+        }
+        if source_table:
+            identity['source_table'] = source_table
+        if target_table:
+            identity['target_table'] = target_table
+
         return self._run_check(
-            impl=run_custom_queries_agg,
+            impl=run_aggregates,
             impl_kwargs=dict(
                 source_query=source_query,
                 target_query=target_query,
@@ -455,17 +474,16 @@ class DataQualityChecker:
                 include_count=include_count,
                 hash_columns=hash_columns,
                 hash_pct=hash_pct,
+                source_table=source_table,
+                target_table=target_table,
             ),
-            check_type=ct.CHECK_TYPE_CUSTOM_QUERIES_AGG,
+            check_type=ct.CHECK_TYPE_AGGREGATES,
             check_name=check_name,
             persist_result=persist_result,
             check_tags=check_tags,
             report_output_format=report_output_format,
-            fail_message='Custom query aggregate check failed',
-            source_query=source_query,
-            source_params=source_params,
-            target_query=target_query,
-            target_params=target_params,
+            fail_message='Aggregate check failed',
+            identity=identity,
         )
 
     def _start_check_run(
@@ -714,6 +732,6 @@ class DataQualityChecker:
         if self.target_engine is None:
             raise ValueError(
                 'target_engine is required for check_samples, check_counts_group_by_date, '
-                'check_total_counts, check_custom_queries, and check_custom_queries_agg'
+                'check_total_counts, check_custom_queries, and check_aggregates'
             )
         return self.target_engine

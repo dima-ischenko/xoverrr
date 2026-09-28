@@ -107,20 +107,20 @@ class TestClickHouseHashSample:
         assert 'amount' in set(result.details.issue_examples['column_name'])
         self._assert_sampled(result)
 
-    def test_custom_queries_agg_match_and_mismatch(self, clickhouse_engine):
+    def test_aggregates_match_and_mismatch(self, clickhouse_engine):
         checker = self._checker(clickhouse_engine)
-        match = checker.check_custom_queries_agg(
-            source_query='SELECT id, amount, created_at FROM test_ch_hash_sample_src',
-            target_query='SELECT id, amount, created_at FROM test_ch_hash_sample_trg',
+        match = checker.check_aggregates(
+            source='SELECT id, amount, created_at FROM test_ch_hash_sample_src',
+            target='SELECT id, amount, created_at FROM test_ch_hash_sample_trg',
             max_columns=['created_at'],
             sum_columns=['amount'],
             include_count=True,
             hash_columns=['id'],
             hash_pct=HASH_PCT,
         )
-        mismatch = checker.check_custom_queries_agg(
-            source_query='SELECT id, amount FROM test_ch_hash_sample_src',
-            target_query='SELECT id, amount + 5 AS amount FROM test_ch_hash_sample_trg',
+        mismatch = checker.check_aggregates(
+            source='SELECT id, amount FROM test_ch_hash_sample_src',
+            target='SELECT id, amount + 5 AS amount FROM test_ch_hash_sample_trg',
             sum_columns=['amount'],
             hash_columns=['id'],
             hash_pct=HASH_PCT,

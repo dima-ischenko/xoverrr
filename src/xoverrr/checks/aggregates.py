@@ -1,19 +1,43 @@
-"""MAX / SUM / COUNT(*) comparison of two custom SQL queries."""
+"""MAX / SUM / COUNT(*) comparison of tables and/or SQL queries."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
 
 from .. import constants as ct
 from ..compare import prepare_dataframe
 from ..logger import app_logger
-from ..reporting import generate_custom_query_agg_report
+from ..models import DataReference
+from ..reporting import generate_aggregates_report
 from ..stats import CheckDetails, CheckStats, quality_scores
 
 if TYPE_CHECKING:
     from ..core import DataQualityChecker
+
+AggregateRelation = Union[DataReference, str]
+
+
+def resolve_aggregate_relation(
+    relation: AggregateRelation,
+    params: Optional[Dict],
+    side: str,
+) -> Tuple[str, Dict, Optional[str]]:
+    """Return ``(query, params, table_name)`` for one aggregate side."""
+    params = dict(params or {})
+    if isinstance(relation, DataReference):
+        if params:
+            raise ValueError(f'{side}_params is only valid when {side} is a SQL query')
+        return f'SELECT * FROM {relation.full_name}', {}, relation.full_name
+    if isinstance(relation, str):
+        query = relation.strip()
+        if not query:
+            raise ValueError(f'{side} query is empty')
+        return query, params, None
+    raise TypeError(
+        f'{side} must be a DataReference or a SQL string, got {type(relation).__name__}'
+    )
 
 
 def _aggregate_result_metadata(
@@ -50,7 +74,7 @@ def _aggregate_result_metadata(
     return pd.DataFrame(rows)
 
 
-def run_custom_queries_agg(
+def run_aggregates(
     checker: DataQualityChecker,
     source_query: str,
     target_query: str,
@@ -61,10 +85,12 @@ def run_custom_queries_agg(
     include_count: bool,
     hash_columns: List[str],
     hash_pct: Optional[int],
+    source_table: Optional[str] = None,
+    target_table: Optional[str] = None,
 ) -> Tuple[str, Optional[str], Optional[CheckStats], Optional[CheckDetails]]:
     source_adapter = checker._adapter('source')
     target_adapter = checker._adapter('target')
-    source_data = _execute_custom_agg(
+    source_data = _execute_aggregate(
         checker,
         source_query,
         source_params,
@@ -76,7 +102,7 @@ def run_custom_queries_agg(
         hash_columns=hash_columns,
         hash_pct=hash_pct,
     )
-    target_data = _execute_custom_agg(
+    target_data = _execute_aggregate(
         checker,
         target_query,
         target_params,
@@ -105,7 +131,7 @@ def run_custom_queries_agg(
         0.0 if matched else 100.0
     )
     status = ct.CHECK_SUCCESS if matched else ct.CHECK_FAILED
-    draft_report = generate_custom_query_agg_report(
+    draft_report = generate_aggregates_report(
         stats,
         details,
         checker.timezone,
@@ -117,12 +143,14 @@ def run_custom_queries_agg(
         target_params,
         hash_columns=hash_columns,
         hash_pct=hash_pct,
+        source_table=source_table,
+        target_table=target_table,
         **checker._report_context,
     )
     return status, draft_report, stats, details
 
 
-def _execute_custom_agg(
+def _execute_aggregate(
     checker: DataQualityChecker,
     query: str,
     params: Dict,
@@ -146,7 +174,7 @@ def _execute_custom_agg(
         query = adapter.wrap_query_with_hash_sample(
             query, hash_columns, hash_pct, metadata, checker.timezone
         )
-    sql = adapter.build_custom_query_aggregate_sql(
+    sql = adapter.build_aggregate_sql(
         query,
         max_columns=max_columns,
         sum_columns=sum_columns,

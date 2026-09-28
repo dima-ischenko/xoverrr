@@ -625,7 +625,7 @@ def generate_total_count_report(
     return '\n'.join(lines)
 
 
-def generate_custom_query_agg_report(
+def generate_aggregates_report(
     stats: CheckStats,
     details: CheckDetails,
     timezone: str,
@@ -640,8 +640,10 @@ def generate_custom_query_agg_report(
     target_db_type: Optional[str] = None,
     hash_columns: Optional[List[str]] = None,
     hash_pct: Optional[int] = None,
+    source_table: Optional[str] = None,
+    target_table: Optional[str] = None,
 ) -> str:
-    """Generate a text report for a custom-query aggregate comparison."""
+    """Generate a text report for an aggregate comparison."""
     lines = []
     append_report_run_header(
         lines,
@@ -653,18 +655,25 @@ def generate_custom_query_agg_report(
         hash_columns=hash_columns,
         hash_pct=hash_pct,
     )
-    lines.append('CUSTOM QUERIES AGG CHECK REPORT:')
+    lines.append('AGGREGATES CHECK REPORT:')
+    if source_table or target_table:
+        lines.append(source_table or '(query)')
+        lines.append('VS')
+        lines.append(target_table or '(query)')
     lines.append('=' * 80)
 
-    if source_query and target_query:
+    if source_query or target_query:
         lines.append(f'timezone: {timezone}')
-        lines.append(f'    {source_query}')
-        if source_params:
-            lines.append(f'    params: {source_params}')
-        lines.append('-' * 40)
-        lines.append(f'    {target_query}')
-        if target_params:
-            lines.append(f'    params: {target_params}')
+        if source_query:
+            lines.append(f'    {source_query}')
+            if source_params:
+                lines.append(f'    params: {source_params}')
+        if source_query and target_query:
+            lines.append('-' * 40)
+        if target_query:
+            lines.append(f'    {target_query}')
+            if target_params:
+                lines.append(f'    params: {target_params}')
 
     lines.append('-' * 40)
     lines.append('\nSUMMARY:')

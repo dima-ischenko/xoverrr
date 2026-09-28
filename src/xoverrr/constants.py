@@ -33,7 +33,7 @@ CHECK_TYPE_COUNTS_GROUP_BY_DATE = 'counts_group_by_date'
 CHECK_TYPE_TOTAL_COUNTS = 'total_counts'
 CHECK_TYPE_SAMPLES = 'samples'
 CHECK_TYPE_CUSTOM_QUERIES = 'custom_queries'
-CHECK_TYPE_CUSTOM_QUERIES_AGG = 'custom_queries_agg'
+CHECK_TYPE_AGGREGATES = 'aggregates'
 CHECK_TYPE_SNIFF_QUERY = 'sniff_query'
 
 # Shared y/n flag convention for x-prefixed check columns.

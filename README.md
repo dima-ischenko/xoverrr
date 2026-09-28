@@ -8,7 +8,7 @@ Supported databases: **Oracle**, **PostgreSQL** (including Greenplum), and **Cli
 
 ## Features
 
-- **Six check strategies** — row samples, counts grouped by date, whole-table counts, custom SQL, custom SQL aggregates (`MAX` / `SUM` / `COUNT(*)`), and source-only sniff checks
+- **Six check strategies** — row samples, counts grouped by date, whole-table counts, custom SQL, aggregates (`MAX` / `SUM` / `COUNT(*)` of tables and/or queries), and source-only sniff checks
 - **Multi-DBMS** — tables and views, extensible by means of adapters
 - **SQLAlchemy engines** — any supported source, target, or results connection may be supplied
 - **Recent-row exclusion** — rows that may still be delayed by a batch load, replication, or calculation can be omitted
@@ -78,7 +78,7 @@ Every method returns a `CheckResult`:
 
 `final_score` ranges from 0 to 100; a higher value indicates closer agreement. `final_diff_score` is the complement: `100 - final_score`.
 
-Most methods fail when `final_diff_score` exceeds `tolerance_pct` (the default is `0`, so any difference constitutes a failure). `check_custom_queries_agg` admits no tolerance: every aggregate must match, or the check fails.
+Most methods fail when `final_diff_score` exceeds `tolerance_pct` (the default is `0`, so any difference constitutes a failure). `check_aggregates` admits no tolerance: every aggregate must match, or the check fails.
 
 | Status | Meaning |
 |--------|---------|
@@ -96,7 +96,7 @@ Most methods fail when `final_diff_score` exceeds `tolerance_pct` (the default i
 | `check_counts_group_by_date` | Compare daily volumes in order to detect missing or extra days | Yes |
 | `check_samples` | Compare column values, row by row | Yes |
 | `check_custom_queries` | Compare the results of SQL (joins, renamed columns) | Yes |
-| `check_custom_queries_agg` | Compare `MAX`, `SUM`, or `COUNT(*)` of two queries | Yes |
+| `check_aggregates` | Compare `MAX`, `SUM`, or `COUNT(*)` of tables and/or queries | Yes |
 | `check_sniff_query` | Validate the source against a rule, without a target | No |
 
 The target engine may be the same object as `source_engine`. Two engines are required only when the two sides reside in different databases.
@@ -311,21 +311,49 @@ To divide a long range into windows, include `start_date` and `end_date` in **bo
 
 ---
 
-## 5. Custom SQL aggregates — `check_custom_queries_agg`
+## 5. Aggregates — `check_aggregates`
 
-Compares `MAX`, `SUM`, and, optionally, `COUNT(*)` of two queries. The database performs the aggregation:
+Compares `MAX`, `SUM`, and, optionally, `COUNT(*)` of two relations. Each side may be a table (`DataReference`) or a SQL string:
+
+```python
+# table vs table
+checker.check_aggregates(
+    source=DataReference('orders', schema='sales'),
+    target=DataReference('orders', schema='archive'),
+    sum_columns=['amount'],
+    include_count=True,
+)
+
+# query vs table
+checker.check_aggregates(
+    source='SELECT amount FROM sales.orders WHERE created_at >= :start_date',
+    target=DataReference('orders', schema='archive'),
+    source_params={'start_date': '2024-01-01'},
+    sum_columns=['amount'],
+)
+
+# table vs query
+checker.check_aggregates(
+    source=DataReference('orders', schema='sales'),
+    target='SELECT amount FROM archive.orders WHERE created_at >= :start_date',
+    target_params={'start_date': '2024-01-01'},
+    sum_columns=['amount'],
+)
+```
+
+A table is wrapped as `SELECT * FROM schema.table`. The database then performs the aggregation:
 
 ```sql
 SELECT max(amount) AS max_amount, sum(amount) AS sum_amount, count(*) AS cnt
-FROM (<your query>) x_subq
+FROM (<your query or SELECT * FROM table>) x_subq
 ```
 
-At least one of `max_columns`, `sum_columns`, or `include_count=True` must be supplied. Date filters remain in the SQL. There is no `tolerance_pct`, no chunking, and no `xrecently_changed`. Every aggregate must match; otherwise the check fails (`final_score` is 100 or 0).
+At least one of `max_columns`, `sum_columns`, or `include_count=True` must be supplied. Bind parameters (`source_params`, `target_params`) are valid only on a SQL side. There is no `tolerance_pct`, no chunking, and no `xrecently_changed`. Every aggregate must match; otherwise the check fails (`final_score` is 100 or 0).
 
 ```python
-result = checker.check_custom_queries_agg(
-    source_query='SELECT amount, created_at FROM scott.source_table WHERE created_at >= :start_date',
-    target_query='SELECT amount, created_at FROM scott.target_table WHERE created_at >= :start_date',
+result = checker.check_aggregates(
+    source='SELECT amount, created_at FROM scott.source_table WHERE created_at >= :start_date',
+    target='SELECT amount, created_at FROM scott.target_table WHERE created_at >= :start_date',
     source_params={'start_date': '2024-01-01'},
     target_params={'start_date': '2024-01-01'},
     max_columns=['created_at'],
@@ -336,10 +364,10 @@ result = checker.check_custom_queries_agg(
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `source_query` | Yes | — | Source SQL. Bind values with `:name`. |
-| `target_query` | Yes | — | Target SQL. |
-| `source_params` | No | `None` (`{}`) | Bind values. |
-| `target_params` | No | `None` (`{}`) | Bind values. |
+| `source` | Yes | — | `DataReference` or SQL (`:name` binds). |
+| `target` | Yes | — | `DataReference` or SQL. |
+| `source_params` | No | `None` (`{}`) | Bind values. Allowed only when `source` is SQL. |
+| `target_params` | No | `None` (`{}`) | Bind values. Allowed only when `target` is SQL. |
 | `max_columns` | No | `None` (`[]`) | Wrapped as `max(col) AS max_col`. Simple identifiers only. At least one of `max_columns`, `sum_columns`, or `include_count=True` is required. |
 | `sum_columns` | No | `None` (`[]`) | Wrapped as `sum(col) AS sum_col`. |
 | `include_count` | No | `False` | Also compares `count(*) AS cnt`. |
@@ -438,7 +466,7 @@ On `check_samples`, `check_counts_group_by_date`, `check_total_counts`, `check_c
 - `check_sniff_query`: chunking uses `start_date` and `end_date` in `source_params`
 - `check_total_counts`: requires `date_column` and `date_range`; the chunk counts are summed
 
-`check_custom_queries_agg` does not support chunking. The date filter should be expressed in the SQL.
+`check_aggregates` does not support chunking. A date filter on a query belongs in the SQL; a table is aggregated in full.
 
 ---
 
