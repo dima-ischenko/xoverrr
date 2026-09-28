@@ -24,7 +24,7 @@ from .reporting import (
     generate_sample_report,
     generate_total_count_report,
 )
-from .utils import CheckDetails, CheckStats
+from .stats import CheckDetails, CheckStats
 
 __all__ = [
     'DataQualityChecker',

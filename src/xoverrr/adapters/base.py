@@ -8,7 +8,7 @@ from sqlalchemy.engine import Engine
 from ..constants import HASH_KEY_SEPARATOR, RESERVED_WORDS
 from ..logger import app_logger
 from ..models import DataReference, ObjectType
-from ..utils import normalize_hash_pct
+from ..stats import normalize_hash_pct
 
 # Persist-row clock column; filled by DEFAULT now()/SYSTIMESTAMP, omitted from INSERT.
 PERSIST_INSERTED_AT_COLUMN = 'inserted_at'

@@ -14,19 +14,44 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 
-from .constants import (
-    DATETIME_FORMAT,
-    REPORT_OUTPUT_FORMAT_JSON,
-    REPORT_OUTPUT_FORMAT_TEXT,
-    REPORT_OUTPUT_FORMATS,
-)
-from .utils import (
-    CheckDetails,
-    CheckStats,
-    append_report_run_header,
-    format_report_collection,
-    sniff_issue_row_count,
-)
+from .constants import (DATETIME_FORMAT, REPORT_OUTPUT_FORMAT_JSON,
+                        REPORT_OUTPUT_FORMAT_TEXT, REPORT_OUTPUT_FORMATS)
+from .stats import CheckDetails, CheckStats, sniff_issue_row_count
+
+
+def format_report_collection(value) -> str:
+    """Format optional collections for human-readable report lines."""
+    if value is None:
+        return ''
+    if isinstance(value, (set, frozenset)):
+        if not value:
+            return ''
+        return ', '.join(str(item) for item in sorted(value, key=str))
+    if isinstance(value, (tuple, list)):
+        if not value:
+            return ''
+        return ', '.join(str(item) for item in value)
+    return str(value)
+
+
+def append_report_run_header(
+    lines: List[str],
+    run_id: str,
+    run_started_at: str,
+    library_version: Optional[str] = None,
+    source_db_type: Optional[str] = None,
+    target_db_type: Optional[str] = None,
+) -> None:
+    lines.append('=' * 80)
+    lines.append(run_started_at)
+    lines.append(f'run_id: {run_id}')
+    if library_version is not None:
+        lines.append(f'lib version: {library_version}')
+    if source_db_type is not None:
+        lines.append(f'source db type: {source_db_type}')
+    if target_db_type is not None:
+        lines.append(f'target db type: {target_db_type}')
+
 
 if TYPE_CHECKING:
     from .persistence import CheckRunTimings
