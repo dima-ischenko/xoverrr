@@ -385,7 +385,7 @@ all aggregates match  ->  success,  final_score = 100,  final_diff_score = 0
 any difference        ->  failed,   final_score = 0,    final_diff_score = 100
 ```
 
-`SUM` and `MAX` ignore nulls. Two empty or all-null sides count as a match. `count(*)` of an empty side is 0.
+`sum` and `max` ignore nulls. Two empty or all-null sides count as a match. `count(*)` of an empty side is 0.
 
 ---
 
