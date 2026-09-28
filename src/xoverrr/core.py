@@ -422,12 +422,12 @@ class DataQualityChecker:
         Compare MAX, SUM, and optional COUNT(*) of two tables and/or queries.
 
         ``source`` and ``target`` may each be a :class:`DataReference` or a
-        SQL string. A table is wrapped as ``SELECT * FROM schema.table``.
-        Bind parameters are allowed only on a SQL side.
+        SQL string. Bind parameters are allowed only on a SQL side.
 
-        The adapter wraps each inner relation as
+        A table is aggregated directly:
         ``SELECT max(col) AS max_col, sum(col) AS sum_col, count(*) AS cnt
-        FROM (<query>) x_subq``.
+        FROM schema.table``. A SQL side is wrapped as
+        ``SELECT ... FROM (<query>) x_subq``.
 
         Date filters belong in SQL, via ``source_params`` and
         ``target_params``. The check succeeds only when every aggregate
@@ -452,9 +452,7 @@ class DataQualityChecker:
             raise ValueError('hash_columns is required when hash_pct is set')
 
         identity = {
-            'source_query': source_query,
             'source_params': source_params,
-            'target_query': target_query,
             'target_params': target_params,
         }
         if source_table:
@@ -474,6 +472,7 @@ class DataQualityChecker:
                 include_count=include_count,
                 hash_columns=hash_columns,
                 hash_pct=hash_pct,
+                identity=identity,
                 source_table=source_table,
                 target_table=target_table,
             ),

@@ -78,14 +78,13 @@ class BaseDatabaseAdapter(ABC):
         )
         return query + extra_sql, params
 
-    def build_aggregate_sql(
+    def aggregate_projection(
         self,
-        query: str,
         max_columns: Optional[List[str]] = None,
         sum_columns: Optional[List[str]] = None,
         include_count: bool = False,
     ) -> str:
-        """Wrap a relation so the database computes MAX / SUM / COUNT(*)."""
+        """Return the ``max`` / ``sum`` / ``count(*)`` select list."""
         select_parts = []
         for column in self._normalize_aggregate_columns(max_columns):
             select_parts.append(f'max({column}) as max_{column}')
@@ -95,11 +94,26 @@ class BaseDatabaseAdapter(ABC):
             select_parts.append('count(*) as cnt')
         if not select_parts:
             raise ValueError('max_columns, sum_columns, or include_count is required')
+        return ', '.join(select_parts)
 
+    def build_aggregate_sql(
+        self,
+        query: str,
+        max_columns: Optional[List[str]] = None,
+        sum_columns: Optional[List[str]] = None,
+        include_count: bool = False,
+        table: Optional[str] = None,
+    ) -> str:
+        """Build MAX / SUM / COUNT(*) SQL for a table or an inner query."""
+        projection = self.aggregate_projection(
+            max_columns, sum_columns, include_count
+        )
+        if table:
+            return f'SELECT {projection} FROM {table}'
         inner = self._strip_query(query)
         if not inner:
             raise ValueError('query is empty')
-        return f'SELECT {", ".join(select_parts)} FROM ({inner}) x_subq'
+        return f'SELECT {projection} FROM ({inner}) x_subq'
 
     @staticmethod
     def _strip_query(query: str) -> str:

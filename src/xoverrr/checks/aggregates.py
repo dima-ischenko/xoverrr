@@ -85,12 +85,13 @@ def run_aggregates(
     include_count: bool,
     hash_columns: List[str],
     hash_pct: Optional[int],
+    identity: Dict,
     source_table: Optional[str] = None,
     target_table: Optional[str] = None,
 ) -> Tuple[str, Optional[str], Optional[CheckStats], Optional[CheckDetails]]:
     source_adapter = checker._adapter('source')
     target_adapter = checker._adapter('target')
-    source_data = _execute_aggregate(
+    source_data, source_sql, source_params = _execute_aggregate(
         checker,
         source_query,
         source_params,
@@ -101,8 +102,9 @@ def run_aggregates(
         'source',
         hash_columns=hash_columns,
         hash_pct=hash_pct,
+        table=source_table,
     )
-    target_data = _execute_aggregate(
+    target_data, target_sql, target_params = _execute_aggregate(
         checker,
         target_query,
         target_params,
@@ -113,7 +115,12 @@ def run_aggregates(
         'target',
         hash_columns=hash_columns,
         hash_pct=hash_pct,
+        table=target_table,
     )
+    identity['source_query'] = source_sql
+    identity['source_params'] = source_params
+    identity['target_query'] = target_sql
+    identity['target_params'] = target_params
     source_data[ct.XAGG_ROW_COLUMN] = '1'
     target_data[ct.XAGG_ROW_COLUMN] = '1'
     stats, details = checker._check_dataframes_timed(
@@ -137,9 +144,9 @@ def run_aggregates(
         checker.timezone,
         checker._active_run_id,
         checker._active_run_started_at,
-        source_query,
+        source_sql,
         source_params,
-        target_query,
+        target_sql,
         target_params,
         hash_columns=hash_columns,
         hash_pct=hash_pct,
@@ -161,9 +168,12 @@ def _execute_aggregate(
     query_side: str,
     hash_columns: Optional[List[str]] = None,
     hash_pct: Optional[int] = None,
-) -> pd.DataFrame:
+    table: Optional[str] = None,
+) -> Tuple[pd.DataFrame, str, Dict]:
     engine = checker._side_engine(query_side)
     metadata = checker._get_metadata_cols_for_custom_query((query, params), engine)
+    inner = query
+    from_table = table
     if hash_pct:
         available = {str(name).lower() for name in metadata.get('column_name', [])}
         missing = [column for column in hash_columns or [] if column not in available]
@@ -171,14 +181,16 @@ def _execute_aggregate(
             raise ValueError(
                 f'hash_columns not present in {query_side} query: {missing}'
             )
-        query = adapter.wrap_query_with_hash_sample(
+        inner = adapter.wrap_query_with_hash_sample(
             query, hash_columns, hash_pct, metadata, checker.timezone
         )
+        from_table = None
     sql = adapter.build_aggregate_sql(
-        query,
+        inner,
         max_columns=max_columns,
         sum_columns=sum_columns,
         include_count=include_count,
+        table=from_table,
     )
     app_logger.info(f'{query_side} aggregate query:\n{sql}')
     frame = checker._run_converted(
@@ -189,4 +201,4 @@ def _execute_aggregate(
         _aggregate_result_metadata(metadata, max_columns, sum_columns, include_count),
     )
     frame.columns = [str(column).lower() for column in frame.columns]
-    return prepare_dataframe(frame)
+    return prepare_dataframe(frame), sql, params

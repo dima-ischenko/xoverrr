@@ -28,6 +28,13 @@ def test_adapter_builds_aggregate_sql():
         f'count(*) as cnt FROM ({INNER}) x_subq'
     )
 
+    table_sql = PostgresAdapter().build_aggregate_sql(
+        'SELECT * FROM sales.orders',
+        sum_columns=['amount'],
+        table='sales.orders',
+    )
+    assert table_sql == 'SELECT sum(amount) as sum_amount FROM sales.orders'
+
 
 def test_adapter_count_only_and_validation():
     adapter = PostgresAdapter()
@@ -52,12 +59,9 @@ def test_check_aggregates_requires_columns():
         )
 
 
-class _Adapter:
+class _Adapter(PostgresAdapter):
     def convert_types(self, df, metadata, timezone):
         return df
-
-    def build_aggregate_sql(self, *args, **kwargs):
-        return PostgresAdapter().build_aggregate_sql(*args, **kwargs)
 
 
 def _checker():
@@ -124,7 +128,7 @@ def test_resolve_aggregate_relation_rejects_empty_query():
         resolve_aggregate_relation('   ', None, 'source')
 
 
-def test_check_aggregates_table_vs_query_builds_select_star(monkeypatch):
+def test_check_aggregates_table_vs_query_returns_built_sql(monkeypatch):
     checker = _checker()
     metadata = pd.DataFrame({'column_name': ['amount'], 'data_type': ['numeric']})
     executed = []
@@ -149,15 +153,21 @@ def test_check_aggregates_table_vs_query_builds_select_star(monkeypatch):
         sum_columns=['amount'],
     )
 
+    source_sql = 'SELECT sum(amount) as sum_amount FROM sales.orders'
+    target_sql = (
+        'SELECT sum(amount) as sum_amount '
+        'FROM (SELECT amount FROM archive.orders) x_subq'
+    )
     assert result.status == CHECK_SUCCESS
     assert result.check_type == CHECK_TYPE_AGGREGATES
     assert result.source_table == 'sales.orders'
-    assert result.source_query == 'SELECT * FROM sales.orders'
+    assert result.source_query == source_sql
     assert result.target_table is None
-    assert any('FROM (SELECT * FROM sales.orders) x_subq' in sql for sql in executed)
-    assert any(
-        'FROM (SELECT amount FROM archive.orders) x_subq' in sql for sql in executed
-    )
+    assert result.target_query == target_sql
+    assert executed == [source_sql, target_sql]
+    assert source_sql in result.report
+    assert target_sql in result.report
+    assert 'SELECT * FROM' not in result.report
 
 
 def test_check_aggregates_uses_compare_dataframes(monkeypatch):
@@ -195,6 +205,24 @@ def test_check_aggregates_uses_compare_dataframes(monkeypatch):
     assert result.check_type == CHECK_TYPE_AGGREGATES
     assert result.stats.final_diff_score == 100.0
     assert result.stats.final_score == 0.0
-    assert 'count(*) as cnt' in executed[-1]
-    assert 'sum(amount) as sum_amount' in executed[-1]
+    source_sql = (
+        'SELECT sum(amount) as sum_amount, count(*) as cnt '
+        'FROM (SELECT amount FROM source_table) x_subq'
+    )
+    target_sql = (
+        'SELECT sum(amount) as sum_amount, count(*) as cnt '
+        'FROM (SELECT amount FROM target_table) x_subq'
+    )
+    assert executed == [source_sql, target_sql]
+    assert result.source_query == source_sql
+    assert result.target_query == target_sql
+    assert source_sql in result.report
+    assert target_sql in result.report
     assert 'cnt' in set(result.details.issue_examples['column_name'])
+    breakdown = result.report.split('ISSUE BREAKDOWN:', 1)[1]
+    assert 'aggregate' in breakdown
+    assert 'source_value' in breakdown
+    assert 'target_value' in breakdown
+    assert 'cnt' in breakdown
+    assert 'sum_amount' not in breakdown
+    assert 'primary_key' not in breakdown
