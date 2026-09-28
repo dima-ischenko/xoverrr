@@ -16,7 +16,7 @@ from .constants import DATETIME_FORMAT, STATS_REPORT_FLOAT_DECIMALS
 from .logger import app_logger
 from .models import DataReference, DBMSType
 from .reporting import CheckResult
-from .utils import CheckDetails, CheckStats
+from .stats import CheckDetails, CheckStats
 
 PERSIST_PRIMARY_KEY = 'run_id'
 RUN_ID_LENGTH = 16

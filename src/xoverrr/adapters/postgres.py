@@ -1,3 +1,4 @@
+import re
 import time
 from json import dumps
 from typing import Callable, Dict, List, Optional, Tuple, Union
@@ -5,8 +6,8 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 import pandas as pd
 from sqlalchemy import text
 
-from ..constants import (DATETIME_FORMAT, FLAG_VALUE_YES,
-                         XRECENTLY_CHANGED_COLUMN, TO_CHAR_CAST_DATETIME)
+from ..constants import (DATETIME_FORMAT, FLAG_VALUE_YES, HASH_DATE_FORMAT,
+                         HASH_DATETIME_FORMAT, XRECENTLY_CHANGED_COLUMN)
 from ..exceptions import MetadataError, QueryExecutionError
 from ..logger import app_logger
 from ..models import DataReference, ObjectType
@@ -149,7 +150,7 @@ class PostgresAdapter(BaseDatabaseAdapter):
         SELECT *
         FROM (
             {query_text}
-        ) xoverrr_subq
+        ) x_subq
         LIMIT 0
         """
 
@@ -300,8 +301,8 @@ class PostgresAdapter(BaseDatabaseAdapter):
         exclude_recent_hours: Optional[int] = None,
         columns_meta: pd.DataFrame = None,
         timezone: str = None,
-        key_column: List[str] =None,
-        hash_pct: int = None
+        key_column: List[str] = None,
+        hash_pct: int = None,
     ) -> Tuple[str, Dict]:
 
         params = {}
@@ -310,23 +311,13 @@ class PostgresAdapter(BaseDatabaseAdapter):
             update_column, exclude_recent_hours
         )
 
-        hash_condition = None
-        ts_mask = (
-                    columns_meta['data_type']
-                    .str.lower()
-                    .str.contains(r'timestamp.*', regex=True, na=False)
-                )
-
-        ts_columns = columns_meta[ts_mask]['column_name'].tolist()
-
         if exclusion_condition:
             columns.append(exclusion_condition)
             params.update(exclusion_params)
 
-        if hash_pct:
-            ts_columns = self._build_cast_timestamp_column_expression(ts_columns)
-            hash_keys = [ts_columns.get(i) if ts_columns.get(i) else i for i in key_column ]
-            hash_condition = self._build_hash_filter(hash_keys, hash_pct)
+        hash_condition = self.build_hash_filter(
+            key_column, hash_pct, columns_meta, timezone
+        )
 
         query = f"""
         SELECT {', '.join(columns)}
@@ -343,11 +334,26 @@ class PostgresAdapter(BaseDatabaseAdapter):
             query += f"             AND {hash_condition}\n"
         return query, params
 
-    def _build_cast_timestamp_column_expression(
-        self,
-        ts_columns: List[str]
-    ):
-        return {i:f'to_char({i}::timestamp, {TO_CHAR_CAST_DATETIME})' for i in ts_columns}
+    def hash_key_expression(
+        self, column: str, data_type: str, timezone: Optional[str]
+    ) -> str:
+        data_type = data_type or ''
+        if re.search(r'timestamptz|timestamp.*with\s+time\s+zone', data_type):
+            tz = timezone or 'UTC'
+            return f"to_char({column} at time zone '{tz}', '{HASH_DATETIME_FORMAT}')"
+        if re.search(r'timestamp|datetime', data_type):
+            return f"to_char({column}::timestamp, '{HASH_DATETIME_FORMAT}')"
+        if re.search(r'\bdate\b', data_type):
+            return f"to_char({column}::date, '{HASH_DATE_FORMAT}')"
+        if re.search(r'bool', data_type):
+            return f"case when {column} then '1' when not {column} then '0' end"
+        return f'cast({column} as text)'
+
+    def hash_mod_predicate(self, concat_sql: str, percent: int) -> str:
+        return (
+            f"(('x' || substring(md5(({concat_sql})), 1, 8))::bit(32)::bigint)"
+            f' % 100 < {percent}'
+        )
 
     def _build_exclusion_condition(
         self, update_column: str, exclude_recent_hours: int
@@ -441,7 +447,3 @@ class PostgresAdapter(BaseDatabaseAdapter):
         insert_sql = self.build_persistence_insert_sql(table_ref, record)
         with engine.begin() as conn:
             conn.execute(text(insert_sql), record)
-
-    def _build_hash_filter(self, fields, percent):
-        fields_to_char = [f'cast({i} as text)' for i in fields]
-        return f"""(('x' || substring(md5(({'||'.join(fields_to_char)})),1,8))::bit(32)::bigint) % 100 < {percent}"""

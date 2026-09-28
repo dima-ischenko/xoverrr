@@ -16,8 +16,53 @@ import pandas as pd
 
 from .constants import (DATETIME_FORMAT, REPORT_OUTPUT_FORMAT_JSON,
                         REPORT_OUTPUT_FORMAT_TEXT, REPORT_OUTPUT_FORMATS)
-from .utils import (CheckDetails, CheckStats, append_report_run_header,
-                    format_report_collection, sniff_issue_row_count)
+from .stats import CheckDetails, CheckStats
+
+
+def format_report_collection(value) -> str:
+    """Format optional collections for human-readable report lines."""
+    if value is None:
+        return ''
+    if isinstance(value, (set, frozenset)):
+        if not value:
+            return ''
+        return ', '.join(str(item) for item in sorted(value, key=str))
+    if isinstance(value, (tuple, list)):
+        if not value:
+            return ''
+        return ', '.join(str(item) for item in value)
+    return str(value)
+
+
+def append_report_run_header(
+    lines: List[str],
+    run_id: str,
+    run_started_at: str,
+    library_version: Optional[str] = None,
+    source_db_type: Optional[str] = None,
+    target_db_type: Optional[str] = None,
+    primary_key: Optional[List[str]] = None,
+    hash_pct: Optional[int] = None,
+    hash_columns: Optional[List[str]] = None,
+) -> None:
+    lines.append('=' * 80)
+    lines.append(run_started_at)
+    lines.append(f'run_id: {run_id}')
+    if library_version is not None:
+        lines.append(f'lib version: {library_version}')
+    if source_db_type is not None:
+        lines.append(f'source db type: {source_db_type}')
+    if target_db_type is not None:
+        lines.append(f'target db type: {target_db_type}')
+    pk_text = format_report_collection(primary_key)
+    if pk_text:
+        lines.append(f'primary key: {pk_text}')
+    hash_cols_text = format_report_collection(hash_columns)
+    if hash_cols_text:
+        lines.append(f'hash columns: {hash_cols_text}')
+    if hash_pct is not None:
+        lines.append(f'hash_pct: {hash_pct}')
+
 
 if TYPE_CHECKING:
     from .persistence import CheckRunTimings
@@ -224,6 +269,8 @@ def generate_sample_report(
     library_version: Optional[str] = None,
     source_db_type: Optional[str] = None,
     target_db_type: Optional[str] = None,
+    primary_key: Optional[List[str]] = None,
+    hash_pct: Optional[int] = None,
 ) -> str:
     """
     Generate a human-readable text report for a sample check.
@@ -251,6 +298,8 @@ def generate_sample_report(
         library_version=library_version,
         source_db_type=source_db_type,
         target_db_type=target_db_type,
+        primary_key=primary_key,
+        hash_pct=hash_pct,
     )
     if source_table and target_table:
         lines.append('SAMPLES CHECK REPORT:')
@@ -392,7 +441,7 @@ def generate_check_sniff_query_report(
     lines.append('\nSUMMARY:')
     lines.append(f'  Checked rows: {stats.total_source_rows}')
     lines.append(f'  Passed rows: {stats.passed_rows}')
-    lines.append(f'  Issue rows: {sniff_issue_row_count(stats)}')
+    lines.append(f'  Issue rows: {max(0, stats.total_source_rows - stats.passed_rows)}')
     lines.append('-' * 40)
     lines.append(f'  Issue rows %: {stats.issue_rows_pct:.5f}')
     lines.append(f'  Final discrepancies score: {stats.final_diff_score:.5f}')
@@ -572,5 +621,80 @@ def generate_total_count_report(
     lines.append(f'  Discrepancies %: {stats.final_diff_score:.5f}%')
     lines.append(f'  Final discrepancies score: {stats.final_diff_score:.5f}')
     lines.append(f'  Final data quality score: {stats.final_score:.5f}')
+    lines.append('=' * 80)
+    return '\n'.join(lines)
+
+
+def generate_aggregates_report(
+    stats: CheckStats,
+    details: CheckDetails,
+    timezone: str,
+    run_id: str,
+    run_started_at: str,
+    source_query: Optional[str] = None,
+    source_params: Optional[Dict] = None,
+    target_query: Optional[str] = None,
+    target_params: Optional[Dict] = None,
+    library_version: Optional[str] = None,
+    source_db_type: Optional[str] = None,
+    target_db_type: Optional[str] = None,
+    hash_columns: Optional[List[str]] = None,
+    hash_pct: Optional[int] = None,
+    source_table: Optional[str] = None,
+    target_table: Optional[str] = None,
+) -> str:
+    """Generate a text report for an aggregate comparison."""
+    lines = []
+    append_report_run_header(
+        lines,
+        run_id,
+        run_started_at,
+        library_version=library_version,
+        source_db_type=source_db_type,
+        target_db_type=target_db_type,
+        hash_columns=hash_columns,
+        hash_pct=hash_pct,
+    )
+    lines.append('AGGREGATES CHECK REPORT:')
+    if source_table or target_table:
+        lines.append(source_table or '(query)')
+        lines.append('VS')
+        lines.append(target_table or '(query)')
+    lines.append('=' * 80)
+
+    if source_query or target_query:
+        lines.append(f'timezone: {timezone}')
+        if source_query:
+            lines.append(f'    {source_query}')
+            if source_params:
+                lines.append(f'    params: {source_params}')
+        if source_query and target_query:
+            lines.append('-' * 40)
+        if target_query:
+            lines.append(f'    {target_query}')
+            if target_params:
+                lines.append(f'    params: {target_params}')
+
+    lines.append('-' * 40)
+    lines.append('\nSUMMARY:')
+    lines.append(f'  Source rows: {stats.total_source_rows}')
+    lines.append(f'  Target rows: {stats.total_target_rows}')
+    lines.append(f'  Comparable rows: {stats.comparable_rows}')
+    lines.append(f'  Passed rows: {stats.passed_rows}')
+    lines.append(f'  Issue rows %: {stats.issue_rows_pct:.5f}')
+    lines.append(f'  Final discrepancies score: {stats.final_diff_score:.5f}')
+    lines.append(f'  Final data quality score: {stats.final_score:.5f}')
+
+    if not details.issue_breakdown.empty:
+        lines.append('\nISSUE BREAKDOWN:')
+        lines.append(details.issue_breakdown.to_string(index=False))
+        if details.issue_examples is not None and not details.issue_examples.empty:
+            lines.append('\n  Issue examples:\n')
+            lines.append(
+                details.issue_examples.to_string(
+                    index=False, max_colwidth=64, justify='left'
+                )
+            )
+
     lines.append('=' * 80)
     return '\n'.join(lines)

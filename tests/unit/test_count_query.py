@@ -62,7 +62,8 @@ def test_count_query_with_date_column_groups_by_day(adapter_cls):
 
 
 def test_count_volume_scores():
-    from xoverrr.utils import build_total_count_stats, count_volume_scores
+    from xoverrr.checks.total_counts import (build_total_count_stats,
+                                             count_volume_scores)
 
     assert count_volume_scores(0, 4) == (0.0, 100.0)
     diff, score = count_volume_scores(1, 3)

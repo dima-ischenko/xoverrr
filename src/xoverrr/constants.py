@@ -5,6 +5,14 @@ DATETIME_FORMAT = f'{DATE_FORMAT} %H:%M:%S'
 TO_CHAR_CAST_DATETIME = 'YYYYMMDD HH24:MI:SS'
 TO_CHAR_CAST_DATETIME_CH = '%Y%m%d %H:%i:%s'
 
+# Canonical strings for hash sampling, so the same key hashes the same way
+# on Oracle, PostgreSQL, and ClickHouse.
+HASH_DATE_FORMAT = 'YYYYMMDD'
+HASH_DATETIME_FORMAT = 'YYYYMMDDHH24MISS'
+HASH_DATE_FORMAT_CH = '%Y%m%d'
+HASH_DATETIME_FORMAT_CH = '%Y%m%d%H%i%s'
+HASH_KEY_SEPARATOR = '|'
+
 # Default values
 NULL_REPLACEMENT = 'N/A'
 DEFAULT_MAX_EXAMPLES = 3
@@ -25,6 +33,7 @@ CHECK_TYPE_COUNTS_GROUP_BY_DATE = 'counts_group_by_date'
 CHECK_TYPE_TOTAL_COUNTS = 'total_counts'
 CHECK_TYPE_SAMPLES = 'samples'
 CHECK_TYPE_CUSTOM_QUERIES = 'custom_queries'
+CHECK_TYPE_AGGREGATES = 'aggregates'
 CHECK_TYPE_SNIFF_QUERY = 'sniff_query'
 
 # Shared y/n flag convention for x-prefixed check columns.
@@ -33,6 +42,9 @@ FLAG_VALUE_NO = 'n'
 
 # Recently changed exclusion column (check_samples / check_custom_queries).
 XRECENTLY_CHANGED_COLUMN = 'xrecently_changed'
+
+# Synthetic key for the single-row aggregate comparison.
+XAGG_ROW_COLUMN = 'xagg'
 
 # Pass/fail flag column for check_sniff_query (row-level or scalar).
 # ``y`` = passed, ``n`` = failed.

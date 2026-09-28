@@ -4,8 +4,8 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 import pandas as pd
 from sqlalchemy import text
 
-from ..constants import (DATETIME_FORMAT, FLAG_VALUE_YES,
-                         XRECENTLY_CHANGED_COLUMN, TO_CHAR_CAST_DATETIME)
+from ..constants import (DATETIME_FORMAT, FLAG_VALUE_YES, HASH_DATE_FORMAT,
+                         HASH_DATETIME_FORMAT, XRECENTLY_CHANGED_COLUMN)
 from ..exceptions import QueryExecutionError
 from ..logger import app_logger
 from ..models import DataReference, ObjectType
@@ -420,12 +420,11 @@ class OracleAdapter(BaseDatabaseAdapter):
         exclude_recent_hours: Optional[int] = None,
         columns_meta: pd.DataFrame = None,
         timezone: str = None,
-        key_column: List[str] =None,
-        hash_pct: int = None
+        key_column: List[str] = None,
+        hash_pct: int = None,
     ) -> Tuple[str, Dict]:
 
-        tz_columns = []
-        tz_columns, ts_columns = self._identify_timestamp_tz_columns(columns_meta)
+        tz_columns, _ts_columns = self._identify_timestamp_tz_columns(columns_meta)
 
         converted_columns = self._apply_timestamp_tz_casts(
             columns=columns,
@@ -445,17 +444,15 @@ class OracleAdapter(BaseDatabaseAdapter):
             converted_columns.append(exclusion_condition)
             params.update(exclusion_params)
 
-        if hash_pct:
-            ts_columns = self._build_cast_timestamp_column_expression(ts_columns)
-            hash_keys = [ts_columns.get(i) if ts_columns.get(i) else i for i in key_column ]
-            hash_condition = self._build_hash_filter(hash_keys,hash_pct)
+        hash_condition = self.build_hash_filter(
+            key_column, hash_pct, columns_meta, timezone
+        )
 
         query = f"""
         SELECT {', '.join(converted_columns)}
         FROM {data_ref.full_name}
         WHERE 1=1\n"""
 
-        hash_condition = None
         date_expr = None
         if date_column:
             date_expr = self._build_cast_tz_column_expression(
@@ -491,6 +488,28 @@ class OracleAdapter(BaseDatabaseAdapter):
             return condition, params
 
         return None, None
+
+    def hash_key_expression(
+        self, column: str, data_type: str, timezone: Optional[str]
+    ) -> str:
+        data_type = data_type or ''
+        if 'time zone' in data_type or 'timestamp_tz' in data_type:
+            tz = timezone or 'UTC'
+            return (
+                f"to_char(cast({column} at time zone '{tz}' as timestamp), "
+                f"'{HASH_DATETIME_FORMAT}')"
+            )
+        if 'timestamp' in data_type:
+            return f"to_char({column}, '{HASH_DATETIME_FORMAT}')"
+        if 'date' in data_type:
+            return f"to_char({column}, '{HASH_DATE_FORMAT}')"
+        return f"to_char({column})"
+
+    def hash_mod_predicate(self, concat_sql: str, percent: int) -> str:
+        return (
+            'MOD(TO_NUMBER(SUBSTR(RAWTOHEX(STANDARD_HASH('
+            f"{concat_sql}, 'MD5')), 1, 8), 'XXXXXXXX'), 100) < {percent}"
+        )
 
     def _get_type_conversion_rules(self, timezone: str) -> Dict[str, Callable]:
         return {
@@ -597,12 +616,6 @@ class OracleAdapter(BaseDatabaseAdapter):
             return f'{cast_expr} AS {column_name}'
 
         return cast_expr
-
-    def _build_cast_timestamp_column_expression(
-        self,
-        ts_columns: List[str]
-    ):
-        return {i:f'to_char({i}, {TO_CHAR_CAST_DATETIME})' for i in ts_columns}
 
     def _apply_timestamp_tz_casts(
         self,
@@ -715,7 +728,3 @@ class OracleAdapter(BaseDatabaseAdapter):
         )
         with engine.begin() as conn:
             conn.execute(text(insert_sql), bind_record)
-
-    def _build_hash_filter(self, fields, percent):
-        fields_to_char = [f'to_char({i})' for i in fields]
-        return f"""MOD(TO_NUMBER(SUBSTR(RAWTOHEX(STANDARD_HASH(({'||'.join(fields_to_char)}), 'MD5')), 1, 8), 'XXXXXXXX'), 100) < {percent}"""
