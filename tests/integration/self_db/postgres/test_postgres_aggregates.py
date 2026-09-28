@@ -6,18 +6,37 @@ from xoverrr.constants import CHECK_FAILED, CHECK_SUCCESS
 from xoverrr.core import DataQualityChecker
 from xoverrr.models import DataReference
 
+MATCH_ROWS = 10
+SRC_TABLE = 'test_pg_aggregates_src'
+TRG_TABLE = 'test_pg_aggregates_trg'
+
+
+def _pg_values(divergent_last: bool) -> str:
+    rows = [
+        f"({i}, {i * 10}, {i}, '2024-01-{i:02d}', '2024-01-{i:02d} 10:00:00')"
+        for i in range(1, MATCH_ROWS + 1)
+    ]
+    last = MATCH_ROWS + 1
+    if divergent_last:
+        rows.append(
+            f"({last}, 9999, 50, '2024-01-{last:02d}', '2024-01-{last:02d} 12:00:00')"
+        )
+    else:
+        rows.append(
+            f"({last}, {last * 10}, {last}, '2024-01-{last:02d}', "
+            f"'2024-01-{last:02d} 10:00:00')"
+        )
+    return ',\n                '.join(rows)
+
 
 class TestPostgresAggregates:
     @pytest.fixture(autouse=True)
     def setup_agg_data(self, postgres_engine, table_helper):
-        source_table = 'test_pg_aggregates_src'
-        target_table = 'test_pg_aggregates_trg'
-
         table_helper.create_table(
             engine=postgres_engine,
-            table_name=source_table,
+            table_name=SRC_TABLE,
             create_sql=f"""
-                CREATE TABLE {source_table} (
+                CREATE TABLE {SRC_TABLE} (
                     id          INTEGER PRIMARY KEY,
                     amount      numeric,
                     qty         INTEGER,
@@ -26,17 +45,15 @@ class TestPostgresAggregates:
                 )
             """,
             insert_sql=f"""
-                INSERT INTO {source_table} (id, amount, qty, created_at, updated_at) VALUES
-                (1, 10, 1, '2024-01-01', '2024-01-01 10:00:00'),
-                (2, 20, 2, '2024-01-02', '2024-01-02 11:00:00'),
-                (3, 999, 50, '2024-01-03', '2024-01-03 12:00:00')
+                INSERT INTO {SRC_TABLE} (id, amount, qty, created_at, updated_at) VALUES
+                {_pg_values(divergent_last=True)}
             """,
         )
         table_helper.create_table(
             engine=postgres_engine,
-            table_name=target_table,
+            table_name=TRG_TABLE,
             create_sql=f"""
-                CREATE TABLE {target_table} (
+                CREATE TABLE {TRG_TABLE} (
                     id          INTEGER PRIMARY KEY,
                     amount      numeric,
                     qty         INTEGER,
@@ -45,10 +62,8 @@ class TestPostgresAggregates:
                 )
             """,
             insert_sql=f"""
-                INSERT INTO {target_table} (id, amount, qty, created_at, updated_at) VALUES
-                (1, 10, 1, '2024-01-01', '2024-01-01 10:00:00'),
-                (2, 20, 2, '2024-01-02', '2024-01-02 11:00:00'),
-                (3, 30, 3, '2024-01-03', '2024-01-03 12:00:00')
+                INSERT INTO {TRG_TABLE} (id, amount, qty, created_at, updated_at) VALUES
+                {_pg_values(divergent_last=False)}
             """,
         )
         yield
@@ -60,16 +75,16 @@ class TestPostgresAggregates:
             FROM test.test_pg_aggregates_src
             WHERE created_at >= cast(:start_date as date)
               AND created_at < cast(:end_date as date)
-              AND id < 3
+              AND id <= 10
         """
         target_query = """
             SELECT id, amount, created_at
             FROM test.test_pg_aggregates_trg
             WHERE created_at >= cast(:start_date as date)
               AND created_at < cast(:end_date as date)
-              AND id < 3
+              AND id <= 10
         """
-        params = {'start_date': '2024-01-01', 'end_date': '2024-01-04'}
+        params = {'start_date': '2024-01-01', 'end_date': '2024-01-11'}
 
         result = checker.check_aggregates(
             source=source_query,
@@ -90,7 +105,7 @@ class TestPostgresAggregates:
         query = """
             SELECT amount, qty, created_at, updated_at
             FROM {table}
-            WHERE id < 3
+            WHERE id <= 10
         """
         result = checker.check_aggregates(
             source=query.format(table='test.test_pg_aggregates_src'),
@@ -114,7 +129,7 @@ class TestPostgresAggregates:
             target="""
                 SELECT qty, created_at, updated_at
                 FROM test.test_pg_aggregates_trg
-                WHERE id < 3
+                WHERE id <= 10
             """,
             max_columns=['created_at', 'updated_at', 'qty'],
         )
@@ -151,7 +166,7 @@ class TestPostgresAggregates:
             target="""
                 SELECT created_at
                 FROM test.test_pg_aggregates_trg
-                WHERE created_at < DATE '2024-01-03'
+                WHERE created_at < DATE '2024-01-11'
             """,
             max_columns=['created_at'],
         )
@@ -162,7 +177,7 @@ class TestPostgresAggregates:
         checker = DataQualityChecker(postgres_engine, postgres_engine, timezone='UTC')
         result = checker.check_aggregates(
             source='SELECT id FROM test.test_pg_aggregates_src',
-            target='SELECT id FROM test.test_pg_aggregates_trg WHERE id < 3',
+            target='SELECT id FROM test.test_pg_aggregates_trg WHERE id <= 10',
             include_count=True,
         )
 
@@ -178,7 +193,7 @@ class TestPostgresAggregates:
             target="""
                 SELECT amount, created_at
                 FROM test.test_pg_aggregates_trg
-                WHERE id < 3
+                WHERE id <= 10
             """,
             max_columns=['created_at'],
             sum_columns=['amount'],
@@ -201,7 +216,7 @@ class TestPostgresAggregates:
     def test_aggregates_query_vs_table_mismatch(self, postgres_engine):
         checker = DataQualityChecker(postgres_engine, postgres_engine, timezone='UTC')
         result = checker.check_aggregates(
-            source='SELECT amount FROM test.test_pg_aggregates_src WHERE id < 3',
+            source='SELECT amount FROM test.test_pg_aggregates_src WHERE id <= 10',
             target=DataReference('test_pg_aggregates_trg', schema='test'),
             sum_columns=['amount'],
         )
@@ -213,10 +228,12 @@ class TestPostgresAggregates:
         checker = DataQualityChecker(postgres_engine, postgres_engine, timezone='UTC')
         result = checker.check_aggregates(
             source=DataReference('test_pg_aggregates_src', schema='test'),
-            target='SELECT amount FROM test.test_pg_aggregates_trg WHERE id < 3',
+            target='SELECT amount FROM test.test_pg_aggregates_trg WHERE id <= 10',
             sum_columns=['amount'],
         )
         self._assert_failed(result, expected_columns={'sum_amount'})
+        assert result.source_table == 'test.test_pg_aggregates_src'
+        assert result.target_table is None
 
     @staticmethod
     def _assert_failed(result, expected_columns):

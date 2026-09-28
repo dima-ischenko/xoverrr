@@ -4,19 +4,33 @@ import pytest
 
 from xoverrr.constants import CHECK_FAILED, CHECK_SUCCESS
 from xoverrr.core import DataQualityChecker
+from xoverrr.models import DataReference
+
+MATCH_ROWS = 10
+SRC_TABLE = 'test_ch_aggregates_src'
+TRG_TABLE = 'test_ch_aggregates_trg'
+
+
+def _ch_values(divergent_last: bool) -> str:
+    rows = [
+        f"({i}, {i * 10}, {i}, '2024-01-{i:02d}')" for i in range(1, MATCH_ROWS + 1)
+    ]
+    last = MATCH_ROWS + 1
+    if divergent_last:
+        rows.append(f"({last}, 9999, 50, '2024-01-{last:02d}')")
+    else:
+        rows.append(f"({last}, {last * 10}, {last}, '2024-01-{last:02d}')")
+    return ',\n                '.join(rows)
 
 
 class TestClickHouseAggregates:
     @pytest.fixture(autouse=True)
     def setup_agg_data(self, clickhouse_engine, table_helper):
-        source_table = 'test_ch_aggregates_src'
-        target_table = 'test_ch_aggregates_trg'
-
         table_helper.create_table(
             engine=clickhouse_engine,
-            table_name=source_table,
+            table_name=SRC_TABLE,
             create_sql=f"""
-                CREATE TABLE {source_table} (
+                CREATE TABLE {SRC_TABLE} (
                     id          UInt32,
                     amount      Float64,
                     qty         UInt32,
@@ -26,17 +40,15 @@ class TestClickHouseAggregates:
                 ORDER BY id
             """,
             insert_sql=f"""
-                INSERT INTO {source_table} (id, amount, qty, created_at) VALUES
-                (1, 10, 1, '2024-01-01'),
-                (2, 20, 2, '2024-01-02'),
-                (3, 999, 50, '2024-01-03')
+                INSERT INTO {SRC_TABLE} (id, amount, qty, created_at) VALUES
+                {_ch_values(divergent_last=True)}
             """,
         )
         table_helper.create_table(
             engine=clickhouse_engine,
-            table_name=target_table,
+            table_name=TRG_TABLE,
             create_sql=f"""
-                CREATE TABLE {target_table} (
+                CREATE TABLE {TRG_TABLE} (
                     id          UInt32,
                     amount      Float64,
                     qty         UInt32,
@@ -46,10 +58,8 @@ class TestClickHouseAggregates:
                 ORDER BY id
             """,
             insert_sql=f"""
-                INSERT INTO {target_table} (id, amount, qty, created_at) VALUES
-                (1, 10, 1, '2024-01-01'),
-                (2, 20, 2, '2024-01-02'),
-                (3, 30, 3, '2024-01-03')
+                INSERT INTO {TRG_TABLE} (id, amount, qty, created_at) VALUES
+                {_ch_values(divergent_last=False)}
             """,
         )
         yield
@@ -63,16 +73,16 @@ class TestClickHouseAggregates:
             FROM test_ch_aggregates_src
             WHERE created_at >= toDate(:start_date)
               AND created_at < toDate(:end_date)
-              AND id < 3
+              AND id <= 10
         """
         target_query = """
             SELECT id, amount, created_at
             FROM test_ch_aggregates_trg
             WHERE created_at >= toDate(:start_date)
               AND created_at < toDate(:end_date)
-              AND id < 3
+              AND id <= 10
         """
-        params = {'start_date': '2024-01-01', 'end_date': '2024-01-04'}
+        params = {'start_date': '2024-01-01', 'end_date': '2024-01-11'}
 
         result = checker.check_aggregates(
             source=source_query,
@@ -95,7 +105,7 @@ class TestClickHouseAggregates:
         query = """
             SELECT amount, qty, created_at
             FROM {table}
-            WHERE id < 3
+            WHERE id <= 10
         """
         result = checker.check_aggregates(
             source=query.format(table='test_ch_aggregates_src'),
@@ -121,7 +131,7 @@ class TestClickHouseAggregates:
             target="""
                 SELECT qty, created_at
                 FROM test_ch_aggregates_trg
-                WHERE id < 3
+                WHERE id <= 10
             """,
             max_columns=['created_at', 'qty'],
         )
@@ -162,7 +172,7 @@ class TestClickHouseAggregates:
             target="""
                 SELECT created_at
                 FROM test_ch_aggregates_trg
-                WHERE created_at < toDate('2024-01-03')
+                WHERE created_at < toDate('2024-01-11')
             """,
             max_columns=['created_at'],
         )
@@ -175,7 +185,7 @@ class TestClickHouseAggregates:
         )
         result = checker.check_aggregates(
             source='SELECT id FROM test_ch_aggregates_src',
-            target='SELECT id FROM test_ch_aggregates_trg WHERE id < 3',
+            target='SELECT id FROM test_ch_aggregates_trg WHERE id <= 10',
             include_count=True,
         )
 
@@ -193,13 +203,53 @@ class TestClickHouseAggregates:
             target="""
                 SELECT amount, created_at
                 FROM test_ch_aggregates_trg
-                WHERE id < 3
+                WHERE id <= 10
             """,
             max_columns=['created_at'],
             sum_columns=['amount'],
         )
 
         self._assert_failed(result, expected_columns={'max_created_at', 'sum_amount'})
+
+    def test_aggregates_table_vs_table_mismatch(self, clickhouse_engine):
+        checker = DataQualityChecker(
+            clickhouse_engine, clickhouse_engine, timezone='UTC'
+        )
+        result = checker.check_aggregates(
+            source=DataReference('test_ch_aggregates_src', schema='test'),
+            target=DataReference('test_ch_aggregates_trg', schema='test'),
+            sum_columns=['amount'],
+            include_count=True,
+        )
+        self._assert_failed(result, expected_columns={'sum_amount'})
+        assert result.source_table == 'test.test_ch_aggregates_src'
+        assert result.target_table == 'test.test_ch_aggregates_trg'
+
+    def test_aggregates_query_vs_table_mismatch(self, clickhouse_engine):
+        checker = DataQualityChecker(
+            clickhouse_engine, clickhouse_engine, timezone='UTC'
+        )
+        result = checker.check_aggregates(
+            source='SELECT amount FROM test_ch_aggregates_src WHERE id <= 10',
+            target=DataReference('test_ch_aggregates_trg', schema='test'),
+            sum_columns=['amount'],
+        )
+        self._assert_failed(result, expected_columns={'sum_amount'})
+        assert result.source_table is None
+        assert result.target_table == 'test.test_ch_aggregates_trg'
+
+    def test_aggregates_table_vs_query_mismatch(self, clickhouse_engine):
+        checker = DataQualityChecker(
+            clickhouse_engine, clickhouse_engine, timezone='UTC'
+        )
+        result = checker.check_aggregates(
+            source=DataReference('test_ch_aggregates_src', schema='test'),
+            target='SELECT amount FROM test_ch_aggregates_trg WHERE id <= 10',
+            sum_columns=['amount'],
+        )
+        self._assert_failed(result, expected_columns={'sum_amount'})
+        assert result.source_table == 'test.test_ch_aggregates_src'
+        assert result.target_table is None
 
     @staticmethod
     def _assert_failed(result, expected_columns):
