@@ -507,7 +507,7 @@ class OracleAdapter(BaseDatabaseAdapter):
 
     def hash_mod_predicate(self, concat_sql: str, percent: int) -> str:
         return (
-            'MOD(TO_NUMBER(SUBSTR(RAWTOHEX(STANDARD_HASH('
+            'mod(to_number(substr(rawtohex(standard_hash('
             f"{concat_sql}, 'MD5')), 1, 8), 'XXXXXXXX'), 100) < {percent}"
         )
 

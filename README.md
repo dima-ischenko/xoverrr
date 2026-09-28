@@ -341,11 +341,22 @@ checker.check_aggregates(
 )
 ```
 
-A table is wrapped as `SELECT * FROM schema.table`. The database then performs the aggregation:
+A table is aggregated in place. A SQL string is wrapped as a subquery, then aggregated:
 
 ```sql
-SELECT max(amount) AS max_amount, sum(amount) AS sum_amount, count(*) AS cnt
-FROM (<your query or SELECT * FROM table>) x_subq
+-- table
+SELECT
+    max(amount) AS max_amount,
+    sum(amount) AS sum_amount,
+    count(*) AS cnt
+FROM schema.table
+
+-- query
+SELECT
+    max(amount) AS max_amount,
+    sum(amount) AS sum_amount,
+    count(*) AS cnt
+FROM (<your query>) x_subq
 ```
 
 At least one of `max_columns`, `sum_columns`, or `include_count=True` must be supplied. Bind parameters (`source_params`, `target_params`) are valid only on a SQL side. There is no `tolerance_pct`, no chunking, and no `xrecently_changed`. Every aggregate must match; otherwise the check fails (`final_score` is 100 or 0).

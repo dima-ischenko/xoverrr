@@ -685,16 +685,28 @@ def generate_aggregates_report(
     lines.append(f'  Final discrepancies score: {stats.final_diff_score:.5f}')
     lines.append(f'  Final data quality score: {stats.final_score:.5f}')
 
-    if not details.issue_breakdown.empty:
+    breakdown = _aggregate_issue_breakdown(details)
+    if breakdown is not None and not breakdown.empty:
         lines.append('\nISSUE BREAKDOWN:')
-        lines.append(details.issue_breakdown.to_string(index=False))
-        if details.issue_examples is not None and not details.issue_examples.empty:
-            lines.append('\n  Issue examples:\n')
-            lines.append(
-                details.issue_examples.to_string(
-                    index=False, max_colwidth=64, justify='left'
-                )
-            )
+        lines.append(breakdown.to_string(index=False))
 
     lines.append('=' * 80)
     return '\n'.join(lines)
+
+
+def _aggregate_issue_breakdown(details: CheckDetails) -> pd.DataFrame:
+    """Divergent aggregates with source and target values.
+
+    The comparison key is a synthetic row id, so the generic primary-key
+    examples do not say which aggregate disagreed.
+    """
+    examples = details.issue_examples
+    value_columns = {'column_name', 'source_value', 'target_value'}
+    if (
+        examples is not None
+        and not examples.empty
+        and value_columns.issubset(examples.columns)
+    ):
+        frame = examples.loc[:, ['column_name', 'source_value', 'target_value']]
+        return frame.rename(columns={'column_name': 'aggregate'}).reset_index(drop=True)
+    return details.issue_breakdown
