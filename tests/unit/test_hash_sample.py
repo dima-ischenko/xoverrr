@@ -53,7 +53,7 @@ def test_oracle_hash_filter_quotes_date_format():
     )
 
     assert "to_char(created_at, 'YYYYMMDD')" in sql
-    assert 'STANDARD_HASH' in sql
+    assert 'standard_hash' in sql
     assert sql.endswith('< 10')
 
 
@@ -83,7 +83,7 @@ def test_oracle_build_data_query_keeps_hash_predicate():
         hash_pct=30,
     )
 
-    assert 'STANDARD_HASH' in query
+    assert 'standard_hash' in query
     assert '% 100 < 30' not in query
     assert '< 30' in query
 

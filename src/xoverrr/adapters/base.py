@@ -94,7 +94,7 @@ class BaseDatabaseAdapter(ABC):
             select_parts.append('count(*) as cnt')
         if not select_parts:
             raise ValueError('max_columns, sum_columns, or include_count is required')
-        return ', '.join(select_parts)
+        return ',\n    '.join(select_parts)
 
     def build_aggregate_sql(
         self,
@@ -109,15 +109,16 @@ class BaseDatabaseAdapter(ABC):
         projection = self.aggregate_projection(
             max_columns, sum_columns, include_count
         )
+        sql = f'SELECT\n    {projection}'
         if table:
-            sql = f'SELECT {projection} FROM {table}'
+            sql += f'\nFROM {table}'
         else:
             inner = self._strip_query(query)
             if not inner:
                 raise ValueError('query is empty')
-            sql = f'SELECT {projection} FROM ({inner}) x_subq'
+            sql += f'\nFROM ({inner}) x_subq'
         if where:
-            sql += f' WHERE {where}'
+            sql += f'\nWHERE {where}'
         return sql
 
     @staticmethod

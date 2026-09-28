@@ -345,11 +345,17 @@ A table is aggregated in place. A SQL string is wrapped as a subquery, then aggr
 
 ```sql
 -- table
-SELECT max(amount) AS max_amount, sum(amount) AS sum_amount, count(*) AS cnt
+SELECT
+    max(amount) AS max_amount,
+    sum(amount) AS sum_amount,
+    count(*) AS cnt
 FROM schema.table
 
 -- query
-SELECT max(amount) AS max_amount, sum(amount) AS sum_amount, count(*) AS cnt
+SELECT
+    max(amount) AS max_amount,
+    sum(amount) AS sum_amount,
+    count(*) AS cnt
 FROM (<your query>) x_subq
 ```
 

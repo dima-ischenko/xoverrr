@@ -24,8 +24,10 @@ def test_adapter_builds_aggregate_sql():
     )
 
     assert sql == (
-        'SELECT max(created_at) as max_created_at, sum(amount) as sum_amount, '
-        f'count(*) as cnt FROM ({INNER}) x_subq'
+        'SELECT\n'
+        '    max(created_at) as max_created_at,\n'
+        '    sum(amount) as sum_amount,\n'
+        f'    count(*) as cnt\nFROM ({INNER}) x_subq'
     )
 
     table_sql = PostgresAdapter().build_aggregate_sql(
@@ -33,13 +35,15 @@ def test_adapter_builds_aggregate_sql():
         sum_columns=['amount'],
         table='sales.orders',
     )
-    assert table_sql == 'SELECT sum(amount) as sum_amount FROM sales.orders'
+    assert table_sql == (
+        'SELECT\n    sum(amount) as sum_amount\nFROM sales.orders'
+    )
 
 
 def test_adapter_count_only_and_validation():
     adapter = PostgresAdapter()
     sql = adapter.build_aggregate_sql(INNER, include_count=True)
-    assert sql == f'SELECT count(*) as cnt FROM ({INNER}) x_subq'
+    assert sql == f'SELECT\n    count(*) as cnt\nFROM ({INNER}) x_subq'
 
     with pytest.raises(ValueError, match='include_count'):
         adapter.build_aggregate_sql(INNER)
@@ -153,9 +157,9 @@ def test_check_aggregates_table_vs_query_returns_built_sql(monkeypatch):
         sum_columns=['amount'],
     )
 
-    source_sql = 'SELECT sum(amount) as sum_amount FROM sales.orders'
+    source_sql = 'SELECT\n    sum(amount) as sum_amount\nFROM sales.orders'
     target_sql = (
-        'SELECT sum(amount) as sum_amount '
+        'SELECT\n    sum(amount) as sum_amount\n'
         'FROM (SELECT amount FROM archive.orders) x_subq'
     )
     assert result.status == CHECK_SUCCESS
@@ -201,13 +205,13 @@ def test_check_aggregates_hash_filter_skips_extra_subquery(monkeypatch):
 
     assert result.status == CHECK_SUCCESS
     assert executed[0].startswith(
-        'SELECT sum(amount) as sum_amount FROM sales.orders WHERE '
+        'SELECT\n    sum(amount) as sum_amount\nFROM sales.orders\nWHERE '
     )
     assert 'x_subq' not in executed[0]
     assert 'x_hash' not in executed[0]
     assert executed[1].startswith(
-        'SELECT sum(amount) as sum_amount '
-        'FROM (SELECT id, amount FROM archive.orders) x_subq WHERE '
+        'SELECT\n    sum(amount) as sum_amount\n'
+        'FROM (SELECT id, amount FROM archive.orders) x_subq\nWHERE '
     )
     assert 'x_hash' not in executed[1]
     assert executed[0] in result.report
@@ -250,11 +254,11 @@ def test_check_aggregates_uses_compare_dataframes(monkeypatch):
     assert result.stats.final_diff_score == 100.0
     assert result.stats.final_score == 0.0
     source_sql = (
-        'SELECT sum(amount) as sum_amount, count(*) as cnt '
+        'SELECT\n    sum(amount) as sum_amount,\n    count(*) as cnt\n'
         'FROM (SELECT amount FROM source_table) x_subq'
     )
     target_sql = (
-        'SELECT sum(amount) as sum_amount, count(*) as cnt '
+        'SELECT\n    sum(amount) as sum_amount,\n    count(*) as cnt\n'
         'FROM (SELECT amount FROM target_table) x_subq'
     )
     assert executed == [source_sql, target_sql]
