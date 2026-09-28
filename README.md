@@ -16,6 +16,7 @@ Supported databases: **Oracle**, **PostgreSQL** (including Greenplum), and **Cli
 - **Type conversion** — values are normalised on the application side so that they may be compared across databases
 - **Column filters** — include and exclude lists; columns present on only one side are skipped automatically
 - **Chunked date ranges** — long periods may be processed in windows of *N* days
+- **Hash sampling** — compare a stable subset of keys (`hash_pct`) so both sides keep the same rows
 - **Reports** — text or JSON, with examples of mismatched rows
 - **Optional persistence** — the results of each run may be written to a third engine for dashboards and audit
 - **Tests** — unit coverage together with Docker-backed integration tests
@@ -245,6 +246,7 @@ result = checker.check_samples(
 | `exclude_columns` | No | `None` (`[]`) | Columns to omit. Primary-key columns named here are nevertheless retained. |
 | `include_columns` | No | `None` (`[]`) | If set, only these columns and the primary key are compared. |
 | `custom_primary_key` | No | `None` | Join key. If omitted, it is taken from metadata. |
+| `hash_pct` | No | `None` | Keep keys whose MD5 hash modulo 100 is less than this value (1–100). Both sides use the same predicate, so the same keys are sampled. Uses the primary key. `None` or `0` disables sampling. |
 | `tolerance_pct` | No | `0.0` | The check fails when `final_diff_score` exceeds this value (0–100). |
 | `max_examples` | No | `3` | Maximum number of mismatch examples to retain per column. |
 | `persist_result` | No | `None` | Results table; omit this argument to skip writing. |
@@ -292,7 +294,8 @@ To divide a long range into windows, include `start_date` and `end_date` in **bo
 |-----------|----------|---------|-------------|
 | `source_query` | Yes | — | Source SQL. Bind values with `:name`. |
 | `target_query` | Yes | — | Target SQL. |
-| `custom_primary_key` | Yes | — | Key columns in the result. An empty list raises `ValueError`. |
+| `custom_primary_key` | Yes | — | Key columns in the result. An empty list raises `ValueError`. Used as the hash key when `hash_pct` is set. |
+| `hash_pct` | No | `None` | Keep keys whose MD5 hash modulo 100 is less than this value (1–100). `None` or `0` disables sampling. |
 | `source_params` | No | `None` (`{}`) | Bind values. For chunking, include `start_date` and `end_date`. |
 | `target_params` | No | `None` (`{}`) | Bind values. For chunking, include `start_date` and `end_date`. |
 | `check_name` | No | `None` | Label attached to the result. |
@@ -340,6 +343,8 @@ result = checker.check_custom_queries_agg(
 | `max_columns` | No | `None` (`[]`) | Wrapped as `max(col) AS max_col`. Simple identifiers only. At least one of `max_columns`, `sum_columns`, or `include_count=True` is required. |
 | `sum_columns` | No | `None` (`[]`) | Wrapped as `sum(col) AS sum_col`. |
 | `include_count` | No | `False` | Also compares `count(*) AS cnt`. |
+| `hash_columns` | No | `None` (`[]`) | Columns hashed when `hash_pct` is set. Required if `hash_pct` is set. |
+| `hash_pct` | No | `None` | Keep keys whose MD5 hash modulo 100 is less than this value (1–100), then aggregate that subset. `None` or `0` disables sampling. |
 | `check_name` | No | `None` | Label attached to the result. |
 | `persist_result` | No | `None` | Results table; omit this argument to skip writing. |
 | `check_tags` | No | `None` | Additional labels. |

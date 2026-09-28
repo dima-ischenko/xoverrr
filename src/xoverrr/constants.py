@@ -5,6 +5,14 @@ DATETIME_FORMAT = f'{DATE_FORMAT} %H:%M:%S'
 TO_CHAR_CAST_DATETIME = 'YYYYMMDD HH24:MI:SS'
 TO_CHAR_CAST_DATETIME_CH = '%Y%m%d %H:%i:%s'
 
+# Canonical strings for hash sampling, so the same key hashes the same way
+# on Oracle, PostgreSQL, and ClickHouse.
+HASH_DATE_FORMAT = 'YYYYMMDD'
+HASH_DATETIME_FORMAT = 'YYYYMMDDHH24MISS'
+HASH_DATE_FORMAT_CH = '%Y%m%d'
+HASH_DATETIME_FORMAT_CH = '%Y%m%d%H%i%s'
+HASH_KEY_SEPARATOR = '|'
+
 # Default values
 NULL_REPLACEMENT = 'N/A'
 DEFAULT_MAX_EXAMPLES = 3

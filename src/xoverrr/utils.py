@@ -123,6 +123,19 @@ def build_check_stats(
     )
 
 
+def normalize_hash_pct(hash_pct: Optional[int]) -> Optional[int]:
+    """Return ``None`` when sampling is off, otherwise an integer 1–100."""
+    if hash_pct is None or hash_pct == 0:
+        return None
+    try:
+        value = int(hash_pct)
+    except (TypeError, ValueError) as exc:
+        raise ValueError('hash_pct must be an integer from 1 to 100') from exc
+    if value < 1 or value > 100:
+        raise ValueError('hash_pct must be an integer from 1 to 100')
+    return value
+
+
 def normalize_column_names(columns: List[str]) -> List[str]:
     """
     Normalize column names to lowercase for a consistent check.

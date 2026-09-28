@@ -5,9 +5,10 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 import pandas as pd
 from sqlalchemy.engine import Engine
 
-from ..constants import RESERVED_WORDS
+from ..constants import HASH_KEY_SEPARATOR, RESERVED_WORDS
 from ..logger import app_logger
 from ..models import DataReference, ObjectType
+from ..utils import normalize_hash_pct
 
 # Persist-row clock column; filled by DEFAULT now()/SYSTIMESTAMP, omitted from INSERT.
 PERSIST_INSERTED_AT_COLUMN = 'inserted_at'
@@ -95,10 +96,84 @@ class BaseDatabaseAdapter(ABC):
         if not select_parts:
             raise ValueError('max_columns, sum_columns, or include_count is required')
 
-        inner = (query or '').strip().rstrip(';').strip()
+        inner = self._strip_query(query)
         if not inner:
             raise ValueError('query is empty')
         return f'SELECT {", ".join(select_parts)} FROM ({inner}) x_subq'
+
+    @staticmethod
+    def _strip_query(query: str) -> str:
+        return (query or '').strip().rstrip(';').strip()
+
+    def wrap_query_with_hash_sample(
+        self,
+        query: str,
+        hash_columns: Optional[List[str]],
+        hash_pct: Optional[int],
+        columns_meta: Optional[pd.DataFrame] = None,
+        timezone: Optional[str] = None,
+    ) -> str:
+        """Wrap a custom query so only a stable hash-bucket of keys is read."""
+        predicate = self.build_hash_filter(
+            hash_columns, hash_pct, columns_meta, timezone
+        )
+        if not predicate:
+            return query
+        inner = self._strip_query(query)
+        if not inner:
+            raise ValueError('query is empty')
+        return f'SELECT * FROM ({inner}) x_hash WHERE {predicate}'
+
+    def build_hash_filter(
+        self,
+        hash_columns: Optional[List[str]],
+        hash_pct: Optional[int],
+        columns_meta: Optional[pd.DataFrame] = None,
+        timezone: Optional[str] = None,
+    ) -> Optional[str]:
+        """Return a SQL predicate that keeps ``hash_pct`` percent of keys."""
+        percent = normalize_hash_pct(hash_pct)
+        if percent is None:
+            return None
+        columns = [str(column).strip() for column in (hash_columns or []) if column]
+        if not columns:
+            raise ValueError('hash_pct requires hash columns')
+        type_map = self._column_type_map(columns_meta)
+        parts = []
+        for column in columns:
+            quoted = self._quote_ident(column)
+            expr = self.hash_key_expression(
+                quoted, type_map.get(column.lower(), ''), timezone
+            )
+            parts.append(f"coalesce({expr}, '')")
+        concat = f" || '{HASH_KEY_SEPARATOR}' || ".join(parts)
+        return self.hash_mod_predicate(concat, percent)
+
+    @staticmethod
+    def _column_type_map(columns_meta: Optional[pd.DataFrame]) -> Dict[str, str]:
+        if columns_meta is None or columns_meta.empty:
+            return {}
+        return {
+            str(row.column_name).lower(): str(row.data_type).lower()
+            for row in columns_meta.itertuples()
+            if getattr(row, 'column_name', None) is not None
+        }
+
+    @staticmethod
+    def _quote_ident(column: str) -> str:
+        if column.lower() in RESERVED_WORDS:
+            return f'"{column}"'
+        return column
+
+    def hash_key_expression(
+        self, column: str, data_type: str, timezone: Optional[str]
+    ) -> str:
+        """Return SQL that casts ``column`` to a canonical string for hashing."""
+        raise NotImplementedError
+
+    def hash_mod_predicate(self, concat_sql: str, percent: int) -> str:
+        """Return ``md5(concat) % 100 < percent`` for this DBMS."""
+        raise NotImplementedError
 
     @staticmethod
     def _normalize_aggregate_columns(columns: Optional[List[str]]) -> List[str]:
@@ -166,7 +241,7 @@ class BaseDatabaseAdapter(ABC):
             columns_meta,
             timezone,
             key_column,
-            hash_pct
+            hash_pct,
         )
         return result
 
@@ -181,8 +256,9 @@ class BaseDatabaseAdapter(ABC):
         end_date: Optional[str],
         exclude_recent_hours: Optional[int] = None,
         columns_meta: pd.DataFrame = None,
-        key_column: List[str] =None,
-        hash_pct: int = None
+        timezone: str = None,
+        key_column: List[str] = None,
+        hash_pct: int = None,
     ) -> Tuple[str, Dict]:
         pass
 

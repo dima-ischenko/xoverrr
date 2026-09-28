@@ -41,6 +41,7 @@ from .utils import (
     cross_fill_missing_dates,
     evaluate_check_sniff_query_data,
     normalize_column_names,
+    normalize_hash_pct,
     prepare_dataframe,
     sniff_issue_row_count,
     validate_dataframe_size,
@@ -378,6 +379,7 @@ class DataQualityChecker:
         persist_result: Optional[DataReference] = None,
         check_tags: Optional[Dict] = None,
         report_output_format: str = ct.REPORT_OUTPUT_FORMAT_TEXT,
+        hash_pct: Optional[int] = None,
     ) -> CheckResult:
         """
         Compare sample rows and column values between two tables or views.
@@ -412,6 +414,7 @@ class DataQualityChecker:
         )
 
         exclude_hours = exclude_recent_hours or self.default_exclude_recent_hours
+        hash_pct = normalize_hash_pct(hash_pct)
 
         start_date, end_date = _unpack_date_range(date_range)
         exclude_cols = normalize_column_names(exclude_columns or [])
@@ -439,6 +442,7 @@ class DataQualityChecker:
                 tolerance_pct,
                 exclude_hours,
                 max_examples,
+                hash_pct,
                 run_id=run_id,
                 run_started_at=run_started_at,
             )
@@ -739,6 +743,7 @@ class DataQualityChecker:
         tolerance_pct: float,
         exclude_recent_hours: Optional[int],
         max_examples: Optional[int],
+        hash_pct: Optional[int],
         run_id: str,
         run_started_at: str,
     ) -> Tuple[str, str, Optional[CheckStats], Optional[CheckDetails]]:
@@ -877,6 +882,7 @@ class DataQualityChecker:
                 exclude_recent_hours=exclude_recent_hours,
                 tolerance_pct=tolerance_pct,
                 max_examples=max_examples,
+                hash_pct=hash_pct,
                 run_id=run_id,
                 run_started_at=run_started_at,
             )
@@ -1031,6 +1037,7 @@ class DataQualityChecker:
         persist_result: Optional[DataReference] = None,
         check_tags: Optional[Dict] = None,
         report_output_format: str = ct.REPORT_OUTPUT_FORMAT_TEXT,
+        hash_pct: Optional[int] = None,
     ) -> CheckResult:
         """
         Compare data from custom queries with specified key columns.
@@ -1051,6 +1058,7 @@ class DataQualityChecker:
         custom_keys = normalize_column_names(custom_primary_key)
         if not custom_keys:
             raise ValueError('custom_primary_key is mandatory')
+        hash_pct = normalize_hash_pct(hash_pct)
 
         validate_report_output_format(report_output_format)
         persist_result = normalize_persist_result(persist_result)
@@ -1073,6 +1081,21 @@ class DataQualityChecker:
 
             source_adapter = self._get_adapter(self.source_db_type)
             target_adapter = self._get_adapter(self.target_db_type)
+            if hash_pct:
+                source_query = source_adapter.wrap_query_with_hash_sample(
+                    source_query,
+                    custom_keys,
+                    hash_pct,
+                    source_metadata,
+                    timezone,
+                )
+                target_query = target_adapter.wrap_query_with_hash_sample(
+                    target_query,
+                    custom_keys,
+                    hash_pct,
+                    target_metadata,
+                    timezone,
+                )
             date_chunks = self._resolve_custom_query_chunks(
                 source_params, target_params, chunk_size_days
             )
@@ -1187,8 +1210,23 @@ class DataQualityChecker:
         sum_columns: List[str],
         include_count: bool,
         query_side: str,
+        hash_columns: Optional[List[str]] = None,
+        hash_pct: Optional[int] = None,
     ) -> pd.DataFrame:
         metadata = self._get_metadata_cols_for_custom_query((query, params), engine)
+        if hash_pct:
+            available = {
+                str(name).lower()
+                for name in metadata.get('column_name', [])
+            }
+            missing = [column for column in hash_columns or [] if column not in available]
+            if missing:
+                raise ValueError(
+                    f'hash_columns not present in {query_side} query: {missing}'
+                )
+            query = adapter.wrap_query_with_hash_sample(
+                query, hash_columns, hash_pct, metadata, self.timezone
+            )
         sql = adapter.build_custom_query_aggregate_sql(
             query,
             max_columns=max_columns,
@@ -1222,6 +1260,8 @@ class DataQualityChecker:
         persist_result: Optional[DataReference] = None,
         check_tags: Optional[Dict] = None,
         report_output_format: str = ct.REPORT_OUTPUT_FORMAT_TEXT,
+        hash_columns: Optional[List[str]] = None,
+        hash_pct: Optional[int] = None,
     ) -> CheckResult:
         """
         Compare MAX, SUM, and optional COUNT(*) of two custom queries.
@@ -1243,6 +1283,10 @@ class DataQualityChecker:
         target_params = target_params or {}
         if not max_columns and not sum_columns and not include_count:
             raise ValueError('max_columns, sum_columns, or include_count is required')
+        hash_pct = normalize_hash_pct(hash_pct)
+        hash_columns = normalize_column_names(hash_columns or [])
+        if hash_pct and not hash_columns:
+            raise ValueError('hash_columns is required when hash_pct is set')
 
         validate_report_output_format(report_output_format)
         persist_result = normalize_persist_result(persist_result)
@@ -1264,6 +1308,8 @@ class DataQualityChecker:
                 sum_columns or [],
                 include_count,
                 'source',
+                hash_columns=hash_columns,
+                hash_pct=hash_pct,
             )
             target_data = self._execute_custom_query_agg(
                 target_query,
@@ -1274,6 +1320,8 @@ class DataQualityChecker:
                 sum_columns or [],
                 include_count,
                 'target',
+                hash_columns=hash_columns,
+                hash_pct=hash_pct,
             )
             source_data[ct.XAGG_ROW_COLUMN] = '1'
             target_data[ct.XAGG_ROW_COLUMN] = '1'
@@ -1845,6 +1893,8 @@ class DataQualityChecker:
         end_date: Optional[str],
         exclude_recent_hours: Optional[int],
         query_side: str,
+        key_columns: Optional[List[str]] = None,
+        hash_pct: Optional[int] = None,
     ) -> Tuple[pd.DataFrame, str, Dict]:
         """Fetch table data and apply type conversion."""
         db_type = DBMSType.from_engine(engine)
@@ -1861,6 +1911,8 @@ class DataQualityChecker:
             exclude_recent_hours,
             columns_meta,
             self.timezone,
+            key_columns,
+            hash_pct,
         )
 
         df = self._execute_query(
@@ -1963,6 +2015,7 @@ class DataQualityChecker:
         exclude_recent_hours: Optional[int],
         tolerance_pct: float,
         max_examples: Optional[int],
+        hash_pct: Optional[int],
         run_id: str,
         run_started_at: str,
     ) -> Tuple[str, str, Optional[CheckStats], Optional[CheckDetails]]:
@@ -2006,6 +2059,8 @@ class DataQualityChecker:
                 chunk_end,
                 exclude_recent_hours,
                 query_side='source',
+                key_columns=key_columns,
+                hash_pct=hash_pct,
             )
             target_data, target_query, target_params = self._get_table_data(
                 self.target_engine,
@@ -2018,6 +2073,8 @@ class DataQualityChecker:
                 chunk_end,
                 exclude_recent_hours,
                 query_side='target',
+                key_columns=key_columns,
+                hash_pct=hash_pct,
             )
 
             total_source_rows_raw += len(source_data)
