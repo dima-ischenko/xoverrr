@@ -1,12 +1,23 @@
 """Check statistics, details, and input normalisation."""
 
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 
 from .constants import CHECK_FAILED, CHECK_SUCCESS
+
+
+def clamp_pct(value: float) -> float:
+    """Keep a percentage score in the closed interval 0–100."""
+    return min(100.0, max(0.0, float(value)))
+
+
+def quality_scores(final_diff_score: float) -> Tuple[float, float]:
+    """Return ``(final_diff_score, final_score)``, each in 0–100."""
+    diff = clamp_pct(final_diff_score)
+    return diff, 100.0 - diff
 
 
 def build_check_stats(
@@ -43,8 +54,12 @@ def build_check_stats(
             final_score=0,
         )
 
-    dup_source_rows_pct = (dup_source_rows / total_source_rows) * 100
-    dup_target_rows_pct = (dup_target_rows / total_target_rows) * 100
+    dup_source_rows_pct = (
+        (dup_source_rows / total_source_rows) * 100 if total_source_rows else 0.0
+    )
+    dup_target_rows_pct = (
+        (dup_target_rows / total_target_rows) * 100 if total_target_rows else 0.0
+    )
     source_only_rows_pct = (only_source_rows / comparable_rows) * 100
     target_only_rows_pct = (only_target_rows / comparable_rows) * 100
     issue_rows_pct = (1 - passed_rows / comparable_rows) * 100
@@ -53,7 +68,7 @@ def build_check_stats(
     max_issue_pct = float(np.max(issue_pcts)) if issue_pcts else 0.0
     median_issue_pct = float(np.median(issue_pcts)) if issue_pcts else 0.0
 
-    final_diff_score = (
+    final_diff_score, final_score = quality_scores(
         dup_source_rows_pct * 0.1
         + dup_target_rows_pct * 0.1
         + source_only_rows_pct * 0.15
@@ -78,7 +93,7 @@ def build_check_stats(
         max_issue_pct=max_issue_pct,
         median_issue_pct=median_issue_pct,
         final_diff_score=final_diff_score,
-        final_score=100 - final_diff_score,
+        final_score=final_score,
     )
 
 
@@ -133,6 +148,9 @@ class CheckStats:
     median_issue_pct: float
     final_diff_score: float
     final_score: float
+
+    def __post_init__(self):
+        self.final_diff_score, self.final_score = quality_scores(self.final_diff_score)
 
 
 @dataclass

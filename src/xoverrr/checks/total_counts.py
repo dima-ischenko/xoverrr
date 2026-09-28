@@ -11,7 +11,7 @@ from ..chunking import iter_date_chunks
 from ..logger import app_logger
 from ..models import DataReference
 from ..reporting import generate_total_count_report
-from ..stats import CheckStats, status_for_diff_score
+from ..stats import CheckStats, quality_scores, status_for_diff_score
 
 if TYPE_CHECKING:
     from ..core import DataQualityChecker
@@ -21,9 +21,8 @@ def count_volume_scores(diff_count, equal_count) -> Tuple[float, float]:
     """Return ``(final_diff_score, final_score)`` from count totals."""
     total = float(diff_count) + float(equal_count)
     if not total:
-        return 0.0, 100.0
-    final_diff_score = 100.0 * float(diff_count) / total
-    return final_diff_score, 100.0 - final_diff_score
+        return quality_scores(0.0)
+    return quality_scores(100.0 * float(diff_count) / total)
 
 
 def build_total_count_stats(source_count: int, target_count: int) -> CheckStats:

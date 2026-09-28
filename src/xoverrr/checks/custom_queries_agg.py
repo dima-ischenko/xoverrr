@@ -10,7 +10,7 @@ from .. import constants as ct
 from ..compare import prepare_dataframe
 from ..logger import app_logger
 from ..reporting import generate_custom_query_agg_report
-from ..stats import CheckDetails, CheckStats
+from ..stats import CheckDetails, CheckStats, quality_scores
 
 if TYPE_CHECKING:
     from ..core import DataQualityChecker
@@ -101,8 +101,9 @@ def run_custom_queries_agg(
         return ct.CHECK_SKIPPED, None, None, None
 
     matched = stats.final_diff_score <= 0
-    stats.final_diff_score = 0.0 if matched else 100.0
-    stats.final_score = 100.0 - stats.final_diff_score
+    stats.final_diff_score, stats.final_score = quality_scores(
+        0.0 if matched else 100.0
+    )
     status = ct.CHECK_SUCCESS if matched else ct.CHECK_FAILED
     draft_report = generate_custom_query_agg_report(
         stats,

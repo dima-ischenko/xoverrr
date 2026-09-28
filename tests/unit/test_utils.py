@@ -11,7 +11,8 @@ from xoverrr.constants import (FLAG_VALUE_NO, FLAG_VALUE_YES,
                                XRECENTLY_CHANGED_COLUMN)
 from xoverrr.reporting import (append_report_run_header,
                                format_report_collection)
-from xoverrr.stats import CheckDetails, CheckStats
+from xoverrr.stats import (CheckDetails, CheckStats, build_check_stats,
+                           quality_scores)
 
 
 class TestUtils:
@@ -306,6 +307,39 @@ class TestUtils:
         # Final score = 50% * 0.15 + 50% * 0.15 = 15.0%
         expected_score = 50.0 * 0.15 + 50.0 * 0.15
         assert stats.final_diff_score == pytest.approx(expected_score, rel=1e-5)
+        assert stats.final_score == pytest.approx(100.0 - expected_score, rel=1e-5)
+
+    def test_compare_dataframes_mostly_disjoint_keys_scores_stay_in_range(self):
+        df1 = pd.DataFrame({'id': list(range(100)), 'value': ['s'] * 100})
+        df2 = pd.DataFrame({'id': list(range(90, 102)), 'value': ['t'] * 12})
+
+        stats, _ = compare_dataframes(df1, df2, ['id'])
+
+        assert 0.0 <= stats.final_diff_score <= 100.0
+        assert 0.0 <= stats.final_score <= 100.0
+        assert stats.final_score == pytest.approx(100.0 - stats.final_diff_score)
+        assert stats.final_diff_score == pytest.approx(100.0)
+
+    def test_build_check_stats_clamps_when_only_keys_dwarf_comparable_rows(self):
+        stats = build_check_stats(
+            total_source_rows=1000,
+            total_target_rows=10,
+            dup_source_rows=0,
+            dup_target_rows=0,
+            only_source_rows=990,
+            only_target_rows=0,
+            comparable_rows=10,
+            passed_rows=10,
+        )
+        assert stats.final_diff_score == pytest.approx(100.0)
+        assert stats.final_score == pytest.approx(0.0)
+
+    def test_quality_scores_clamp_to_unit_interval(self):
+        assert quality_scores(-5) == (0.0, 100.0)
+        assert quality_scores(0) == (0.0, 100.0)
+        assert quality_scores(40) == (40.0, 60.0)
+        assert quality_scores(100) == (100.0, 0.0)
+        assert quality_scores(1485) == (100.0, 0.0)
 
     def test_compare_dataframes_missing_columns(self):
         """Test check with missing key columns"""

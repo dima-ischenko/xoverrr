@@ -13,7 +13,7 @@ from ..compare import prepare_dataframe
 from ..logger import app_logger
 from ..reporting import generate_check_sniff_query_report
 from ..stats import (CheckDetails, CheckStats, normalize_column_names,
-                     status_for_diff_score)
+                     quality_scores, status_for_diff_score)
 
 if TYPE_CHECKING:
     from ..core import DataQualityChecker
@@ -47,6 +47,7 @@ def build_sniff_issue_stats(
         )
 
     issue_rows_pct = (issue_rows / total_rows) * 100
+    final_diff_score, final_score = quality_scores(issue_rows_pct)
     return CheckStats(
         total_source_rows=total_rows,
         total_target_rows=0,
@@ -63,8 +64,8 @@ def build_sniff_issue_stats(
         issue_rows_pct=issue_rows_pct,
         max_issue_pct=issue_rows_pct,
         median_issue_pct=issue_rows_pct,
-        final_diff_score=issue_rows_pct,
-        final_score=100 - issue_rows_pct,
+        final_diff_score=final_diff_score,
+        final_score=final_score,
     )
 
 
